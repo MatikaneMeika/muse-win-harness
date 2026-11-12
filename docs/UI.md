@@ -18,7 +18,7 @@ shell/main.cjs
   │    └─ 挂载 shell/muse-settings-preload.cjs (contextIsolation: true, sandbox: false)
   │         ├─ 左侧活动栏 MWH 入口图标 (.mwh-activity-slot)
   │         ├─ 侧边设置抽屉 (#mwh-drawer, 20px 圆角) + 全屏遮罩 (.mwh-drawer-backdrop)
-  │         ├─ 五栏高级配置中心 (#mwh-subpanel: 连接 / 权限 / 工作区 / 代理 / 审计)
+  │         ├─ 四栏高级配置中心 (#mwh-subpanel: 连接与权限 / 工作区与代理 / 资源库 / 审计日志)
   │         ├─ 底部实时审批灵动岛 (#mwh-approval-island)
   │         └─ MutationObserver 探测 muse.ai 明暗主题 -> ipcMain 'mwh:theme-sync' 同步顶栏与 DWM
   │
@@ -99,11 +99,17 @@ npx electron . --smoke-test
 - **拖拽与边缘吸附**：单击标题栏切换展开/收起；按住 90ms 进入拖拽，松手吸附并写入 `localStorage['mwh_island_layout_v2']`，同时经 `mwh:island-layout-save` 镜像落盘至 `userData/island-layout.json`。
 - **待审批自动展开一次**：收到新的 `WAITING_APPROVAL` 任务时自动展开一次，展示风险等级、目标路径/命令与「允许一次 / 本工作区始终允许 / 拒绝」按钮。
 
-### 抽屉与五栏高级配置中心
+### 抽屉与四栏高级配置中心
 
-- 点击 Muse 左侧活动栏中的 **MWH** 图标展开设置抽屉（`#mwh-drawer`，宽 `min(clamp(280px, 25vw, 420px), 剩余视口)`，圆角 `20px`），内含快捷配对复制与四档权限模式切换。
-- 点击抽屉底部「高级配置中心」展开右侧子面板（`#mwh-subpanel`，圆角 `24px`），顶部为等宽五栏 Tab（**`连接` / `权限` / `工作区` / `代理` / `审计`**）。
-- **审计与快照折叠树**：在「审计」Tab 中按规范化后的工作区路径（`normalizeWinPath`）树状折叠展示 Git Shadow 快照，支持单条一键回滚、多选删除与历史裁剪。
+- 点击 Muse 左侧活动栏中的 **MWH** 图标展开设置抽屉（`#mwh-drawer`，宽 `min(clamp(280px, 25vw, 420px), 剩余视口)`，圆角 `20px`），内含快捷配对复制与四档权限模式切换；底部摘要区包含只读状态条目「资源库 · N 个已启用」（N 为当前启用的 MCP 与 Skill 条目总数，点击直达资源库配置）。
+- 点击抽屉底部「高级配置中心」展开右侧子面板（`#mwh-subpanel`，圆角 `24px`），顶部为等宽四栏 Tab（**`connectors`「连接与权限」 / `daemon`「工作区与代理」 / `resources`「资源库」 / `snapshots-audit`「审计日志」**）：
+  - **连接与权限**：包含「连接器」（公网隧道与端点连接参数）与「权限」（四档权限模式切换）两个纵向小节。
+  - **工作区与代理**：包含「工作区」（授权根目录与白名单管理）与「代理」（动态 ACP 代理列表、探测及页内添加）两个纵向小节。
+  - **资源库**：本机 MCP 与 Skill 统一管理面。
+    - 页眉标明：「打开即对 Muse 生效，默认全部关闭。」以及「MCP 在你的 Windows 用户权限下运行，没有额外沙箱。」
+    - 呈现「本机 MCP」与「Skill」两张卡片，支持「扫描本机」与页内「添加」表单（支持 stdio / Streamable HTTP 协议与 Skill 目录选择，「立即启用」默认关闭）。
+    - 支持条目原位展开查看 `tools/list` 对外名称预览（`{serverId}_{原名}`）与 Skill 描述/相对路径（`~` 形式展示，绝不泄漏绝对私有目录）；支持琥珀色故障态展示；编辑表单支持标记「只读」并显示低调徽章。
+  - **审计日志**：审计与 Git Shadow 快照折叠树，按规范化后的工作区路径（`normalizeWinPath`）树状折叠展示快照，支持单条一键回滚、多选删除与历史裁剪。
 
 ### 设置界面内容准入规则（UI Content Admission Rules）
 
@@ -147,9 +153,9 @@ Muse 云端自定义连接器要求 **HTTPS（443 端口）、禁止 URL 携带 
 - 在设置抽屉或「高级配置中心 → 权限」Tab 中依次切换四档权限模式：**计划模式 (`plan`)** / **变更前确认 (`confirm`)** / **自主模式 (`autonomous`)** / **完全访问 (`full-access`)**。
 - 确认切换后 `GET /api/v1/state` 与抽屉状态即时同步更新，且 `.mwh/logs/audit.jsonl` 记录模式变更事件。
 
-### 第三节：五栏高级配置中心与真实环境探针巡检
-- 打开「高级配置中心」，依次切换 **连接 / 权限 / 工作区 / 代理 / 审计** 五个等宽 Tab。
-- 在「工作区」与「代理」Tab 中核对工作区白名单路径及 ACP 代理探测（`acp-probe`）状态，确认与本机实际环境一致。
+### 第三节：四栏高级配置中心与真实环境探针巡检
+- 打开「高级配置中心」，依次切换 **连接与权限 / 工作区与代理 / 资源库 / 审计日志** 四个等宽 Tab。
+- 在「工作区与代理」Tab 中核对工作区白名单路径及 ACP 代理探测（`acp-probe`）状态；在「资源库」Tab 中核对本机 MCP 与 Skill 列表、条目探测与原位展开工具清单，确认与本机实际环境一致。
 
 ### 第四节：只读探查、审批浮岛与快照回滚巡检
 - 触发一条文件读取或写操作，观察底部实时审批浮岛（`#mwh-approval-island`）是否自动展开并在批准后更新为完成状态，同时在「审计」Tab 核对生成的 Git Shadow 快照与 `.mwh/logs/audit.jsonl` 记录。

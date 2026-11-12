@@ -75,6 +75,11 @@ const preloadSource = read(files.preload);
 const chromePreloadSource = read(files.chromePreload);
 const chromeHtmlSource = read(files.chromeHtml);
 
+const reactModalPath = path.join(root, 'frontend', 'src', 'overlay', 'MwhSettingsModal.tsx');
+const reactServicePath = path.join(root, 'frontend', 'src', 'services', 'mwhService.ts');
+const reactModalSource = fs.existsSync(reactModalPath) ? read(reactModalPath) : '';
+const reactServiceSource = fs.existsSync(reactServicePath) ? read(reactServicePath) : '';
+
 /* 2. main.cjs retired-code & DWM contract ------------------------------- */
 
 assert(!/\bsampleMuseTheme\b/.test(mainSource), 'main.cjs still references sampleMuseTheme');
@@ -128,7 +133,7 @@ assert(/--mwh-drawer-w:\s*min\(clamp\(280px,\s*25vw,\s*420px\)/.test(preloadSour
   assert(/--mwh-subpanel-w:/.test(preloadSource), 'preload must define --mwh-subpanel-w');
   assert(/var\(--mwh-drawer-w\)/.test(subpanelBlock), '.mwh-subpanel left/width must follow --mwh-drawer-w');
 
-for (const section of ['connectors', 'permissions', 'daemon', 'subagents', 'snapshots-audit']) {
+for (const section of ['connectors', 'daemon', 'resources', 'snapshots-audit']) {
   assert(preloadSource.includes(section), `preload is missing advanced section: ${section}`);
 }
 
@@ -157,7 +162,7 @@ assert(!preloadSource.includes('mwh-pulse-subtle'), 'preload still defines the m
 assert(preloadSource.includes('mwhSpinGrad'), 'preload spinner is missing the mwhSpinGrad gradient');
 assert(preloadSource.includes('mwh-spin'), 'preload spinner is missing the mwh-spin rotation class');
 
-/* 8. Five advanced tabs: minimal titles + equal-width grid bar ------- */
+/* 8. Four advanced tabs: equal-width grid bar + resource library copy - */
 
 const sectionsStart = preloadSource.indexOf('const ADVANCED_SECTIONS');
 const sectionsEnd = preloadSource.indexOf('];', sectionsStart);
@@ -166,17 +171,28 @@ const sectionsBlock =
   sectionsStart !== -1 && sectionsEnd > sectionsStart ? preloadSource.slice(sectionsStart, sectionsEnd) : '';
 
 const sectionTitles = [...sectionsBlock.matchAll(/\btitle:\s*'([^']*)'/g)].map((m) => m[1]);
-assert(sectionTitles.length === 5, `ADVANCED_SECTIONS must declare 5 titles, found ${sectionTitles.length}`);
-for (const expected of ['连接', '权限', '工作区', '代理', '审计']) {
-  assert(sectionTitles.includes(expected), `ADVANCED_SECTIONS is missing the minimal title: ${expected}`);
-}
-for (const title of sectionTitles) {
-  const length = [...title].length;
-  assert(length >= 2 && length <= 4, `ADVANCED_SECTIONS title '${title}' must be 2-4 characters, got ${length}`);
+assert(sectionTitles.length === 4, `ADVANCED_SECTIONS must declare 4 titles, found ${sectionTitles.length}`);
+for (const expected of ['连接与权限', '工作区与代理', '资源库', '审计日志']) {
+  assert(sectionTitles.includes(expected), `ADVANCED_SECTIONS is missing the title: ${expected}`);
 }
 
 const tabsBarBlock = cssBlock(preloadSource, '.mwh-subpanel-tabs-bar {');
-assert(/grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/.test(tabsBarBlock), '.mwh-subpanel-tabs-bar must be a 5-column equal-width grid');
+assert(/grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/.test(tabsBarBlock), '.mwh-subpanel-tabs-bar must be a 4-column equal-width grid');
+
+// Resource library essential human copy assertions:
+for (const [label, src] of [
+  ['muse-settings-preload.cjs', preloadSource],
+  ['MwhSettingsModal.tsx', reactModalSource],
+]) {
+  assert(
+    src.includes('打开即对 Muse 生效，默认全部关闭。'),
+    `${label} is missing the resource library activation note: 打开即对 Muse 生效，默认全部关闭。`
+  );
+  assert(
+    src.includes('MCP 在你的 Windows 用户权限下运行，没有额外沙箱。'),
+    `${label} is missing the kernel sandbox disclosure: MCP 在你的 Windows 用户权限下运行，没有额外沙箱。`
+  );
+}
 
 /* 9. Full-screen backdrop (no left gap / black top border) ----------- */
 
@@ -191,11 +207,6 @@ assert(preloadSource.includes('parseOpaqueRgb'), 'preload is missing the parseOp
 assert(preloadSource.includes('mwh-activity-slot'), 'preload is missing the .mwh-activity-slot flex container');
 
 /* 11. UI Content Admission Gate (human audience + zero stale CLI/agentask) */
-
-const reactModalPath = path.join(root, 'frontend', 'src', 'overlay', 'MwhSettingsModal.tsx');
-const reactServicePath = path.join(root, 'frontend', 'src', 'services', 'mwhService.ts');
-const reactModalSource = fs.existsSync(reactModalPath) ? read(reactModalPath) : '';
-const reactServiceSource = fs.existsSync(reactServicePath) ? read(reactServicePath) : '';
 
 const forbiddenUiPhrases = [
   '云端调用通道',
@@ -423,9 +434,9 @@ if (failures.length > 0) {
 console.log('[PASS] UI Contract Gate');
 console.log('  syntax: main.cjs, muse-settings-preload.cjs, chrome-preload.cjs');
 console.log('  ipc channels aligned: ' + used.size);
-console.log('  drawer 320px/20px + subpanel 640px/24px + 5 sections verified');
+console.log('  drawer 320px/20px + subpanel 640px/24px + 4 sections verified');
 console.log('  brand palette: zero purple, Muse blue only, single gradient ring spinner');
-console.log('  layout: full-screen backdrop + 5-column tab grid + centred activity slot');
+console.log('  layout: full-screen backdrop + 4-column tab grid + centred activity slot');
 console.log('  content admission: human-only UI, zero agent lecture cards or retired CLI refs');
 console.log('  truth source: SKILL.example.md + zero private machine path leaks');
 console.log('  preflight: launcher verifies daemon (--ensure-daemon-only) before opening the shell');

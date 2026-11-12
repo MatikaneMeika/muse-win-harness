@@ -111,3 +111,13 @@ MWH 服务端对配置的公网隧道地址（`customPublicUrl`、`cfNamedDomain
 5. **`lstat`–使用间隙 TOCTOU 窗口**：路径围栏在 `lstat` 判定 reparse point 后、实际读写前存在极窄竞态窗口。
 6. **`Atomics.wait` 事件循环阻塞**：进程终止验证使用同步等待，单次强杀验证路径最长约 4 秒阻塞事件循环（有界，非无限）。
 7. **PID 复用误判窗口**：进程树终止验证基于 PID 存活探测，极端高负载下存在操作系统复用 PID 的窄窗口。
+8. **第三方 MCP 与本机 Skill 无额外 OS 内核沙箱**：
+   - **无额外操作系统内核沙箱**：通过「资源库」启用的第三方本机 MCP（stdio / Streamable HTTP）子进程在当前 Windows 用户权限下运行，没有额外沙箱（无 Hyper-V / AppContainer 等 OS 级隔离）。其权限等同于该用户可执行的全部行为，这与「外部 CLI 代理无 OS 级围栏」同类。
+   - **stdio 进程树管控**：stdio 类型的 MCP 子进程进入 Windows 原生 Win32 Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`），并在 `windowsHide: true` 下运行。在 MWH 正常退出、用户停用资源、或者触发浮窗停止 / 全局急停时，会一并强杀整个子进程树，不留孤儿进程。
+   - **Streamable HTTP 出站守卫**：HTTP MCP 连接遵循现有 `outboundGuard` 规则，禁止探测私有局域网/保留网段等未授权地址以防范 SSRF，默认仅允许回环与用户明确指定的主机。
+   - **统一内核流转与权限映射**：所有由 Muse 或上游模型发起的第三方 MCP 工具与 `skill_read` 调用必须经由唯一的 `PipelineKernel`：
+     - 在计划模式（`plan`）下，未在编辑表单显式勾选「只读」的第三方工具一律默认拦截；若勾选「只读」则按 `read` 放行并记入审计。
+     - 在变更前确认（`confirm`）下，调用挂起至桌面浮岛供人工审批。
+     - 在自主模式（`autonomous`）与完全访问（`full-access`）下，常规调用放行但高危破坏性指令仍强制审批。
+     - 调用全程结构化记录于 `.mwh/logs/audit.jsonl`，密钥与凭据自动脱敏。
+   - **只读扫描**：本机 MCP 与 Skill 扫描过程完全为只读探测，不修改任何外部产品配置文件，条目默认全部关闭，不把外部产品的密钥抄入展示或审计日志。

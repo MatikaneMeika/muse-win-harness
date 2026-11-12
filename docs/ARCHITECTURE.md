@@ -118,13 +118,13 @@ Muse-Win-Harness（简称 **MWH**，当前版本 `v0.1.0`）是专为 Windows 10
 
 ---
 
-## 3. Muse 工具定义矩阵（7 默认暴露 + 1 条件注册）
+## 3. Muse 工具定义矩阵（7 默认暴露 + 条件注册扩展）
 
-`src/tools/definitions.ts` 中的 `getExposedMuseTools(desktopHandsEnabled)` 根据 `config.yaml` 的 `desktopHands.enabled` 动态决定暴露集合：
+`src/tools/definitions.ts` 中的 `getExposedMuseTools(desktopHandsEnabled)` 根据配置与启用的资源动态决定暴露集合：
 
 | 工具名称 | 元分类 | 默认暴露 | 核心能力与动作枚举 (`action`) |
 | :--- | :--- | :---: | :--- |
-| `pc_status` | `read` | ✅ 是 | 采集系统负载、内存用量、当前权限档位 (`profile`)、隧道状态、最近审批回执 (`lastApprovalReceipt`) 及已配置 ACP 代理列表。 |
+| `pc_status` | `read` | ✅ 是 | 采集系统负载、内存用量、当前权限档位 (`profile`)、隧道状态、最近审批回执 (`lastApprovalReceipt`)、已配置 ACP 代理列表及已启用本机 MCP / Skill 摘要。 |
 | `fs_explore` | `read` | ✅ 是 | 安全文件探查：`read`（读内容）、`list`（目录列举）、`glob`（模式匹配）、`grep`（全文正则搜索）。 |
 | `fs_mutate` | `write` | ✅ 是 | 文件原子变更：`write`（覆写/新建）、`edit`（精确片段替换）、`move`（移动/重命名）、`delete`（删除），变更前自动创建 Git Shadow 快照。 |
 | `exec_command`| `sensitive_write` | ✅ 是 | 8000ms 快慢双轨 PowerShell 指令执行（`-EncodedCommand` Base64 UTF-16LE），Win32 Job Object 进程树包裹。 |
@@ -132,3 +132,5 @@ Muse-Win-Harness（简称 **MWH**，当前版本 `v0.1.0`）是专为 Windows 10
 | `subagent_dispatch`| `sensitive_write` | ✅ 是 | 派生与控制动态 ACP Profile 或 `builtin` 代理：`run`、`events`、`wait`、`steer`、`interrupt`、`list_profiles`。 |
 | `git_checkpoint` | `write` | ✅ 是 | 跟踪与未跟踪工作区全状态确定性快照：`create`（创建快照）、`list`（列举历史）、`rollback`（单点回滚还原）。 |
 | `desktop_hands` | `sensitive_write` | ⚙️ 条件注册 | Win32 DPI 自适应桌面自动化：`screenshot`、`mouse_move`、`mouse_click`、`keyboard_type`。**默认关闭且从工具列表中隐藏**，仅当 `desktopHands.enabled === true` 时注册暴露。 |
+| `skill_read` | `read` | ⚙️ 条件注册 | 本机 Skill 正文只读入口：通过 `name` 读取已启用条目的 `SKILL.md` 正文；未启用、不存在或文件不可读时返回明确错误。仅当**至少有一个已启用 Skill** 时注册暴露。 |
+| `{serverId}_{原工具名}` | `sensitive_write`（标为只读时为 `read`） | ⚙️ 条件注册 | 动态本机 MCP 工具：由用户在资源库中启用的本机 MCP 服务器动态接入。工具原名非法字符转换为下划线并前缀服务器标识；仅当对应 MCP 服务器会话建立且探针就绪时注册暴露；调用统一由 PipelineKernel 仲裁并受 Win32 Job Object 生命周期管控。 |

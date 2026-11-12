@@ -83,7 +83,7 @@
   <!-- Subtle backdrop dimming over chat canvas when drawer is open -->
   <path d="M 72 48 H 1264 V 832 C 1264 838.627 1258.63 844 1252 844 H 72 V 48 Z" fill="#000000" fill-opacity="0.12"/>
 
-  <!-- 3. Primary Settings Drawer (.mwh-drawer: left=var(--mwh-rail)=56px -> x=72; top=12.5vh -> y=148; height=75vh -> h=596; w=336; rx=20) -->
+  <!-- 3. Primary settings drawer: left 56px so x=72; top 12.5vh so y=148; height 75vh so h=596; w=336; rx=20 -->
   <g transform="translate(72, 148)" filter="url(#panelShadow)">
     <rect width="336" height="596" rx="20" fill="#EFECE6"/>
     <rect x="0.5" y="0.5" width="335" height="595" rx="19.5" stroke="#000000" stroke-opacity="0.06"/>
@@ -217,7 +217,7 @@
     <!-- Island Body -->
     <text x="18" y="72" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12">请求修改工作区文件（批准后自动生成 Git Shadow 写前快照，随时可一键回滚）：</text>
 
-    <!-- Code box (--mwh-code: #F2F1EC) -->
+    <!-- Code box, paper #F2F1EC -->
     <rect x="16" y="86" width="592" height="218" rx="12" fill="#F2F1EC"/>
     <text x="32" y="114" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">$ fs_mutate (action="edit", mode="confirm")</text>
     <text x="32" y="138" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">目标路径: &lt;workspace&gt;/src/app.ts</text>

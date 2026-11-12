@@ -1064,6 +1064,24 @@ export const MwhSettingsModal: React.FC = () => {
                               dark={chromeDark}
                             />
                           </div>
+                          <div
+                            className={`p-3 rounded-xl flex items-center justify-between gap-3 mt-3 ${subtleBg}`}
+                          >
+                            <div>
+                              <div className="text-xs font-medium">多端审批</div>
+                              <div className={`text-[11px] mt-0.5 leading-relaxed ${mutedText}`}>
+                                关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse
+                                官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse
+                                里对该工具选了「始终允许」，官方卡片也会跳过。
+                              </div>
+                            </div>
+                            <MwhSwitch
+                              checked={Boolean(state.multiDeviceApproval)}
+                              onChange={() => mwhService.toggleMultiDeviceApproval()}
+                              label="多端审批"
+                              dark={chromeDark}
+                            />
+                          </div>
                         </div>
 
                         {/* 动态安全边界说明 */}

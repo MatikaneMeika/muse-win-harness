@@ -1020,6 +1020,140 @@ await runCase('C16 Bearer token & secret defense line: DPAPI store, token TTL & 
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// C17: 「多端审批」开关。默认关闭保持原浮岛；开启后 medium 与非 HMAC high
+// 不再 CONFIRMATION_REQUIRED，critical 仍 HMAC；request.context 不得私自打开。
+// ---------------------------------------------------------------------------
+await runCase('C17 multi-device approval switch defers non-HMAC, keeps critical, ignores context injection', async () => {
+  const ws = tmpDir('mwh_p3_c17_');
+  const { PipelineKernel } = await import('../dist/pipeline/pipeline.js');
+  const { loadUserSettings, saveUserSettings } = await import('../dist/config/userSettings.js');
+
+  const kOff = new PipelineKernel({
+    confinementMode: 'workspace-write',
+    approvalPolicy: 'smart-risk',
+    workspaceRoot: ws
+  });
+  const offWrite = await kOff.handleRequest({
+    id: 'c17_off_write',
+    toolName: 'fs_mutate',
+    category: 'write',
+    params: { action: 'write', path: 'off.txt', content: 'nope' }
+  });
+  assert(
+    offWrite.status === 'CONFIRMATION_REQUIRED' && offWrite.riskLevel === 'medium',
+    `default-off write expected CONFIRMATION_REQUIRED, got ${offWrite.status}`
+  );
+  assert(!fs.existsSync(path.join(ws, 'off.txt')), 'default-off must not write the file');
+
+  const injected = await kOff.handleRequest({
+    id: 'c17_inject',
+    toolName: 'fs_mutate',
+    category: 'write',
+    params: { action: 'write', path: 'inject.txt', content: 'hack' },
+    context: { multiDeviceApproval: true }
+  });
+  assert(
+    injected.status === 'CONFIRMATION_REQUIRED',
+    `request.context must not enable multi-device approval, got ${injected.status}`
+  );
+  assert(!fs.existsSync(path.join(ws, 'inject.txt')), 'injection must not write');
+
+  const kOn = new PipelineKernel({
+    confinementMode: 'workspace-write',
+    approvalPolicy: 'smart-risk',
+    workspaceRoot: ws,
+    multiDeviceApproval: true
+  });
+  const onWrite = await kOn.handleRequest({
+    id: 'c17_on_write',
+    toolName: 'fs_mutate',
+    category: 'write',
+    params: { action: 'write', path: 'on.txt', content: 'yes' }
+  });
+  assert(
+    onWrite.status === 'SUCCESS' &&
+      onWrite.riskLevel === 'medium' &&
+      fs.readFileSync(path.join(ws, 'on.txt'), 'utf-8') === 'yes',
+    `switch-on write expected SUCCESS, got ${onWrite.status}`
+  );
+
+  const onExec = await kOn.handleRequest({
+    id: 'c17_on_exec',
+    toolName: 'exec_command',
+    category: 'sensitive_write',
+    params: { command: 'Write-Output "mda-hi"' }
+  });
+  assert(
+    onExec.status === 'SUCCESS' &&
+      onExec.riskLevel === 'medium' &&
+      String(onExec.data?.stdout).includes('mda-hi'),
+    `switch-on exec expected SUCCESS, got ${onExec.status} ${onExec.reason || onExec.error || ''}`
+  );
+
+  const onHigh = await kOn.handleRequest({
+    id: 'c17_on_high',
+    toolName: 'fake_sensitive_probe',
+    category: 'sensitive_write',
+    params: {}
+  });
+  assert(
+    onHigh.status !== 'CONFIRMATION_REQUIRED' &&
+      onHigh.riskLevel === 'high' &&
+      onHigh.requiresMobileHmac !== true,
+    `switch-on high must not park on the island, got ${onHigh.status} ${onHigh.reason || onHigh.error || ''}`
+  );
+
+  const onCrit = await kOn.handleRequest({
+    id: 'c17_on_crit',
+    toolName: 'exec_command',
+    category: 'sensitive_write',
+    params: { command: 'rm -rf /' }
+  });
+  assert(
+    onCrit.status === 'CONFIRMATION_REQUIRED' &&
+      onCrit.riskLevel === 'critical' &&
+      onCrit.requiresMobileHmac === true,
+    `switch-on critical must still require HMAC, got ${onCrit.status} hmac=${onCrit.requiresMobileHmac}`
+  );
+
+  kOff.updateContext({ multiDeviceApproval: true });
+  const liveOn = await kOff.handleRequest({
+    id: 'c17_live_on',
+    toolName: 'fs_mutate',
+    category: 'write',
+    params: { action: 'write', path: 'live.txt', content: 'live' }
+  });
+  assert(
+    liveOn.status === 'SUCCESS' && fs.readFileSync(path.join(ws, 'live.txt'), 'utf-8') === 'live',
+    `updateContext(true) should execute medium writes, got ${liveOn.status}`
+  );
+  kOff.updateContext({ multiDeviceApproval: false });
+  const liveOff = await kOff.handleRequest({
+    id: 'c17_live_off',
+    toolName: 'fs_mutate',
+    category: 'write',
+    params: { action: 'write', path: 'live-off.txt', content: 'x' }
+  });
+  assert(
+    liveOff.status === 'CONFIRMATION_REQUIRED',
+    `updateContext(false) should restore the island, got ${liveOff.status}`
+  );
+  assert(!fs.existsSync(path.join(ws, 'live-off.txt')), 'live-off must not write');
+
+  const saved = saveUserSettings(ws, { multiDeviceApproval: true });
+  assert(saved.multiDeviceApproval === true, 'save must return enabled');
+  const loaded = loadUserSettings(ws);
+  assert(loaded.multiDeviceApproval === true, 'load must read enabled back');
+  const settingsFile = path.join(ws, '.mwh', 'settings.json');
+  fs.writeFileSync(settingsFile, '{not-json', 'utf-8');
+  const corrupt = loadUserSettings(ws);
+  assert(corrupt.multiDeviceApproval === false, 'corrupt settings must fail closed to off');
+  const missing = loadUserSettings(path.join(ws, 'no-such-ws'));
+  assert(missing.multiDeviceApproval === false, 'missing file must default off');
+});
+
 // ---------------------------------------------------------------------------
 // SUMMARY
 // ---------------------------------------------------------------------------

@@ -37,6 +37,9 @@
 | **派发代理与权限天花板** (`subagent_dispatch`) | 写意图直接 `DENIED`；请求更高 `childMode` 抛 `PRIVILEGE_ESCALATION_DENIED` | `CONFIRMATION_REQUIRED` (`high`)；子策略不松于父策略；越级返回 `403 PRIVILEGE_ESCALATION_DENIED` | 先挂起 `CONFIRMATION_REQUIRED` (`high`)；即使人工批准后若 `childMode > parentMode` 仍拒绝 (`PRIVILEGE_ESCALATION_DENIED`) | 允许 `childMode <= danger-full-access` 自动派发；内部 Critical 动作仍强制 HMAC 审批 |
 | **快照创建与一键回滚** (`git_checkpoint` create/rollback) | `create`/`rollback` 均 `DENIED` (`READ_ONLY_MODE_WRITE_DENIED`)；`status`/`diff` 放行 | REST `/api/v1/snapshots/:id/rollback` 本机 UI 直接还原；MCP 工具调用走 `CONFIRMATION_REQUIRED` | `SUCCESS`（校验 `metadata.json` 与备份完整性，损坏则 `CHECKPOINT_RESTORE_FAILED` 中止） | `SUCCESS`（同左，受 realpath 围栏保护，禁止逃逸工作区） |
 
+> **附：「多端审批」开关（默认关闭）**  
+> 关闭时，上表 `confirm` 列完全按原行为（写文件与普通命令在浮岛挂起）。开启后，`confirm`（以及底层 `always-ask` / `smart-risk`）下的工作区文件变更、普通命令、以及非 HMAC 的高危动作（如 `subagent_dispatch`）不再二次挂起 Windows 浮岛，改由 Muse 官方 HITL 卡片在 `tools/call` 发出前于各端（Mac、手机、网页）确认。若用户在 Muse 中对该工具选择了「始终允许」，官方卡片也会跳过。破坏性操作（`rm -rf`、`git push -f`、`Remove-Item -Recurse` 等，`critical` + HMAC）无论开关是否开启，均仍在本机按命令检查——Muse 的「始终允许」以整个工具为单位，不会检查这条命令本身。本机 HMAC 审批页绑定在守护进程地址上，不在电脑跟前时无法代替官方卡片完成破坏性审批。
+
 ### 1.2 浮窗停止 (`task-kill`) 与全局急停 (`emergency-kill`) 杀伤边界
 
 - **浮窗停止 (`POST /api/v1/tasks/:id/kill`)**：校验 `id` 属于当前活跃作业后，调用 `JobManager.abort(id)` —— 对外部 ACP 代理先执行协作式梯度中断（`session/cancel → stdin EOF → SIGTERM`），再调用 Win32 Job Object `TerminateJobObject` + `taskkill /F /T` 兜底并同步轮询确认父进程与派生孙进程 PID 全部消亡（`parentAlive=false, childAlive=false`）。

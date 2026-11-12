@@ -1823,12 +1823,16 @@ export const MwhSettingsModal: React.FC = () => {
                                               只读
                                             </span>
                                           )}
-                                          <span className={`text-[11px] ${mutedText} shrink-0 ml-auto hidden sm:inline`}>
-                                            {entry.toolCount ?? entry.exposedToolNames?.length ?? 0} 个工具
-                                          </span>
                                         </div>
 
-                                        <div className="flex items-center gap-2 shrink-0">
+                                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                                          <span
+                                            className={`text-[11px] font-medium tabular-nums tracking-normal ${mutedText} shrink-0 whitespace-nowrap`}
+                                            style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
+                                          >
+                                            {entry.toolCount ?? entry.exposedToolNames?.length ?? 0} 个工具
+                                          </span>
+                                          <div className="flex items-center gap-2">
                                           <MwhSwitch
                                             checked={entry.enabled}
                                             onChange={(next) => mwhService.toggleResource(entry.id, next)}
@@ -1860,6 +1864,7 @@ export const MwhSettingsModal: React.FC = () => {
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
+                                          </div>
                                         </div>
                                       </div>
 
@@ -1879,11 +1884,11 @@ export const MwhSettingsModal: React.FC = () => {
                                               {entry.exposedToolNames.map((t, idx) => (
                                                 <div
                                                   key={idx}
-                                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[11px] font-mono text-neutral-300"
+                                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[11px] font-normal font-mono text-neutral-300"
                                                   title={`原名: ${t.original}`}
                                                 >
                                                   <span>{t.exposed}</span>
-                                                  <span className="text-[10px] text-neutral-500">({t.original})</span>
+                                                  <span className="text-[11px] font-normal text-neutral-500">({t.original})</span>
                                                 </div>
                                               ))}
                                             </div>

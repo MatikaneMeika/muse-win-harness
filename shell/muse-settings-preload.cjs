@@ -630,6 +630,31 @@ const INJECT_STYLE = `
 .mwh-muted { color: var(--mwh-muted); }
 .mwh-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .mwh-hint { font-size: 12px; line-height: 1.55; color: var(--mwh-muted); }
+/* 元信息：界面字体 + tabular-nums，不继承行标题的 600 字重。见 DESIGN.md 3.3 */
+.mwh-tool-count {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  color: var(--mwh-muted);
+  letter-spacing: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* 工具名芯片：同一套等宽字体，字号落到 3.3 等宽档（11px），不用 9.5px */
+.mwh-tool-chip {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 2.5px 8.5px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.mwh-tool-chip .mwh-tool-orig {
+  opacity: 0.6;
+  font-size: 11px;
+  font-weight: 400;
+}
 .mwh-row {
   display: flex;
   align-items: center;
@@ -3524,11 +3549,11 @@ function renderResources(settings) {
               entry.exposedToolNames
                 .map(function (t) {
                   return (
-                    '<span class="mwh-pill mwh-mono" style="font-size:10.5px;padding:2px 7px;background:rgba(255,255,255,0.06)" title="原名: ' +
+                    '<span class="mwh-pill mwh-mono mwh-tool-chip" title="原名: ' +
                     esc(t.original) +
                     '">' +
                     esc(t.exposed) +
-                    ' <span style="opacity:0.6;font-size:9.5px">(' +
+                    ' <span class="mwh-tool-orig">(' +
                     esc(t.original) +
                     ')</span>' +
                     '</span>'
@@ -3565,11 +3590,12 @@ function renderResources(settings) {
           '</span>' +
           statusBadge +
           readonlyBadge +
-          '<span class="mwh-hint" style="margin-left:auto;font-size:11px">' +
+          '</div></div>' +
+          '<div style="display:flex;align-items:center;gap:12px;flex-shrink:0;margin-left:12px">' +
+          '<span class="mwh-tool-count">' +
           esc(toolCountText) +
           '</span>' +
-          '</div></div>' +
-          '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
+          '<div style="display:flex;gap:5px;align-items:center">' +
           renderSwitchHtml({
             checked: entry.enabled,
             action: 'resource-toggle',
@@ -3591,7 +3617,7 @@ function renderResources(settings) {
           '" title="删除">' +
           ICON.trash +
           '</button>' +
-          '</div></div>' +
+          '</div></div></div>' +
           expandedBlock +
           '</div>'
         );

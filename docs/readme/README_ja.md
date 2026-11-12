@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness: クラウド AI に安全な Windows ローカル実行の手を — フォルダ境界・変更前スナップショット・デスクトップ承認" width="100%">
+  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
 </p>
 
 <p align="center">
@@ -18,9 +18,7 @@
   <a href="../../DISCLAIMER.md"><img src="https://img.shields.io/badge/built_with-Vibe_Coding_%2B_Gates-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
-**クラウド上の AI は優秀ですが、ブラウザの中に閉じ込められています。Muse-Win-Harness (MWH) は、ブレーキをあなたの手に残したまま、[Muse](https://muse.ai)（または標準 MCP / REST クライアント）に Windows PC 上で動く「手」を与えます。**
-
-WSL2・Hyper-V・Docker は一切不要。ネイティブ Windows コンパニオンウィンドウと標準 MCP (`/mcp`) / REST (`/api/v1`) ブリッジを通じて、許可したフォルダだけへのアクセス制限、ファイル編集前の自動スナップショット保存、そして画面右下のフローティングアイランドでのワンクリック承認を提供します。
+**[Muse](https://muse.ai) をあなたの Windows につなぐ。** それが Muse-Win-Harness です。
 
 > [!IMPORTANT]
 > **誠実なセキュリティ境界と Vibe Coding 開示（No Security Washing）**

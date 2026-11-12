@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/brand/mwh-cover.svg" alt="Muse-Win-Harness — Give cloud AI a safe pair of hands on your Windows PC" width="100%">
+  <img src="./assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
 </p>
 
 <p align="center">
@@ -19,9 +19,7 @@
   <a href="./DISCLAIMER.md"><img src="https://img.shields.io/badge/built_with-Vibe_Coding_%2B_Human_Gates-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
-**Cloud AI is great at thinking, but stuck in a browser tab. Muse-Win-Harness (MWH) gives [Muse](https://muse.ai) (or any MCP / REST client) a pair of hands on your Windows PC — while keeping the brakes in yours.**
-
-No WSL2, no Docker, no virtual machine setup. MWH wraps `muse.ai` in a clean native Windows companion window, exposes a local tool bridge over standard MCP (`/mcp`) and REST (`/api/v1`), fences file access to the folders you authorize, saves an automatic undo snapshot before every file edit, and pops up a live desktop floating island whenever an action needs your nod.
+**Connect [Muse](https://muse.ai) to your Windows.** That's what Muse-Win-Harness does.
 
 > [!IMPORTANT]
 > **Honest Boundaries & Vibe Coding Disclosure (`v0.1.0` Early Preview)**

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让云端 AI 在你的 Windows 电脑上动手干活，目录有围栏、改前留快照、高危先问你" width="100%">
+  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
 </p>
 
 <p align="center">
@@ -19,9 +19,7 @@
   <a href="../../DISCLAIMER.md"><img src="https://img.shields.io/badge/开发方式-Vibe_Coding_%2B_门禁校验-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
-**云端 AI 很擅长出主意，但困在浏览器网页里摸不到你的本地项目。Muse-Win-Harness (MWH) 给云端 [Muse](https://muse.ai)（或任何标准 MCP / REST 客户端）装上一双 Windows 本地手——同时把方向盘和刹车留在你手里。**
-
-不用装 WSL2、不用开 Hyper-V 虚拟机、也不用配 Docker。MWH 用一个清爽的原生桌面伴随窗口承载 `muse.ai`，在本地搭起标准 MCP（`/mcp`）与 REST（`/api/v1`）桥接器：只允许访问你授权的文件夹，每次改文件前自动存好「后悔药」快照，遇到敏感改动或命令时在窗口右下角弹出实时审批浮岛，点一下才放行。
+**让 [Muse](https://muse.ai) 接入你的 Windows。** 这就是 Muse-Win-Harness。
 
 > [!IMPORTANT]
 > **诚实安全边界与 Vibe Coding 来源声明（`v0.1.0` 早期预览版）**

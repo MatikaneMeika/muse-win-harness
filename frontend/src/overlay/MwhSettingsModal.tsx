@@ -15,6 +15,7 @@ import {
   GitMerge,
   Grid,
   Hand,
+  HelpCircle,
   Loader2,
   Lock,
   Monitor,
@@ -57,6 +58,59 @@ const NAV_ITEMS: Array<{
   { id: 'resources', label: '资源库', sectionHeader: '本机 MCP 与 Skill', icon: Folder },
   { id: 'snapshots-audit', label: '审计日志', sectionHeader: '影子快照与审计日志', icon: FileText },
 ];
+
+const PEEK_AUTO_HIDE_MS = 15000;
+
+function maskEndpointUrl(rawUrl: string, isPeeked: boolean): string {
+  const str = String(rawUrl || '').trim();
+  if (!str || isPeeked) return str;
+  if (/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(\/|$)/i.test(str)) {
+    return str;
+  }
+  return str.replace(/^(https?:\/\/)([^/?#]+)(.*)$/i, (_m, proto: string, hostPort: string, rest: string) => {
+    const parts = hostPort.split('.');
+    if (parts.length >= 2) {
+      const sub = parts[0];
+      const maskedSub =
+        sub.length <= 4 ? `${sub.slice(0, 1)}••••` : `${sub.slice(0, 3)}••••${sub.slice(-2)}`;
+      return `${proto}${[maskedSub, ...parts.slice(1)].join('.')}${rest}`;
+    }
+    return `${proto}${hostPort.slice(0, 3)}••••${rest}`;
+  });
+}
+
+export const TOUR_STEPS = [
+  {
+    id: 'activity-entry',
+    target: 'tour-activity-entry',
+    title: '左栏入口与健康状态',
+    body: '点击 Muse 左侧导航栏 MWH 紫蓝徽标随时呼出或收起控制抽屉；徽标右下角圆点实时反映宿主守护与公网隧道连通状态（冰川青蓝为就绪，赤陶珊瑚红为离线）。',
+  },
+  {
+    id: 'permission-modes',
+    target: 'tour-permission-modes',
+    title: '四档权限与 2 小时自动降级',
+    body: '按任务风险一键切换「计划模式（只读） / 变更前确认（默认） / 自主模式（自动快照） / 完全访问（跨盘放行）」。开启完全访问时支持 2 小时自动降级保护。',
+  },
+  {
+    id: 'endpoints-credentials',
+    target: 'tour-endpoints-credentials',
+    title: '端点防窥脱敏与一键配对',
+    body: '公网 MCP/REST 端点与 Bearer Token 默认自动脱敏防截屏泄露（点击眼睛图标可临时查看 15 秒）；点击「复制配对口令」或「复制 MCP JSON」即可一键填入 Muse 连接器。',
+  },
+  {
+    id: 'advanced-center',
+    target: 'tour-advanced-center',
+    title: '四栏高级配置中心',
+    body: '展开右侧伴随子面板，集中管理「连接与权限」、「工作区与代理（目录白名单与 ACP 引擎）」、「资源库（本机 MCP 与 Skill 原地开关）」及「审计日志（Git Shadow 写前快照单条回滚）」。',
+  },
+  {
+    id: 'approval-island',
+    target: 'tour-approval-island',
+    title: '底部实时审批灵动岛',
+    body: '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。',
+  },
+] as const;
 
 type SnapshotSortOrder = 'newest' | 'oldest' | 'files-desc';
 
@@ -215,8 +269,50 @@ export const MwhSettingsModal: React.FC = () => {
 
   // Real token peek & action loading states
   const [isTokenPeeked, setIsTokenPeeked] = useState(false);
+  const [isEndpointPeeked, setIsEndpointPeeked] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
   const [switchingMode, setSwitchingMode] = useState<string | null>(null);
   const [tunnelActionLoading, setTunnelActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!state.settingsModalOpen) {
+      setIsTokenPeeked(false);
+      setIsEndpointPeeked(false);
+      setTourOpen(false);
+      return;
+    }
+    if (!isTokenPeeked && !isEndpointPeeked) return;
+    const timer = window.setTimeout(() => {
+      setIsTokenPeeked(false);
+      setIsEndpointPeeked(false);
+    }, PEEK_AUTO_HIDE_MS);
+    return () => window.clearTimeout(timer);
+  }, [state.settingsModalOpen, isTokenPeeked, isEndpointPeeked]);
+
+  useEffect(() => {
+    if (!tourOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setTourOpen(false);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setTourStepIndex((prev) => {
+          if (prev + 1 >= TOUR_STEPS.length) {
+            setTourOpen(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setTourStepIndex((prev) => Math.max(0, prev - 1));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tourOpen]);
 
   // Custom UI Glass Confirm Dialog (Zero native window.confirm)
   const [confirmModal, setConfirmModal] = useState<{
@@ -572,11 +668,11 @@ export const MwhSettingsModal: React.FC = () => {
               className="w-[200px] shrink-0 h-full flex flex-col py-5 px-3.5"
             >
               <div>
-                <div className="px-3 pb-4">
+                <div className="px-3 pb-4" data-tour-id="tour-activity-entry">
                   <h2 className="text-[19px] font-bold tracking-tight">设置</h2>
                 </div>
 
-                <div className="space-y-0.5">
+                <div className="space-y-0.5" data-tour-id="tour-advanced-center">
                   {NAV_ITEMS.map((item) => {
                     const Icon = item.icon;
                     const active = state.activeSettingsTab === item.id;
@@ -585,7 +681,7 @@ export const MwhSettingsModal: React.FC = () => {
                         key={item.id}
                         type="button"
                         onClick={() => mwhService.setActiveSettingsTab(item.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] transition-colors duration-120 cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2B7FFF]/70 ${
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] transition-colors duration-120 cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/70 ${
                           active
                             ? chromeDark
                               ? 'bg-[#313238] text-white font-medium'
@@ -611,14 +707,30 @@ export const MwhSettingsModal: React.FC = () => {
                 <h3 className={`text-[13.5px] font-medium ${mutedText}`}>
                   {NAV_ITEMS.find((n) => n.id === state.activeSettingsTab)?.sectionHeader}
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => mwhService.closeSettingsModal()}
-                  aria-label="关闭设置弹窗"
-                  className="w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-120 cursor-pointer hover:bg-white/[0.08] text-[#D8D9E0]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-action="open-tour"
+                    data-testid="mwh-open-tour-btn"
+                    onClick={() => {
+                      setTourStepIndex(0);
+                      setTourOpen(true);
+                    }}
+                    title="功能使用引导"
+                    aria-label="功能使用引导"
+                    className="w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-120 cursor-pointer hover:bg-white/[0.08] text-[#D8D9E0]"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => mwhService.closeSettingsModal()}
+                    aria-label="关闭设置弹窗"
+                    className="w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-120 cursor-pointer hover:bg-white/[0.08] text-[#D8D9E0]"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Scrollable Cards Container */}
@@ -645,7 +757,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 生成 SKILL.md 配对说明与 MCP 模板
                               </div>
                               <div className={`text-xs mt-0.5 truncate ${mutedText}`}>
-                                当前端点：{mwhService.getActivePublicBaseUrl()} · 当前档位：{currentProfile.shortLabel}
+                                当前端点：{maskEndpointUrl(mwhService.getActivePublicBaseUrl(), isEndpointPeeked)} · 当前档位：{currentProfile.shortLabel}
                               </div>
                             </div>
                             <span className={`text-xs font-mono shrink-0 px-2 py-0.5 rounded bg-black/20 ${mutedText}`}>
@@ -654,7 +766,7 @@ export const MwhSettingsModal: React.FC = () => {
                           </div>
 
                           <details className="rounded-xl px-3 py-2 text-[11.5px] cursor-pointer group bg-white/[0.03]">
-                            <summary className="font-medium text-[#8AB8FF] flex items-center justify-between select-none">
+                            <summary className="font-medium text-[#A5B4FC] flex items-center justify-between select-none">
                               <span>查看完整配对说明 (无密钥)</span>
                               <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
                             </summary>
@@ -665,8 +777,8 @@ export const MwhSettingsModal: React.FC = () => {
                             </pre>
                           </details>
 
-                          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                            <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 min-w-0">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -676,9 +788,9 @@ export const MwhSettingsModal: React.FC = () => {
                                     true,
                                   );
                                 }}
-                                className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#2B7FFF] hover:bg-[#1B6FEF] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap"
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105 text-white flex items-center gap-1.5 transition-all duration-120 cursor-pointer whitespace-nowrap max-w-full min-w-0 overflow-hidden text-ellipsis"
                               >
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-3.5 h-3.5 shrink-0" />
                                 <span>一键复制配对口令</span>
                               </button>
 
@@ -690,9 +802,9 @@ export const MwhSettingsModal: React.FC = () => {
                                     '已复制 Streamable HTTP MCP JSON 模板',
                                   )
                                 }
-                                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${subtleBg} hover:opacity-85`}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap max-w-full min-w-0 overflow-hidden text-ellipsis ${subtleBg} hover:opacity-85`}
                               >
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-3.5 h-3.5 shrink-0" />
                                 <span>复制 MCP JSON</span>
                               </button>
                             </div>
@@ -748,7 +860,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 <div className="flex items-center justify-between">
                                   <div className="text-[13px] font-medium">{drv.title}</div>
                                   {isLoading ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8AB8FF]" />
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#A5B4FC]" />
                                   ) : active ? (
                                     <span className="text-[11px] font-mono text-white/90 px-1.5 py-0.5 rounded bg-white/[0.1] border border-white/[0.08]">生效中</span>
                                   ) : null}
@@ -814,7 +926,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       setTunnelActionLoading(null);
                                     }
                                   }}
-                                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#2B7FFF] text-white hover:bg-[#1B6FEF] transition-colors duration-120 cursor-pointer whitespace-nowrap flex items-center gap-1.5 disabled:opacity-50"
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 transition-all duration-120 cursor-pointer whitespace-nowrap flex items-center gap-1.5 disabled:opacity-50"
                                 >
                                   {tunnelActionLoading === 'spawn_quick' ? (
                                     <>
@@ -886,15 +998,40 @@ export const MwhSettingsModal: React.FC = () => {
                           )}
                         </div>
 
-                        <div className={`rounded-2xl p-4 space-y-2.5 text-xs ${cardBg}`}>
-                          <div className="text-[13.5px] font-medium">
-                            当前生效端点与鉴权密钥 (Streamable HTTP MCP / REST)
+                        <div
+                          data-tour-id="tour-endpoints-credentials"
+                          className={`rounded-2xl p-4 space-y-2.5 text-xs ${cardBg}`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-[13.5px] font-medium">
+                              当前生效端点与鉴权密钥 (Streamable HTTP MCP / REST)
+                            </div>
+                            <button
+                              type="button"
+                              data-action="toggle-endpoint-peek"
+                              onClick={() => setIsEndpointPeeked((prev) => !prev)}
+                              title={
+                                isEndpointPeeked
+                                  ? '隐藏完整端点域名'
+                                  : '临时显示完整端点域名 (15s 自动隐藏)'
+                              }
+                              className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 transition-colors duration-120 cursor-pointer flex items-center gap-1 text-[11px]"
+                            >
+                              {isEndpointPeeked ? (
+                                <EyeOff className="w-3.5 h-3.5" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                              <span>{isEndpointPeeked ? '隐藏端点域名' : '显示完整域名'}</span>
+                            </button>
                           </div>
 
                           <div
-                            className={`p-2.5 rounded-xl flex items-center justify-between gap-2 font-mono ${subtleBg}`}
+                            className={`p-2.5 rounded-xl flex items-center justify-between gap-2 min-w-0 font-mono ${subtleBg}`}
                           >
-                            <span className="truncate">MCP: {pairing.mcpEndpoint}</span>
+                            <span className="truncate">
+                              MCP: {maskEndpointUrl(pairing.mcpEndpoint, isEndpointPeeked)}
+                            </span>
                             <button
                               type="button"
                               onClick={() =>
@@ -910,9 +1047,11 @@ export const MwhSettingsModal: React.FC = () => {
                           </div>
 
                           <div
-                            className={`p-2.5 rounded-xl flex items-center justify-between gap-2 font-mono ${subtleBg}`}
+                            className={`p-2.5 rounded-xl flex items-center justify-between gap-2 min-w-0 font-mono ${subtleBg}`}
                           >
-                            <span className="truncate">REST: {pairing.restEndpoint}</span>
+                            <span className="truncate">
+                              REST: {maskEndpointUrl(pairing.restEndpoint, isEndpointPeeked)}
+                            </span>
                             <button
                               type="button"
                               onClick={() =>
@@ -925,16 +1064,17 @@ export const MwhSettingsModal: React.FC = () => {
                           </div>
 
                           <div
-                            className={`p-2.5 rounded-xl flex items-center justify-between gap-2 font-mono ${subtleBg}`}
+                            className={`p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 min-w-0 font-mono ${subtleBg}`}
                           >
                             <span className="truncate">
                               Token: {isTokenPeeked ? (mwhService.getRealToken() || state.tunnel.bearerToken) : state.tunnel.bearerToken}
                             </span>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
+                                data-action="toggle-token-peek"
                                 onClick={() => setIsTokenPeeked((prev) => !prev)}
-                                title={isTokenPeeked ? '隐藏明文' : '查看完整明文'}
+                                title={isTokenPeeked ? '隐藏明文' : '查看完整明文 (15s 自动隐藏)'}
                                 className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 text-white transition-colors duration-120 cursor-pointer flex items-center"
                               >
                                 {isTokenPeeked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -955,7 +1095,7 @@ export const MwhSettingsModal: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => mwhService.rotateBearerToken()}
-                                className="px-2.5 py-1 rounded bg-[#2B7FFF] text-white hover:bg-[#1A6FEF] flex items-center gap-1 transition-colors duration-120 cursor-pointer"
+                                className="px-2.5 py-1 rounded bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 flex items-center gap-1 transition-all duration-120 cursor-pointer"
                               >
                                 <RefreshCw className="w-3 h-3" />
                                 <span>轮换</span>
@@ -969,7 +1109,12 @@ export const MwhSettingsModal: React.FC = () => {
                           权限
                         </div>
 
-                        <div className="space-y-2" role="radiogroup" aria-label="四档权限模式">
+                        <div
+                          className="space-y-2"
+                          role="radiogroup"
+                          aria-label="四档权限模式"
+                          data-tour-id="tour-permission-modes"
+                        >
                           {PERMISSION_PROFILE_LIST.map((prof) => {
                             const selected = currentProfile.id === prof.id;
                             const isDanger = prof.id === 'full-access';
@@ -1008,7 +1153,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 className={`w-full p-3.5 rounded-2xl text-left transition-colors duration-120 cursor-pointer border ${
                                   selected
                                     ? isDanger
-                                      ? 'bg-red-500/12 border-red-500'
+                                      ? 'bg-[#E06C60]/15 border-[#E06C60]'
                                       : 'bg-white/[0.13] border-white/20 text-white shadow-sm'
                                     : `${cardBg} border-transparent hover:bg-white/[0.04]`
                                 }`}
@@ -1021,14 +1166,14 @@ export const MwhSettingsModal: React.FC = () => {
                                     <span className="text-[13.5px] font-semibold">{prof.title}</span>
                                   </div>
                                   {switchingMode === prof.id ? (
-                                    <span className="flex items-center gap-1 text-xs text-[#8AB8FF] font-mono">
+                                    <span className="flex items-center gap-1 text-xs text-[#A5B4FC] font-mono">
                                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                       <span>切换中...</span>
                                     </span>
                                   ) : selected ? (
                                     <span
                                       className={`text-xs font-mono shrink-0 ${
-                                        isDanger ? 'text-red-400' : 'text-[#2B7FFF]'
+                                        isDanger ? 'text-[#F28B82]' : 'text-[#A5B4FC]'
                                       }`}
                                     >
                                       当前生效
@@ -1073,7 +1218,7 @@ export const MwhSettingsModal: React.FC = () => {
                           </div>
 
                           <div className="space-y-1 text-xs">
-                            <div className="font-medium text-emerald-400">当前生效的保护机制：</div>
+                            <div className="font-medium text-[#7DD3FC]">当前生效的保护机制：</div>
                             {currentProfile.enforcedProtections.map((line, idx) => (
                               <div key={idx} className="pl-3 leading-relaxed opacity-90">
                                 - {line}
@@ -1082,7 +1227,7 @@ export const MwhSettingsModal: React.FC = () => {
                           </div>
 
                           <div className="space-y-1 text-xs pt-1">
-                            <div className="font-medium text-amber-400">未覆盖边界说明：</div>
+                            <div className="font-medium text-[#EAB364]">未覆盖边界说明：</div>
                             {currentProfile.uncoveredBoundaries.map((line, idx) => (
                               <div key={idx} className="pl-3 leading-relaxed opacity-90">
                                 - {line}
@@ -1106,7 +1251,7 @@ export const MwhSettingsModal: React.FC = () => {
                             </span>
                             <span
                               className={`text-xs font-mono ${
-                                state.daemon.connected ? 'text-emerald-400' : 'text-neutral-400'
+                                state.daemon.connected ? 'text-[#7DD3FC]' : 'text-neutral-400'
                               }`}
                             >
                               {state.daemon.connected
@@ -1145,7 +1290,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   setConfirmingEmergencyKill(false);
                                   mwhService.emergencyKillAllJobObjects();
                                 }}
-                                className="flex-1 py-2.5 px-4 rounded-xl bg-red-700 hover:bg-red-800 text-white font-semibold text-[13px] flex items-center justify-center gap-2 transition-colors duration-120 cursor-pointer ring-2 ring-red-400/60"
+                                className="flex-1 py-2.5 px-4 rounded-xl bg-[#D05A4E] hover:bg-[#B84A3E] text-white font-semibold text-[13px] flex items-center justify-center gap-2 transition-colors duration-120 cursor-pointer ring-2 ring-[#F28B82]/60"
                               >
                                 <ShieldAlert className="w-4 h-4" />
                                 <span>确认终止所有 Win32 Job Object 进程树？</span>
@@ -1164,7 +1309,7 @@ export const MwhSettingsModal: React.FC = () => {
                               type="button"
                               data-testid="emergency-kill-trigger-btn"
                               onClick={() => setConfirmingEmergencyKill(true)}
-                              className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium text-[13px] flex items-center justify-center gap-2 transition-colors duration-120 cursor-pointer"
+                              className="w-full py-2.5 px-4 rounded-xl bg-[#E06C60] hover:bg-[#D05A4E] text-white font-medium text-[13px] flex items-center justify-center gap-2 transition-colors duration-120 cursor-pointer"
                             >
                               <ShieldAlert className="w-4 h-4" />
                               <span>全局急停（终止所有 Win32 Job Object 进程树）</span>
@@ -1197,7 +1342,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 mwhService.addWorkspaceRoot(newWorkspaceInput);
                                 setNewWorkspaceInput('');
                               }}
-                              className="px-3.5 py-2 rounded-xl text-xs font-medium bg-[#2B7FFF] hover:bg-[#1B6FEF] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap"
+                              className="px-3.5 py-2 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105 text-white flex items-center gap-1.5 transition-all duration-120 cursor-pointer whitespace-nowrap"
                             >
                               <FolderPlus className="w-3.5 h-3.5" />
                               <span>添加目录</span>
@@ -1215,7 +1360,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   type="button"
                                   onClick={() => mwhService.removeWorkspaceRoot(rootPath)}
                                   aria-label={`移除工作区 ${rootPath}`}
-                                  className="text-red-400 hover:text-red-300 p-1 transition-colors duration-120 cursor-pointer shrink-0"
+                                  className="text-[#F28B82] hover:text-[#E06C60] p-1 transition-colors duration-120 cursor-pointer shrink-0"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1235,7 +1380,7 @@ export const MwhSettingsModal: React.FC = () => {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-[13.5px] font-medium">自定义 ACP 代理</span>
-                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400">
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#6366F1]/16 text-[#A5B4FC]">
                                   Agent Client Protocol
                                 </span>
                               </div>
@@ -1247,7 +1392,7 @@ export const MwhSettingsModal: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => openAcpCreateModal()}
-                              className="px-3 py-1.5 rounded-xl text-xs font-medium bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                              className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1]/20 text-[#A5B4FC] hover:bg-[#6366F1]/30 flex items-center gap-1.5 transition-colors cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               添加 ACP 代理
@@ -1287,7 +1432,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       </span>
                                       <span
                                         className={`text-[11px] font-mono flex items-center gap-1 ${
-                                          profile.detected ? 'text-emerald-500' : 'text-amber-500'
+                                          profile.detected ? 'text-[#7DD3FC]' : 'text-[#EAB364]'
                                         }`}
                                       >
                                         {profile.detected ? (
@@ -1343,7 +1488,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteAcp(profile.id)}
-                                      className="p-1.5 rounded-lg hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                      className="p-1.5 rounded-lg hover:bg-[#E06C60]/20 text-neutral-400 hover:text-[#F28B82] transition-colors cursor-pointer"
                                       title="删除 ACP 代理"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -1389,7 +1534,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     'builtin';
                                   mwhService.spawnIsolatedWorktree(preferredAgent, requestedSpawnMode);
                                 }}
-                                className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#2B7FFF] text-white hover:bg-[#1B6FEF] transition-colors duration-120 cursor-pointer whitespace-nowrap"
+                                className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 transition-all duration-120 cursor-pointer whitespace-nowrap"
                               >
                                 新建隔离 Worktree
                               </button>
@@ -1406,7 +1551,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 <div key={wt.id} className={`p-3 rounded-xl space-y-2 ${subtleBg}`}>
                                   <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 text-xs font-mono min-w-0 truncate">
-                                      <span className="font-semibold text-[#2B7FFF]">{wt.id}</span>
+                                      <span className="font-semibold text-[#A5B4FC]">{wt.id}</span>
                                       <span className="truncate">· {wt.branchName}</span>
                                       <span>· 代理: {wt.agentId}</span>
                                       <span>· 生效: {wt.childMode}</span>
@@ -1417,21 +1562,21 @@ export const MwhSettingsModal: React.FC = () => {
                                         <button
                                           type="button"
                                           onClick={() => mwhService.mergeWorktree(wt.id)}
-                                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#2B7FFF] text-white hover:bg-[#1B6FEF] flex items-center gap-1 transition-colors duration-120 cursor-pointer"
+                                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 flex items-center gap-1 transition-all duration-120 cursor-pointer"
                                         >
                                           <GitMerge className="w-3 h-3" />
                                           <span>合并回主分支</span>
                                         </button>
                                       )}
                                       {wt.status === 'MISSING' && (
-                                        <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/15 text-amber-500">
+                                        <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#D99B43]/15 text-[#EAB364]">
                                           已清理 (MISSING)
                                         </span>
                                       )}
                                       <button
                                         type="button"
                                         onClick={() => mwhService.removeWorktree(wt.id)}
-                                        className="px-2.5 py-1 rounded-lg text-xs bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors duration-120 cursor-pointer"
+                                        className="px-2.5 py-1 rounded-lg text-xs bg-[#E06C60]/15 text-[#F28B82] hover:bg-[#E06C60]/25 transition-colors duration-120 cursor-pointer"
                                       >
                                         清理分支
                                       </button>
@@ -1506,7 +1651,7 @@ export const MwhSettingsModal: React.FC = () => {
                             <button
                               type="button"
                               onClick={handleOpenAddResource}
-                              className="px-3 py-1.5 rounded-[10px] text-xs font-medium bg-[#2B7FFF] text-white hover:bg-[#1A6FEF] flex items-center gap-1.5 transition-colors duration-120 cursor-pointer shadow-sm"
+                              className="px-3 py-1.5 rounded-[10px] text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 flex items-center gap-1.5 transition-all duration-120 cursor-pointer shadow-sm"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               <span>添加</span>
@@ -1516,9 +1661,9 @@ export const MwhSettingsModal: React.FC = () => {
 
                         {/* In-page Add / Edit Form */}
                         {resAddOpen && (
-                          <div className={`rounded-[14px] p-4 space-y-3.5 ${cardBg} border border-[#2B7FFF]/25`}>
+                          <div className={`rounded-[14px] p-4 space-y-3.5 ${cardBg} border border-[#6366F1]/25`}>
                             <div className="flex items-center justify-between">
-                              <span className="text-[13.5px] font-semibold text-[#2B7FFF]">
+                              <span className="text-[13.5px] font-semibold text-[#A5B4FC]">
                                 {resEditingId ? '编辑资源' : '添加本机资源'}
                               </span>
                               <button
@@ -1540,7 +1685,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     onClick={() => setResKind('mcp')}
                                     className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
                                       resKind === 'mcp'
-                                        ? 'bg-[#2B7FFF] text-white'
+                                        ? 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white'
                                         : 'bg-white/5 text-neutral-400 hover:bg-white/10'
                                     }`}
                                   >
@@ -1551,7 +1696,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     onClick={() => setResKind('skill')}
                                     className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
                                       resKind === 'skill'
-                                        ? 'bg-[#2B7FFF] text-white'
+                                        ? 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white'
                                         : 'bg-white/5 text-neutral-400 hover:bg-white/10'
                                     }`}
                                   >
@@ -1569,7 +1714,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 value={resDisplayName}
                                 onChange={(e) => setResDisplayName(e.target.value)}
                                 placeholder="例如: MyTools 或 CodeAssist"
-                                className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                               />
                             </div>
 
@@ -1584,7 +1729,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       onClick={() => setResTransport('stdio')}
                                       className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
                                         resTransport === 'stdio'
-                                          ? 'bg-[#2B7FFF] text-white'
+                                          ? 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white'
                                           : 'bg-white/5 text-neutral-400 hover:bg-white/10'
                                       }`}
                                     >
@@ -1595,7 +1740,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       onClick={() => setResTransport('http')}
                                       className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
                                         resTransport === 'http'
-                                          ? 'bg-[#2B7FFF] text-white'
+                                          ? 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white'
                                           : 'bg-white/5 text-neutral-400 hover:bg-white/10'
                                       }`}
                                     >
@@ -1613,7 +1758,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         value={resCommand}
                                         onChange={(e) => setResCommand(e.target.value)}
                                         placeholder="例如: node 或 C:\path\to\server.exe"
-                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                       />
                                     </div>
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
@@ -1623,7 +1768,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         value={resArgs}
                                         onChange={(e) => setResArgs(e.target.value)}
                                         placeholder="例如: dist/index.js --port 8080 (空格分隔)"
-                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                       />
                                     </div>
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
@@ -1633,7 +1778,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         value={resCwd}
                                         onChange={(e) => setResCwd(e.target.value)}
                                         placeholder="可选，默认用户主目录"
-                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                       />
                                     </div>
                                   </>
@@ -1645,7 +1790,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       value={resHttpUrl}
                                       onChange={(e) => setResHttpUrl(e.target.value)}
                                       placeholder="例如: http://127.0.0.1:8000/mcp"
-                                      className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                      className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                     />
                                   </div>
                                 )}
@@ -1661,7 +1806,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   value={resSkillDir}
                                   onChange={(e) => setResSkillDir(e.target.value)}
                                   placeholder="需包含 SKILL.md 的本地目录绝对路径或 ~ 路径"
-                                  className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                  className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                 />
                               </div>
                             )}
@@ -1715,11 +1860,11 @@ export const MwhSettingsModal: React.FC = () => {
                               {resProbeResult && (
                                 <div className="text-xs">
                                   {resProbeResult.ok ? (
-                                    <span className="text-emerald-400">
+                                    <span className="text-[#7DD3FC]">
                                       探测成功{resProbeResult.tools ? `（发现 ${resProbeResult.tools.length} 个工具）` : ''}
                                     </span>
                                   ) : (
-                                    <span className="text-amber-400">
+                                    <span className="text-[#EAB364]">
                                       探测失败: {resProbeResult.error || resProbeResult.faultReason || '无法建立连接'}
                                     </span>
                                   )}
@@ -1737,7 +1882,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={handleSaveResource}
-                                  className="px-3 py-1 rounded-[8px] text-xs bg-[#2B7FFF] text-white hover:bg-[#1A6FEF] font-medium cursor-pointer"
+                                  className="px-3 py-1 rounded-[8px] text-xs bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 font-medium cursor-pointer"
                                 >
                                   保存
                                 </button>
@@ -1806,11 +1951,11 @@ export const MwhSettingsModal: React.FC = () => {
                                             {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
                                           </span>
                                           {isFault ? (
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 shrink-0 font-medium">
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D99B43]/15 text-[#EAB364] shrink-0 font-medium">
                                               {entry.faultReason || '启动故障'}
                                             </span>
                                           ) : isRunning ? (
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 shrink-0">
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#38BDF8]/12 text-[#7DD3FC] shrink-0">
                                               运行正常
                                             </span>
                                           ) : (
@@ -1859,7 +2004,7 @@ export const MwhSettingsModal: React.FC = () => {
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteResource(entry)}
-                                            className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-white/5 cursor-pointer"
+                                            className="p-1 rounded text-[#F28B82] hover:text-[#E06C60] hover:bg-white/5 cursor-pointer"
                                             title="删除"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -1875,7 +2020,7 @@ export const MwhSettingsModal: React.FC = () => {
                                             将出现在 Muse 的 tools/list
                                           </div>
                                           {isFault && (
-                                            <div className="text-xs text-amber-400">
+                                            <div className="text-xs text-[#EAB364]">
                                               已暂时从 /mcp 撤下，修复后会自动恢复
                                             </div>
                                           )}
@@ -1969,11 +2114,11 @@ export const MwhSettingsModal: React.FC = () => {
                                             {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
                                           </span>
                                           {skillFault ? (
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold shrink-0">
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D99B43]/15 text-[#EAB364] font-semibold shrink-0">
                                               {entry.faultReason || '不可用'}
                                             </span>
                                           ) : isReady ? (
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 shrink-0">
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#38BDF8]/12 text-[#7DD3FC] shrink-0">
                                               已就绪
                                             </span>
                                           ) : (
@@ -2004,7 +2149,7 @@ export const MwhSettingsModal: React.FC = () => {
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteResource(entry)}
-                                            className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-white/5 cursor-pointer"
+                                            className="p-1 rounded text-[#F28B82] hover:text-[#E06C60] hover:bg-white/5 cursor-pointer"
                                             title="删除"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -2127,7 +2272,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     type="button"
                                     onClick={handleDeleteSelectedSnapshots}
                                     disabled={activeSelectedIds.length === 0}
-                                    className="px-2.5 py-1 rounded-lg text-[11.5px] bg-red-500/15 text-red-300 hover:bg-red-500/25 disabled:opacity-40 flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap"
+                                    className="px-2.5 py-1 rounded-lg text-[11.5px] bg-[#E06C60]/15 text-[#F28B82] hover:bg-[#E06C60]/25 disabled:opacity-40 flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap"
                                   >
                                     <Trash2 className="w-3 h-3" />
                                     <span>
@@ -2184,7 +2329,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         ) : (
                                           <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-70" />
                                         )}
-                                        <Folder className="w-3.5 h-3.5 text-[#8AB8FF] shrink-0" />
+                                        <Folder className="w-3.5 h-3.5 text-[#A5B4FC] shrink-0" />
                                         <span
                                           className="text-xs font-mono font-semibold text-[#ECECEE] truncate"
                                           title={group.displayPath}
@@ -2268,12 +2413,12 @@ export const MwhSettingsModal: React.FC = () => {
                                                     }}
                                                     className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ${
                                                       snap.rolledBack
-                                                        ? 'bg-emerald-500/15 text-emerald-400'
+                                                        ? 'bg-[#38BDF8]/15 text-[#7DD3FC]'
                                                         : 'bg-white/10 hover:bg-white/20 text-[#ECECEE]'
                                                     }`}
                                                   >
                                                     {snap.rolledBack ? (
-                                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                      <Check className="w-3.5 h-3.5 text-[#7DD3FC]" />
                                                     ) : (
                                                       <RotateCcw className="w-3.5 h-3.5" />
                                                     )}
@@ -2283,7 +2428,7 @@ export const MwhSettingsModal: React.FC = () => {
                                               </div>
 
                                               <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#8E909A] pl-6 overflow-hidden truncate">
-                                                <span className="text-[#8AB8FF] shrink-0" title={snap.diffStat}>
+                                                <span className="text-[#A5B4FC] shrink-0" title={snap.diffStat}>
                                                   {fileCount} 个文件变动
                                                 </span>
                                                 <span className="opacity-40 shrink-0">·</span>
@@ -2309,7 +2454,7 @@ export const MwhSettingsModal: React.FC = () => {
                                                   [group.normKey]: true,
                                                 }))
                                               }
-                                              className="text-xs text-[#8AB8FF] hover:underline cursor-pointer"
+                                              className="text-xs text-[#A5B4FC] hover:underline cursor-pointer"
                                             >
                                               查看该目录下其余 {group.items.length - limitedItems.length} 条快照...
                                             </button>
@@ -2342,7 +2487,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   onClick={() => setAuditFilter(flt)}
                                   className={`px-2.5 py-1 rounded-lg transition-colors duration-120 cursor-pointer ${
                                     auditFilter === flt
-                                      ? 'bg-[#2B7FFF] text-white font-medium'
+                                      ? 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white font-medium'
                                       : 'opacity-70 hover:opacity-100'
                                   }`}
                                 >
@@ -2372,7 +2517,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     }
                                     className={`p-2.5 rounded-xl text-xs font-mono space-y-1 transition-colors min-w-0 overflow-hidden ${
                                       isModeOrSecurityChange
-                                        ? 'bg-amber-500/12 border border-amber-500/50 ring-1 ring-amber-500/30'
+                                        ? 'bg-[#D99B43]/14 border border-[#D99B43]/45 ring-1 ring-[#D99B43]/25'
                                         : subtleBg
                                     }`}
                                   >
@@ -2381,10 +2526,10 @@ export const MwhSettingsModal: React.FC = () => {
                                         <span
                                           className={`font-semibold ${
                                             entry.decision === 'ALLOW'
-                                              ? 'text-emerald-400'
+                                              ? 'text-[#7DD3FC]'
                                               : entry.decision === 'ASK'
-                                                ? 'text-amber-400'
-                                                : 'text-red-400'
+                                                ? 'text-[#EAB364]'
+                                                : 'text-[#F28B82]'
                                           }`}
                                         >
                                           [{entry.decision}]
@@ -2393,7 +2538,7 @@ export const MwhSettingsModal: React.FC = () => {
                                           {entry.toolName}
                                         </span>
                                         {entry.toolName === 'switch_mode' && (
-                                          <span className="px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 text-[10.5px] font-semibold">
+                                          <span className="px-1.5 py-0.5 rounded bg-[#D99B43]/20 text-[#EAB364] text-[10.5px] font-semibold">
                                             模式变更
                                           </span>
                                         )}
@@ -2474,7 +2619,7 @@ export const MwhSettingsModal: React.FC = () => {
                       {/* 唯一标识 ID */}
                       <div className="space-y-1">
                         <label className="text-xs font-medium block">
-                          代理标识 (ID) <span className="text-rose-400">*</span>
+                          代理标识 (ID) <span className="text-[#F28B82]">*</span>
                         </label>
                         <input
                           type="text"
@@ -2485,7 +2630,7 @@ export const MwhSettingsModal: React.FC = () => {
                           placeholder="例如: codebuddy 或 agy"
                           pattern="^[a-zA-Z0-9_\-]+$"
                           title="只允许英文字母、数字、下划线和短横线"
-                          className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-sky-500 disabled:opacity-60`}
+                          className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1] disabled:opacity-60`}
                         />
                       </div>
 
@@ -2498,7 +2643,7 @@ export const MwhSettingsModal: React.FC = () => {
                           value={acpFormDisplayName}
                           onChange={(e) => setAcpFormDisplayName(e.target.value)}
                           placeholder="例如: CodeBuddy 助手"
-                          className={`w-full px-3 py-1.5 rounded-xl text-xs border border-transparent ${subtleBg} focus:outline-none focus:border-sky-500`}
+                          className={`w-full px-3 py-1.5 rounded-xl text-xs border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1]`}
                         />
                       </div>
 
@@ -2506,12 +2651,12 @@ export const MwhSettingsModal: React.FC = () => {
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-medium block">
-                            可执行文件路径 (Command) <span className="text-rose-400">*</span>
+                            可执行文件路径 (Command) <span className="text-[#F28B82]">*</span>
                           </label>
                           <button
                             type="button"
                             onClick={handleProbeAcp}
-                            className="text-[11px] font-mono text-sky-400 hover:text-sky-300 underline cursor-pointer"
+                            className="text-[11px] font-mono text-[#A5B4FC] hover:text-white underline cursor-pointer"
                           >
                             探测路径
                           </button>
@@ -2526,7 +2671,7 @@ export const MwhSettingsModal: React.FC = () => {
                             setAcpProbeStatus(null);
                           }}
                           placeholder="例如: C:\Program Files\nodejs\node.exe 或 node"
-                          className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-sky-500`}
+                          className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1]`}
                         />
 
                         {/* 探测结果提示 */}
@@ -2534,8 +2679,8 @@ export const MwhSettingsModal: React.FC = () => {
                           <div
                             className={`text-[11px] font-mono p-2 rounded-lg flex items-center gap-1.5 ${
                               acpProbeStatus.available
-                                ? 'bg-emerald-500/15 text-emerald-400'
-                                : 'bg-amber-500/15 text-amber-400'
+                                ? 'bg-[#38BDF8]/15 text-[#7DD3FC]'
+                                : 'bg-[#D99B43]/15 text-[#EAB364]'
                             }`}
                           >
                             {acpProbeStatus.available ? (
@@ -2564,7 +2709,7 @@ export const MwhSettingsModal: React.FC = () => {
                           value={acpFormArgs}
                           onChange={(e) => setAcpFormArgs(e.target.value)}
                           placeholder="以空格分隔，例如: C:\path\to\agent.js --acp"
-                          className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-sky-500`}
+                          className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1]`}
                         />
                         <div className={`text-[10.5px] ${mutedText}`}>
                           提示：执行时输入提示词将自动作为后续参数或经 stdin 管道传递。
@@ -2599,7 +2744,7 @@ export const MwhSettingsModal: React.FC = () => {
                         <button
                           type="submit"
                           disabled={acpSaving}
-                          className="px-4 py-1.5 rounded-xl text-xs font-medium bg-[#2B7FFF] hover:bg-[#256FE0] text-white transition-colors cursor-pointer disabled:opacity-50"
+                          className="px-4 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105 text-white transition-all cursor-pointer disabled:opacity-50"
                         >
                           {acpSaving ? '保存中...' : '保存并生效'}
                         </button>
@@ -2609,6 +2754,104 @@ export const MwhSettingsModal: React.FC = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Spotlight Onboarding Tour Overlay (docs/DESIGN.md 4.9) */}
+            {tourOpen && (() => {
+              const activeTourStep = TOUR_STEPS[tourStepIndex] || TOUR_STEPS[0];
+              const isFirstStep = tourStepIndex === 0;
+              const isLastStep = tourStepIndex === TOUR_STEPS.length - 1;
+              return (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="MWH 功能使用引导"
+                  data-testid="mwh-tour-overlay"
+                  data-tour-active-target={activeTourStep.target}
+                  className="fixed inset-0 z-[950] flex items-center justify-center p-4 bg-black/60 backdrop-blur-[2px]"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) setTourOpen(false);
+                  }}
+                >
+                  <div
+                    className={`w-[380px] max-w-[92vw] rounded-[18px] p-5 shadow-2xl border space-y-3.5 ${modalBg}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#6366F1]/16 text-[#A5B4FC]">
+                        步骤 {tourStepIndex + 1} / {TOUR_STEPS.length}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {TOUR_STEPS.map((s, idx) => (
+                          <span
+                            key={s.id}
+                            title={s.title}
+                            className={`h-1.5 rounded-full transition-all duration-180 ${
+                              idx === tourStepIndex
+                                ? 'w-4 bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)]'
+                                : 'w-1.5 bg-white/15'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        data-action="tour-close"
+                        onClick={() => setTourOpen(false)}
+                        aria-label="结束引导"
+                        className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-neutral-400 hover:text-white cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="text-[14.5px] font-semibold">{activeTourStep.title}</div>
+                    <p className={`text-xs leading-relaxed ${mutedText}`}>{activeTourStep.body}</p>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        data-action="tour-close"
+                        onClick={() => setTourOpen(false)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium ${subtleBg} hover:opacity-85 cursor-pointer`}
+                      >
+                        跳过引导
+                      </button>
+                      <div className="flex items-center gap-2">
+                        {!isFirstStep && (
+                          <button
+                            type="button"
+                            data-action="tour-prev"
+                            onClick={() => setTourStepIndex((prev) => Math.max(0, prev - 1))}
+                            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/15 cursor-pointer"
+                          >
+                            上一步
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          data-action={isLastStep ? 'tour-close' : 'tour-next'}
+                          onClick={() => {
+                            if (isLastStep) {
+                              setTourOpen(false);
+                            } else {
+                              const nextIdx = tourStepIndex + 1;
+                              const nextStep = TOUR_STEPS[nextIdx];
+                              if (nextStep?.id === 'advanced-center') {
+                                mwhService.setActiveSettingsTab('connectors');
+                              }
+                              setTourStepIndex(nextIdx);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 cursor-pointer"
+                        >
+                          {isLastStep ? '完成引导' : '下一步'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Custom UI Glass Confirm Dialog (Zero native window.confirm) */}
             {confirmModal && confirmModal.open && (
@@ -2621,7 +2864,7 @@ export const MwhSettingsModal: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <div
                       className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                        confirmModal.danger ? 'bg-red-500/15 text-red-400' : 'bg-[#2B7FFF]/15 text-[#8AB8FF]'
+                        confirmModal.danger ? 'bg-[#E06C60]/15 text-[#F28B82]' : 'bg-[#6366F1]/16 text-[#A5B4FC]'
                       }`}
                     >
                       {confirmModal.danger ? <AlertCircle className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
@@ -2647,7 +2890,9 @@ export const MwhSettingsModal: React.FC = () => {
                         await cb();
                       }}
                       className={`px-4 py-1.5 rounded-xl text-xs font-medium text-white transition-colors cursor-pointer ${
-                        confirmModal.danger ? 'bg-red-600 hover:bg-red-500' : 'bg-[#2B7FFF] hover:bg-[#256FE0]'
+                        confirmModal.danger
+                          ? 'bg-[#E06C60] hover:bg-[#D05A4E]'
+                          : 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105'
                       }`}
                     >
                       {confirmModal.confirmText || '确定'}

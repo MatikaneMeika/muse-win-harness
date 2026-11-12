@@ -1,12 +1,13 @@
 <svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="museGradC" x1="100%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#2B7FFF" />
-      <stop offset="100%" stop-color="#1B6FEF" />
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#3B82F6" />
     </linearGradient>
   </defs>
   <g transform="rotate(12 60 60)">
-    <!-- Official Muse Blue Ribbon & Dot -->
+    <!-- Taskbar-aligned Purple-Blue Gradient Ribbon & Dot -->
     <path d="M 30 80
              C 40 20, 55 30, 55 60
              C 55 90, 70 40, 75 30
@@ -15,4 +16,3 @@
     <circle cx="88" cy="82" r="11" fill="url(#museGradC)" />
   </g>
 </svg>
-

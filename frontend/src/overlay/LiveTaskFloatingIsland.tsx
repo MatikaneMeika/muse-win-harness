@@ -24,9 +24,9 @@ const ISLAND_TRANSITION = ISLAND_REDUCED_MOTION
   ? 'none'
   : `width 240ms ${EASE}, height 240ms ${EASE}, border-radius 240ms ${EASE}, opacity 180ms ${EASE}`;
 
-/** Muse 官方焦点环：2px Muse 蓝，仅键盘可见。 */
+/** 品牌紫蓝焦点环：2px #6366F1，仅键盘可见。 */
 const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2B7FFF]/70 focus-visible:ring-offset-0';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/70 focus-visible:ring-offset-0';
 
 function initialElapsedSec(clock: string): number {
   const match = /^(\d{2}):(\d{2}):(\d{2})$/.exec(String(clock || '').trim());
@@ -149,9 +149,6 @@ export const LiveTaskFloatingIsland: React.FC = () => {
   }, [liveTask.stdoutLines, liveTask.status, capsule]);
 
   const isIdle = liveTask.status === 'IDLE';
-  // 胶囊常驻：空闲时也保留在屏幕上，只收成胶囊；仅设置弹窗打开时让位。
-  // 注：React 岛布局不走主进程文件镜像持久化——其 localStorage 挂在本机 daemon origin，
-  // 无外站清空风险，且浏览器表面无法走 IPC（主进程文件镜像只服务注入岛）。
   const visible = !state.settingsModalOpen;
   const hidden = !visible || fading;
 
@@ -159,8 +156,6 @@ export const LiveTaskFloatingIsland: React.FC = () => {
     if (isIdle) setCapsule(true);
   }, [isIdle, setCapsule]);
 
-  // 待审批自动展开一次：仅当"新任务到来"且当前为胶囊时自动展开；
-  // 同一任务只自动展开一次，用户手动收起后不反复弹开，下一个新任务到来才再次展开。
   const prevTaskKeyRef = useRef('');
   const autoExpandedTaskRef = useRef('');
   useEffect(() => {
@@ -180,7 +175,6 @@ export const LiveTaskFloatingIsland: React.FC = () => {
       ? '执行完成 · 改动数未统计'
       : '执行完成 · 未检测到文件改动';
 
-  // 收起胶囊态：仅保留 2-3 字核心状态，展开态保留完整标题。
   const capsuleTitle = (text: string) =>
     capsule ? islandCapsuleText(liveTask.status, text) : text;
   const headerTitle = isIdle
@@ -193,17 +187,17 @@ export const LiveTaskFloatingIsland: React.FC = () => {
         ? capsuleTitle(completedTitle)
         : capsuleTitle(liveTask.stepLabel || '本地任务执行中');
 
-  /* Muse 官方浮层色阶：#1E1F24 面板 / #141518 代码区 / 8% 描边 / 20px 圆角 */
+  /* Muse 官方浮层色阶：#1C1D20 面板 / #141518 代码区 / 7% 描边 / 20px 圆角 */
   const shellCls = isLight
-    ? 'bg-white/95 border-black/[0.07] text-[#1D1D1F] shadow-[0_12px_40px_rgba(17,17,18,0.14)]'
-    : 'bg-[#1E1F24]/95 border-white/[0.08] text-[#ECECEE] shadow-[0_16px_44px_rgba(0,0,0,0.45)]';
-  const codeCls = isLight ? 'bg-[#F2F1EC] text-[#2B2B30]' : 'bg-[#141518] text-[#C6C7D0]';
+    ? 'bg-[#EFECE6]/95 border-black/[0.06] text-[#1D1D1F] shadow-[0_12px_40px_rgba(17,17,18,0.14)]'
+    : 'bg-[#1C1D20]/95 border-white/[0.07] text-[#ECECEE] shadow-[0_16px_44px_rgba(0,0,0,0.45)]';
+  const codeCls = isLight ? 'bg-[#F2F1EC] text-[#2B2B30]' : 'bg-[#141518] text-[#C4C5CC]';
   const pillGhost = isLight
     ? 'bg-black/[0.06] hover:bg-black/[0.12] text-[#2C2C30]'
     : 'bg-white/[0.08] hover:bg-white/[0.14] text-[#E2E3E8]';
   const pillAccent = isLight
-    ? 'bg-[#E5EDFF] hover:bg-[#D4E2FF] text-[#1D58D8]'
-    : 'bg-[#2B7FFF]/20 hover:bg-[#2B7FFF]/30 text-[#8AB8FF]';
+    ? 'bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5]'
+    : 'bg-[#6366F1]/20 hover:bg-[#6366F1]/30 text-[#A5B4FC]';
   const iconBtnCls = isLight
     ? 'hover:bg-black/[0.06] text-[#3C3C42]'
     : 'hover:bg-white/[0.08] text-[#D4D5DC]';
@@ -220,6 +214,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
     <div
       ref={containerRef}
       data-testid="live-task-floating-island"
+      data-tour-id="tour-approval-island"
       role="region"
       aria-label="MWH 底部任务与审批面板"
       onClick={handleHeaderClick}
@@ -239,21 +234,19 @@ export const LiveTaskFloatingIsland: React.FC = () => {
         }`}
       >
         {liveTask.status === 'WAITING_APPROVAL' ? (
-          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+          <ShieldAlert className="w-4 h-4 text-[#EAB364] shrink-0" />
         ) : liveTask.status === 'COMPLETED' ? (
-          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          <CheckCircle2 className="w-4 h-4 text-[#38BDF8] shrink-0" />
         ) : isIdle ? (
           <span className="w-2 h-2 rounded-full bg-[#8E909A] shrink-0" />
         ) : (
-          <Loader2 className="w-4 h-4 text-[#4A8CFF] animate-spin shrink-0" />
+          <Loader2 className="w-4 h-4 text-[#8B5CF6] animate-spin shrink-0" />
         )}
 
         {!capsule && activeAgentBadge && (
           <span
             data-testid="live-task-agent-badge"
-            className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold shrink-0 ${
-              isLight ? 'bg-black/[0.06] text-[#2C2C30]' : 'bg-white/[0.08] text-[#C4C5CC]'
-            }`}
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold shrink-0 ${pillAccent}`}
           >
             [{activeAgentBadge}]
           </span>
@@ -297,7 +290,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                     setConfirmingKill(false);
                     mwhService.killRunningLiveTask();
                   }}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold bg-red-600 hover:bg-red-700 text-white flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ring-2 ring-red-400/60 ${FOCUS_RING}`}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold bg-[#E06C60] hover:bg-[#D05A4E] text-white flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ring-2 ring-[#F28B82]/50 ${FOCUS_RING}`}
                 >
                   <ShieldAlert className="w-3 h-3" />
                   <span>确认强杀？</span>
@@ -316,7 +309,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 type="button"
                 data-testid="live-task-kill-trigger-btn"
                 onClick={() => setConfirmingKill(true)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
+                className={`px-3 py-1 rounded-full text-xs font-semibold bg-[#E06C60]/90 hover:bg-[#D05A4E] text-white flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
               >
                 <Square className="w-3 h-3 fill-current" />
                 <span>强杀中止</span>
@@ -437,7 +430,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               <button
                 type="button"
                 onClick={() => mwhService.approveLiveTaskOnce()}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#2B7FFF] hover:bg-[#1A6FEF] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>允许一次</span>
@@ -462,7 +455,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               type="button"
               data-testid="live-task-merge-button"
               onClick={() => mwhService.mergeWorktree(liveTask.worktreeId!)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#2B7FFF] hover:bg-[#1A6FEF] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
             >
               <GitMerge className="w-3.5 h-3.5" />
               <span>合并 Worktree</span>

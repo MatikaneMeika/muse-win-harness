@@ -46,7 +46,7 @@ export const PERMISSION_PROFILE_LIST: PermissionProfileMetadata[] = [
     level: 1,
     shortLabel: '计划模式',
     pillText: '本地 PC · 计划模式',
-    dotColorClass: 'bg-emerald-500',
+    dotColorClass: 'bg-[#38BDF8]',
     title: '计划模式（只读，先计划再改）',
     subtitle: '仅允许读取工作区文件、检索代码与只读状态查询，先制定方案再动手，拦截一切文件修改与写入命令。',
     enforcedProtections: [
@@ -66,7 +66,7 @@ export const PERMISSION_PROFILE_LIST: PermissionProfileMetadata[] = [
     level: 2,
     shortLabel: '变更前确认',
     pillText: '本地 PC · 变更前确认',
-    dotColorClass: 'bg-sky-500',
+    dotColorClass: 'bg-[#6366F1]',
     title: '变更前确认（改文件前问 · 默认）',
     subtitle: '只读探针静默放行；每次修改文件、运行脚本或拉起代理前均在桌面浮岛询问确认。',
     enforcedProtections: [
@@ -86,7 +86,7 @@ export const PERMISSION_PROFILE_LIST: PermissionProfileMetadata[] = [
     level: 3,
     shortLabel: '自主模式',
     pillText: '本地 PC · 自主模式',
-    dotColorClass: 'bg-violet-500',
+    dotColorClass: 'bg-[#8B5CF6]',
     title: '自主模式（有风险才问）',
     subtitle: '授权工作区内的常规文件读写自动创建写前快照并静默执行，仅高风险命令或破坏性操作询问确认。',
     enforcedProtections: [
@@ -106,7 +106,7 @@ export const PERMISSION_PROFILE_LIST: PermissionProfileMetadata[] = [
     level: 4,
     shortLabel: '完全访问',
     pillText: '本地 PC · 完全访问',
-    dotColorClass: 'bg-red-500',
+    dotColorClass: 'bg-[#E06C60]',
     title: '完全访问（减少确认）',
     subtitle: '解除工作区目录围栏，跨盘普通文件读写直接执行；仅强制推送、递归删除、磁盘格式化及敏感凭据路径仍需确认。',
     enforcedProtections: [

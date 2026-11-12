@@ -11,13 +11,14 @@
  *   4. Every mwh:* IPC channel used by the preloads is registered in main.cjs.
  *   5. The drawer / sub-panel / five sections / snapshot folding / approval
  *      island are all physically present in the preload.
- *   6. Muse brand palette: zero purple leftovers, official blue only.
+ *   6. Muse brand palette: taskbar purple-blue gradient + low-saturation status tokens.
  *   7. Single gradient ring spinner, no breathing pulse animation.
  *   8. Five advanced tabs use 2-4 character titles and an equal-width grid.
  *   9. Full-screen drawer backdrop and transparent-aware theme probing.
  *  10. UI content admission: human audience, zero retired CLI/agent-lecture copy.
  *  11. Tool truth source + zero hardcoded private machine paths.
  *  12. Startup preflight: launcher must verify the daemon before opening a shell.
+ *  15. Spotlight Onboarding Tour sync gate + endpoint/token privacy & anti-overflow contract.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -76,9 +77,17 @@ const chromePreloadSource = read(files.chromePreload);
 const chromeHtmlSource = read(files.chromeHtml);
 
 const reactModalPath = path.join(root, 'frontend', 'src', 'overlay', 'MwhSettingsModal.tsx');
+const reactSwitchPath = path.join(root, 'frontend', 'src', 'overlay', 'MwhSwitch.tsx');
+const reactIslandPath = path.join(root, 'frontend', 'src', 'overlay', 'LiveTaskFloatingIsland.tsx');
+const reactAppPath = path.join(root, 'frontend', 'src', 'App.tsx');
 const reactServicePath = path.join(root, 'frontend', 'src', 'services', 'mwhService.ts');
+const designDocPath = path.join(root, 'docs', 'DESIGN.md');
 const reactModalSource = fs.existsSync(reactModalPath) ? read(reactModalPath) : '';
+const reactSwitchSource = fs.existsSync(reactSwitchPath) ? read(reactSwitchPath) : '';
+const reactIslandSource = fs.existsSync(reactIslandPath) ? read(reactIslandPath) : '';
+const reactAppSource = fs.existsSync(reactAppPath) ? read(reactAppPath) : '';
 const reactServiceSource = fs.existsSync(reactServicePath) ? read(reactServicePath) : '';
+const designDocSource = fs.existsSync(designDocPath) ? read(designDocPath) : '';
 
 /* 2. main.cjs retired-code & DWM contract ------------------------------- */
 
@@ -155,14 +164,53 @@ assert(preloadSource.includes('mwh-light'), 'preload is missing the light theme 
 assert(preloadSource.includes('MutationObserver'), 'preload is missing the theme MutationObserver');
 assert(preloadSource.includes("mwh:theme-sync"), 'preload is missing mwh:theme-sync emission');
 
-/* 6. Muse brand palette: zero purple, official blue only ------------- */
+/* 6. Muse brand palette: taskbar purple-blue gradient + low-saturation status tokens */
 
-const purplePattern = /#a855f7|#8b5cf6|#9333ea|#c084fc|168,\s*85,\s*247|139,\s*92,\s*246/i;
-assert(!purplePattern.test(preloadSource), 'muse-settings-preload.cjs still contains purple brand colours');
-assert(!purplePattern.test(chromeHtmlSource), 'chrome.html still contains purple brand colours');
+const legacyPureBluePattern = /#2B7FFF|#1B6FEF|#1A6FEF|#256FE0|#8AB8FF|#4A8CFF/i;
+for (const [label, src] of [
+  ['muse-settings-preload.cjs', preloadSource],
+  ['chrome.html', chromeHtmlSource],
+  ['MwhSettingsModal.tsx', reactModalSource],
+  ['MwhSwitch.tsx', reactSwitchSource],
+  ['LiveTaskFloatingIsland.tsx', reactIslandSource],
+  ['App.tsx', reactAppSource],
+]) {
+  assert(!legacyPureBluePattern.test(src), `${label} still contains legacy pure-blue (#2B7FFF/#1B6FEF/#8AB8FF)`);
+}
 
-for (const blue of ['#2B7FFF', '#1B6FEF', '#8AB8FF']) {
-  assert(preloadSource.includes(blue), `preload is missing the Muse brand blue: ${blue}`);
+for (const gradStop of ['#8B5CF6', '#6366F1', '#3B82F6', '#A5B4FC']) {
+  assert(
+    new RegExp(gradStop, 'i').test(preloadSource),
+    `preload is missing taskbar purple-blue gradient token: ${gradStop}`
+  );
+  assert(
+    new RegExp(gradStop, 'i').test(reactModalSource),
+    `MwhSettingsModal.tsx is missing taskbar purple-blue gradient token: ${gradStop}`
+  );
+}
+
+const highSatStatusPattern =
+  /\b(?:emerald|rose)-[34567]00\b|\bred-[345678]00\b|\bamber-[345]00\b|#22c55e|#4ade80|#ef4444|#f87171|#fbbf24|#f59e0b/i;
+for (const [label, src] of [
+  ['muse-settings-preload.cjs', preloadSource],
+  ['MwhSettingsModal.tsx', reactModalSource],
+  ['LiveTaskFloatingIsland.tsx', reactIslandSource],
+]) {
+  assert(
+    !highSatStatusPattern.test(src),
+    `${label} still contains high-saturation raw green/red/amber classes or hexes`
+  );
+}
+
+for (const statusColor of ['#38BDF8', '#7DD3FC', '#E06C60', '#F28B82', '#EAB364']) {
+  assert(
+    new RegExp(statusColor, 'i').test(preloadSource),
+    `preload is missing low-saturation status colour: ${statusColor}`
+  );
+  assert(
+    new RegExp(statusColor, 'i').test(reactModalSource),
+    `MwhSettingsModal.tsx is missing low-saturation status colour: ${statusColor}`
+  );
 }
 
 /* 7. Single gradient ring spinner, no breathing pulse ---------------- */
@@ -447,7 +495,10 @@ for (const rel of [
       `${rel} contains leaked private machine path`
     );
     if (rel.endsWith('.svg')) {
-      assert(!purplePattern.test(text), `${rel} contains purple colour leftover`);
+      assert(!legacyPureBluePattern.test(text), `${rel} still contains legacy pure-blue colour (#2B7FFF/#1B6FEF)`);
+      for (const stop of ['#8B5CF6', '#6366F1', '#3B82F6']) {
+        assert(new RegExp(stop, 'i').test(text), `${rel} is missing purple-blue gradient stop ${stop}`);
+      }
     }
     if (rel.endsWith('.md')) {
       const dir = path.dirname(abs);
@@ -479,6 +530,83 @@ for (const lockRel of ['package-lock.json', 'frontend/package-lock.json', 'shell
   }
 }
 
+/* 15. Spotlight Onboarding Tour Sync Gate & Endpoint Privacy / Anti-Overflow Contract */
+
+const expectedTourTargets = [
+  'tour-activity-entry',
+  'tour-permission-modes',
+  'tour-endpoints-credentials',
+  'tour-advanced-center',
+  'tour-approval-island',
+];
+for (const targetId of expectedTourTargets) {
+  assert(designDocSource.includes(targetId), `docs/DESIGN.md is missing tour anchor spec: ${targetId}`);
+  assert(preloadSource.includes(targetId), `muse-settings-preload.cjs is missing tour target: ${targetId}`);
+  assert(
+    reactModalSource.includes(targetId) || reactIslandSource.includes(targetId),
+    `React overlay is missing tour target: ${targetId}`
+  );
+}
+
+const preloadTourTargets = [
+  ...preloadSource.matchAll(/target:\s*'([^']+)'/g),
+].map((m) => m[1]);
+const reactTourTargets = [
+  ...reactModalSource.matchAll(/target:\s*'([^']+)'/g),
+].map((m) => m[1]);
+assert(
+  preloadTourTargets.length === expectedTourTargets.length &&
+    preloadTourTargets.join(',') === expectedTourTargets.join(','),
+  `preload TOUR_STEPS targets must match [${expectedTourTargets.join(', ')}], got [${preloadTourTargets.join(', ')}]`
+);
+assert(
+  reactTourTargets.length === expectedTourTargets.length &&
+    reactTourTargets.join(',') === expectedTourTargets.join(','),
+  `MwhSettingsModal.tsx TOUR_STEPS targets must match preload TOUR_STEPS, got [${reactTourTargets.join(', ')}]`
+);
+
+// Enforce that every advanced section title and permission profile is documented in TOUR_STEPS:
+const preloadTourStart = preloadSource.indexOf('const TOUR_STEPS');
+const preloadTourEnd = preloadSource.indexOf('];', preloadTourStart);
+const preloadTourBlock =
+  preloadTourStart !== -1 && preloadTourEnd > preloadTourStart
+    ? preloadSource.slice(preloadTourStart, preloadTourEnd)
+    : '';
+for (const secTitle of sectionTitles) {
+  assert(
+    preloadTourBlock.includes(secTitle),
+    `TOUR_STEPS copy must cover advanced section "${secTitle}" (sync tour when adding/renaming sections)`
+  );
+}
+for (const profLabel of ['计划模式', '变更前确认', '自主模式', '完全访问']) {
+  assert(
+    preloadTourBlock.includes(profLabel),
+    `TOUR_STEPS copy must cover permission profile "${profLabel}" (sync tour when updating permission profiles)`
+  );
+}
+
+for (const [label, src] of [
+  ['muse-settings-preload.cjs', preloadSource],
+  ['MwhSettingsModal.tsx', reactModalSource],
+]) {
+  assert(src.includes('open-tour'), `${label} is missing data-action="open-tour" trigger button`);
+  assert(src.includes('toggle-endpoint-peek'), `${label} is missing toggle-endpoint-peek control`);
+  assert(src.includes('toggle-token-peek'), `${label} is missing toggle-token-peek control`);
+  assert(src.includes('maskEndpointUrl'), `${label} is missing maskEndpointUrl privacy helper`);
+  assert(/PEEK_AUTO_HIDE_MS\s*=\s*15000/.test(src), `${label} must enforce PEEK_AUTO_HIDE_MS = 15000`);
+}
+
+const grid2Block = cssBlock(preloadSource, '.mwh-grid-2 {');
+assert(
+  /repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\)/.test(grid2Block),
+  '.mwh-grid-2 must use repeat(auto-fit, minmax(118px, 1fr)) to prevent button clipping at high DPI'
+);
+const btnBlock = cssBlock(preloadSource, '.mwh-btn {');
+assert(
+  /max-width:\s*100%/.test(btnBlock) && /min-width:\s*0/.test(btnBlock),
+  '.mwh-btn must declare max-width: 100% and min-width: 0 to prevent horizontal overflow'
+);
+
 /* Report ---------------------------------------------------------------- */
 
 if (failures.length > 0) {
@@ -491,9 +619,10 @@ console.log('[PASS] UI Contract Gate');
 console.log('  syntax: main.cjs, muse-settings-preload.cjs, chrome-preload.cjs');
 console.log('  ipc channels aligned: ' + used.size);
 console.log('  drawer 320px/20px + subpanel 640px/24px + 4 sections verified');
-console.log('  brand palette: zero purple, Muse blue only, single gradient ring spinner');
+console.log('  brand palette: taskbar purple-blue gradient + low-saturation status tokens + single gradient spinner');
 console.log('  layout: full-screen backdrop + 4-column tab grid + centred activity slot');
 console.log('  content admission: human-only UI, zero agent lecture cards or retired CLI refs');
 console.log('  truth source: SKILL.example.md + zero private machine path leaks');
 console.log('  preflight: launcher verifies daemon (--ensure-daemon-only) before opening the shell');
+console.log('  onboarding & privacy: 5-step spotlight tour synced across surfaces + 15s endpoint/token auto-remask');
 process.exit(0);

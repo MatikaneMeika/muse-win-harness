@@ -56,9 +56,14 @@
       align-items: center;
     }
     .version-pill.branch {
-      background: rgba(59, 130, 246, 0.15);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.28);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.34);
+    }
+    body.light .version-pill.branch {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(59, 130, 246, 0.14));
+      color: #4f46e5;
+      border-color: rgba(99, 102, 241, 0.28);
     }
     .version-pill.main {
       background: rgba(255, 255, 255, 0.05);
@@ -106,7 +111,7 @@
       background: rgba(0, 0, 0, 0.06);
     }
     .win-btn.close:hover {
-      background: #e81123 !important;
+      background: #e06c60 !important;
       color: #ffffff !important;
       opacity: 1;
     }
@@ -122,18 +127,18 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      color: #ff9a9a;
-      background: rgba(232, 17, 35, 0.14);
-      border-bottom: 1px solid rgba(232, 17, 35, 0.28);
+      color: #f28b82;
+      background: rgba(224, 108, 96, 0.14);
+      border-bottom: 1px solid rgba(224, 108, 96, 0.28);
       -webkit-app-region: no-drag;
     }
     #daemon-banner[hidden] {
       display: none;
     }
     body.light #daemon-banner {
-      color: #b3261e;
-      background: rgba(232, 17, 35, 0.08);
-      border-bottom-color: rgba(232, 17, 35, 0.2);
+      color: #c2410c;
+      background: rgba(224, 108, 96, 0.1);
+      border-bottom-color: rgba(224, 108, 96, 0.22);
     }
   </style>
 </head>
@@ -144,8 +149,9 @@
         <svg viewBox="0 0 120 120" width="15" height="15">
           <defs>
             <linearGradient id="logoGrad" x1="100%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#2B7FFF" />
-              <stop offset="100%" stop-color="#1B6FEF" />
+              <stop offset="0%" stop-color="#8B5CF6" />
+              <stop offset="50%" stop-color="#6366F1" />
+              <stop offset="100%" stop-color="#3B82F6" />
             </linearGradient>
           </defs>
           <g transform="rotate(12 60 60)">

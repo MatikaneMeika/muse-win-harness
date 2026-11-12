@@ -31,11 +31,12 @@ const { ipcRenderer } = require('electron');
 const SVG_LOGO = `<svg viewBox="0 0 120 120" width="36" height="36" class="mwh-logo-svg">
   <defs>
     <linearGradient id="mwhGradLarge" x1="100%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#2B7FFF" />
-      <stop offset="100%" stop-color="#1B6FEF" />
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#3B82F6" />
     </linearGradient>
     <filter id="mwhGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2B7FFF" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#6366F1" flood-opacity="0.35"/>
     </filter>
   </defs>
   <g transform="rotate(12 60 60)" filter="url(#mwhGlow)">
@@ -97,11 +98,13 @@ const ICON = {
   eyeOff:
     '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
   spinner:
-    '<svg class="mwh-spin" viewBox="0 0 24 24" width="14" height="14" fill="none"><defs><linearGradient id="mwhSpinGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2B7FFF"/><stop offset="100%" stop-color="#8AB8FF" stop-opacity="0.2"/></linearGradient></defs><circle cx="12" cy="12" r="9" stroke="rgba(43,127,255,0.18)" stroke-width="2.4"/><path d="M12 3a9 9 0 0 1 9 9" stroke="url(#mwhSpinGrad)" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    '<svg class="mwh-spin" viewBox="0 0 24 24" width="14" height="14" fill="none"><defs><linearGradient id="mwhSpinGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8B5CF6"/><stop offset="50%" stop-color="#6366F1"/><stop offset="100%" stop-color="#A5B4FC" stop-opacity="0.2"/></linearGradient></defs><circle cx="12" cy="12" r="9" stroke="rgba(99,102,241,0.18)" stroke-width="2.4"/><path d="M12 3a9 9 0 0 1 9 9" stroke="url(#mwhSpinGrad)" stroke-width="2.4" stroke-linecap="round"/></svg>',
   checkCircle:
     '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="16 10 11 15 8 12"/></svg>',
   audit:
     '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+  help:
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
 };
 
 /* ------------------------------------------------------------------ *
@@ -116,7 +119,7 @@ const PERMISSION_PROFILE_LIST = [
     shortLabel: '计划模式',
     cleanTitle: '计划 (只读)',
     tagline: '仅探查不修改',
-    dotColor: '#10b981',
+    dotColor: '#38BDF8',
     title: '计划模式（只读，先计划再改）',
     subtitle:
       '仅允许读取工作区文件、检索代码与只读状态查询，先制定方案再动手，拦截一切文件修改与写入命令。',
@@ -137,7 +140,7 @@ const PERMISSION_PROFILE_LIST = [
     shortLabel: '变更前确认',
     cleanTitle: '变更前确认',
     tagline: '写前弹窗确认',
-    dotColor: '#0ea5e9',
+    dotColor: '#6366F1',
     title: '变更前确认（改文件前问 · 默认）',
     subtitle:
       '只读探针静默放行；每次修改文件、运行脚本或拉起代理前均在桌面浮岛询问确认。',
@@ -158,7 +161,7 @@ const PERMISSION_PROFILE_LIST = [
     shortLabel: '自主模式',
     cleanTitle: '自主模式',
     tagline: '自动快照放行',
-    dotColor: '#2B7FFF',
+    dotColor: '#8B5CF6',
     title: '自主模式（有风险才问）',
     subtitle:
       '授权工作区内的常规文件读写自动创建写前快照并静默执行，仅高风险命令或破坏性操作询问确认。',
@@ -179,7 +182,7 @@ const PERMISSION_PROFILE_LIST = [
     shortLabel: '完全访问',
     cleanTitle: '完全访问',
     tagline: '跨盘普通放行',
-    dotColor: '#ef4444',
+    dotColor: '#E06C60',
     title: '完全访问（减少确认）',
     subtitle:
       '解除工作区目录围栏，跨盘普通文件读写直接执行；仅强制推送、递归删除、磁盘格式化及敏感凭据路径仍需确认。',
@@ -375,7 +378,7 @@ const INJECT_STYLE = `
   box-sizing: border-box !important;
 }
 .mwh-activity-btn:hover { background: rgba(255, 255, 255, 0.08) !important; transform: scale(1.05) !important; }
-.mwh-activity-btn.active { background: rgba(43, 127, 255, 0.18) !important; }
+.mwh-activity-btn.active { background: rgba(99, 102, 241, 0.18) !important; }
 .mwh-activity-dot {
   position: absolute !important;
   left: 2px !important;
@@ -384,7 +387,7 @@ const INJECT_STYLE = `
   width: 3.5px !important;
   height: 16px !important;
   border-radius: 2px !important;
-  background: #2B7FFF !important;
+  background: linear-gradient(180deg, #8B5CF6 0%, #6366F1 50%, #3B82F6 100%) !important;
   display: none !important;
 }
 .mwh-activity-btn.active .mwh-activity-dot { display: block !important; }
@@ -415,7 +418,8 @@ const INJECT_STYLE = `
 .mwh-subpanel,
 .mwh-approval-island,
 .mwh-toast,
-.mwh-confirm-card {
+.mwh-confirm-card,
+.mwh-tour-card {
   /* 取值对齐 muse.ai 官方暗色阶：面板 #1C1D20 / 卡片 #27282C / 内嵌 #1E1F23 / 代码 #141518 */
   --mwh-bg: #1c1d20;
   --mwh-card: #27282c;
@@ -428,8 +432,22 @@ const INJECT_STYLE = `
   --mwh-border: rgba(255, 255, 255, 0.07);
   --mwh-subtle: rgba(255, 255, 255, 0.05);
   --mwh-hover: rgba(255, 255, 255, 0.09);
-  --mwh-accent: #2B7FFF;
-  --mwh-accent-soft: rgba(43, 127, 255, 0.15);
+  --mwh-accent-start: #8B5CF6;
+  --mwh-accent: #6366F1;
+  --mwh-accent-end: #3B82F6;
+  --mwh-accent-grad: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #3B82F6 100%);
+  --mwh-accent-grad-hover: linear-gradient(135deg, #7C3AED 0%, #4F46E5 50%, #2563EB 100%);
+  --mwh-accent-soft: rgba(99, 102, 241, 0.16);
+  --mwh-accent-text: #A5B4FC;
+  --mwh-status-ok: #38BDF8;
+  --mwh-status-ok-text: #7DD3FC;
+  --mwh-status-ok-bg: rgba(56, 189, 248, 0.12);
+  --mwh-status-warn: #D99B43;
+  --mwh-status-warn-text: #EAB364;
+  --mwh-status-warn-bg: rgba(234, 179, 100, 0.14);
+  --mwh-status-danger: #E06C60;
+  --mwh-status-danger-text: #F28B82;
+  --mwh-status-danger-bg: rgba(224, 108, 96, 0.15);
   --mwh-shadow: 0 6px 20px 0 rgba(17, 17, 18, 0.45), 0 8px 36px 0 rgba(17, 17, 18, 0.35);
   --mwh-rail: 56px;
   --mwh-gap: 16px;
@@ -441,7 +459,9 @@ const INJECT_STYLE = `
 .mwh-approval-island.mwh-light,
 .mwh-toast.mwh-light,
 .mwh-confirm-card.mwh-light,
-.mwh-light .mwh-confirm-card {
+.mwh-light .mwh-confirm-card,
+.mwh-tour-card.mwh-light,
+.mwh-light .mwh-tour-card {
   /* 对齐 muse.ai 官方亮色阶：纸感米白 #F7F6F2 / 面板 #EFECE6 / 内嵌 #E6E4DE */
   --mwh-bg: #efece6;
   --mwh-card: #f7f6f2;
@@ -453,7 +473,14 @@ const INJECT_STYLE = `
   --mwh-border: rgba(0, 0, 0, 0.06);
   --mwh-subtle: rgba(0, 0, 0, 0.04);
   --mwh-hover: rgba(0, 0, 0, 0.07);
-  --mwh-accent-soft: rgba(43, 127, 255, 0.12);
+  --mwh-accent-soft: rgba(99, 102, 241, 0.12);
+  --mwh-accent-text: #4F46E5;
+  --mwh-status-ok-text: #0284C7;
+  --mwh-status-ok-bg: rgba(14, 165, 233, 0.12);
+  --mwh-status-warn-text: #B45309;
+  --mwh-status-warn-bg: rgba(217, 119, 6, 0.12);
+  --mwh-status-danger-text: #C2410C;
+  --mwh-status-danger-bg: rgba(224, 108, 96, 0.14);
   --mwh-shadow: 0 4px 16px 0 rgba(17, 17, 18, 0.12), 0 6px 28px 0 rgba(17, 17, 18, 0.08);
 }
 .mwh-drawer,
@@ -597,12 +624,12 @@ const INJECT_STYLE = `
   transition: fill 0.25s ease, filter 0.25s ease;
 }
 .mwh-connected .mwh-pc-status-dot {
-  fill: #2B7FFF !important;
-  filter: drop-shadow(0 0 4px rgba(43, 127, 255, 0.85));
+  fill: #38BDF8 !important;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.85));
 }
 .mwh-disconnected .mwh-pc-status-dot {
-  fill: #EF4444 !important;
-  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.85));
+  fill: #E06C60 !important;
+  filter: drop-shadow(0 0 4px rgba(224, 108, 96, 0.85));
 }
 
 /* ---------- Cards & primitives ---------- */
@@ -660,6 +687,8 @@ const INJECT_STYLE = `
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .mwh-btn {
   border: 0;
@@ -676,12 +705,16 @@ const INJECT_STYLE = `
   color: var(--mwh-text);
   transition: background-color 0.15s ease, opacity 0.15s ease;
   white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mwh-btn:hover { background: var(--mwh-subtle); opacity: 0.95; }
-.mwh-btn-primary { background: var(--mwh-accent); color: #ffffff; }
-.mwh-btn-primary:hover { background: #1A6FEF; }
-.mwh-btn-danger { background: rgba(239, 68, 68, 0.16); color: #f87171; }
-.mwh-btn-danger:hover { background: rgba(239, 68, 68, 0.26); }
+.mwh-btn-primary { background: var(--mwh-accent-grad); color: #ffffff; }
+.mwh-btn-primary:hover { background: var(--mwh-accent-grad-hover); opacity: 1; }
+.mwh-btn-danger { background: var(--mwh-status-danger-bg); color: var(--mwh-status-danger-text); }
+.mwh-btn-danger:hover { background: rgba(224, 108, 96, 0.24); }
 .mwh-btn-ghost { background: var(--mwh-card-2); border: none; }
 .mwh-btn:disabled { opacity: 0.4; cursor: default; }
 .mwh-btn-switch { min-width: 84px; height: 28px; padding: 0 10px; justify-content: center; }
@@ -697,10 +730,10 @@ const INJECT_STYLE = `
   color: var(--mwh-muted);
   white-space: nowrap;
 }
-.mwh-pill-accent { background: var(--mwh-accent-soft); color: #8AB8FF; }
-.mwh-pill-green { background: rgba(34, 197, 94, 0.12); color: #4ade80; }
-.mwh-pill-amber { background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
-.mwh-pill-red { background: rgba(239, 68, 68, 0.14); color: #f87171; }
+.mwh-pill-accent { background: var(--mwh-accent-soft); color: var(--mwh-accent-text); }
+.mwh-pill-green { background: var(--mwh-status-ok-bg); color: var(--mwh-status-ok-text); }
+.mwh-pill-amber { background: var(--mwh-status-warn-bg); color: var(--mwh-status-warn-text); }
+.mwh-pill-red { background: var(--mwh-status-danger-bg); color: var(--mwh-status-danger-text); }
 .mwh-code {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11.5px;
@@ -728,7 +761,7 @@ const INJECT_STYLE = `
 }
 .mwh-input:focus,
 .mwh-input:focus-visible {
-  box-shadow: 0 0 0 1px rgba(43, 127, 255, 0.42), 0 0 0 4px rgba(43, 127, 255, 0.14);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.45), 0 0 0 4px rgba(99, 102, 241, 0.16);
 }
 .mwh-select {
   background: var(--mwh-card-2);
@@ -743,7 +776,7 @@ const INJECT_STYLE = `
 }
 .mwh-select:focus,
 .mwh-select:focus-visible {
-  box-shadow: 0 0 0 1px rgba(43, 127, 255, 0.42), 0 0 0 4px rgba(43, 127, 255, 0.14);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.45), 0 0 0 4px rgba(99, 102, 241, 0.16);
 }
 .mwh-check {
   width: 13px;
@@ -773,8 +806,8 @@ const INJECT_STYLE = `
 }
 .mwh-switch:hover { background: rgba(255, 255, 255, 0.12); }
 .mwh-switch:active { transform: scale(0.97); }
-.mwh-switch.is-on { background: var(--mwh-accent); }
-.mwh-switch.is-on:hover { background: #1B6FEF; }
+.mwh-switch.is-on { background: var(--mwh-accent-grad); }
+.mwh-switch.is-on:hover { background: var(--mwh-accent-grad-hover); }
 .mwh-switch:focus-visible { box-shadow: 0 0 0 3px var(--mwh-accent-soft); }
 .mwh-switch-dot {
   position: absolute;
@@ -794,8 +827,8 @@ const INJECT_STYLE = `
 .mwh-switch.is-disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .mwh-light .mwh-switch { background: rgba(0, 0, 0, 0.12); }
 .mwh-light .mwh-switch:hover { background: rgba(0, 0, 0, 0.16); }
-.mwh-light .mwh-switch.is-on { background: var(--mwh-accent); }
-.mwh-light .mwh-switch.is-on:hover { background: #1B6FEF; }
+.mwh-light .mwh-switch.is-on { background: var(--mwh-accent-grad); }
+.mwh-light .mwh-switch.is-on:hover { background: var(--mwh-accent-grad-hover); }
 /* 开关 + 文字的设置行：整行可点击，文字在左、开关在右 */
 .mwh-switch-row {
   display: flex;
@@ -831,8 +864,8 @@ const INJECT_STYLE = `
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 7px #22c55e;
+  background: var(--mwh-status-ok);
+  box-shadow: 0 0 7px rgba(56, 189, 248, 0.75);
 }
 
 /* ---------- Permission grid ---------- */
@@ -854,7 +887,7 @@ const INJECT_STYLE = `
 .mwh-mode-card:hover { background: var(--mwh-hover); }
 .mwh-mode-card.active { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.13); color: var(--mwh-text); }
 .mwh-drawer.mwh-light .mwh-mode-card.active, .mwh-subpanel.mwh-light .mwh-mode-card.active { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); background: rgba(0, 0, 0, 0.08); color: var(--mwh-text); }
-.mwh-mode-card.active.danger { box-shadow: inset 0 0 0 1.5px #ef4444; background: rgba(239, 68, 68, 0.14); }
+.mwh-mode-card.active.danger { box-shadow: inset 0 0 0 1.5px var(--mwh-status-danger); background: var(--mwh-status-danger-bg); }
 .mwh-mode-name {
   display: flex;
   align-items: center;
@@ -876,6 +909,7 @@ const INJECT_STYLE = `
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
   background: var(--mwh-card-2);
   border: none;
   border-radius: 10px;
@@ -937,7 +971,7 @@ const INJECT_STYLE = `
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .mwh-adv-item:hover { background: var(--mwh-hover); }
-.mwh-adv-item.active { background: var(--mwh-accent-soft); border-color: rgba(43, 127, 255, 0.4); color: var(--mwh-text); }
+.mwh-adv-item.active { background: var(--mwh-accent-soft); border-color: rgba(99, 102, 241, 0.4); color: var(--mwh-text); }
 .mwh-adv-icon {
   width: 26px;
   height: 26px;
@@ -949,7 +983,7 @@ const INJECT_STYLE = `
   flex-shrink: 0;
   color: var(--mwh-muted);
 }
-.mwh-adv-item.active .mwh-adv-icon { background: rgba(43, 127, 255, 0.18); color: #8AB8FF; }
+.mwh-adv-item.active .mwh-adv-icon { background: rgba(99, 102, 241, 0.18); color: var(--mwh-accent-text); }
 .mwh-adv-text { flex: 1; min-width: 0; }
 .mwh-adv-title { font-size: 12px; font-weight: 600; display: block; }
 .mwh-adv-sub { font-size: 10.5px; color: var(--mwh-muted); display: block; margin-top: 1px; }
@@ -1088,7 +1122,7 @@ const INJECT_STYLE = `
 }
 
 /* ---------- Section content pieces ---------- */
-.mwh-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mwh-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
 .mwh-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .mwh-driver-card {
   border: 1px solid transparent;
@@ -1105,7 +1139,7 @@ const INJECT_STYLE = `
   min-height: 84px;
   height: 100%;
 }
-.mwh-driver-card:hover { border-color: rgba(43, 127, 255, 0.4); }
+.mwh-driver-card:hover { border-color: rgba(99, 102, 241, 0.4); }
 .mwh-driver-card.active { border-color: var(--mwh-accent); background: var(--mwh-accent-soft); color: var(--mwh-text); }
 .mwh-driver-title { font-size: 12px; font-weight: 600; }
 .mwh-driver-sub { font-size: 10.5px; color: var(--mwh-muted); margin-top: 3px; line-height: 1.4; }
@@ -1127,8 +1161,8 @@ const INJECT_STYLE = `
 .mwh-protection-list { display: flex; flex-direction: column; gap: 4px; font-size: 11px; line-height: 1.55; }
 .mwh-protection-item { padding-left: 10px; position: relative; color: var(--mwh-text-2); }
 .mwh-protection-item::before { content: "-"; position: absolute; left: 0; color: var(--mwh-muted); }
-.mwh-green-title { color: #4ade80; font-weight: 600; font-size: 11.5px; }
-.mwh-amber-title { color: #fbbf24; font-weight: 600; font-size: 11.5px; }
+.mwh-green-title { color: var(--mwh-status-ok-text); font-weight: 600; font-size: 11.5px; }
+.mwh-amber-title { color: var(--mwh-status-warn-text); font-weight: 600; font-size: 11.5px; }
 
 /* Snapshot groups: 抗挤压弹性盒 + 两行式人类可读卡片体系 */
 .mwh-snap-group {
@@ -1176,7 +1210,7 @@ const INJECT_STYLE = `
   flex: 0 0 auto;
 }
 .mwh-snap-caret { display: inline-flex; align-items: center; flex: 0 0 auto; color: var(--mwh-muted); }
-.mwh-snap-folder-ico { display: inline-flex; align-items: center; flex: 0 0 auto; color: #8AB8FF; }
+.mwh-snap-folder-ico { display: inline-flex; align-items: center; flex: 0 0 auto; color: var(--mwh-accent-text); }
 .mwh-snap-folder { font-weight: 600; color: var(--mwh-text); flex: 0 1 auto; min-width: 0; }
 .mwh-snap-parent { font-size: 11px; color: var(--mwh-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; flex: 1; min-width: 0; }
 .mwh-snap-count {
@@ -1265,7 +1299,7 @@ const INJECT_STYLE = `
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mwh-snap-files { color: #8AB8FF; flex: 0 0 auto; }
+.mwh-snap-files { color: var(--mwh-accent-text); flex: 0 0 auto; }
 .mwh-snap-hash { color: var(--mwh-muted); flex: 0 0 auto; }
 .mwh-snap-divider { color: var(--mwh-muted); opacity: 0.5; flex: 0 0 auto; }
 .mwh-snap-id { color: var(--mwh-muted); opacity: 0.7; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
@@ -1278,7 +1312,7 @@ const INJECT_STYLE = `
   background: transparent;
   border: 0;
   font-size: 11.5px;
-  color: #8AB8FF;
+  color: var(--mwh-accent-text);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
@@ -1336,8 +1370,8 @@ const INJECT_STYLE = `
   margin-bottom: 14px;
 }
 .mwh-confirm-icon.danger {
-  background: rgba(239, 68, 68, 0.16);
-  color: #ef4444;
+  background: var(--mwh-status-danger-bg);
+  color: var(--mwh-status-danger);
 }
 .mwh-confirm-title {
   font-size: 15px;
@@ -1381,7 +1415,7 @@ const INJECT_STYLE = `
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #2B7FFF;
+  color: var(--mwh-accent-text);
 }
 .mwh-is-loading {
   pointer-events: none !important;
@@ -1401,15 +1435,15 @@ const INJECT_STYLE = `
   font-size: 10.5px;
 }
 .mwh-audit-entry.security {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.5);
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+  background: var(--mwh-status-warn-bg);
+  border-color: rgba(217, 155, 67, 0.45);
+  box-shadow: 0 0 0 1px rgba(217, 155, 67, 0.22);
 }
 .mwh-audit-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mwh-audit-tags { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
-.mwh-audit-ALLOW { color: #4ade80; font-weight: 700; }
-.mwh-audit-ASK { color: #fbbf24; font-weight: 700; }
-.mwh-audit-BLOCK { color: #f87171; font-weight: 700; }
+.mwh-audit-ALLOW { color: var(--mwh-status-ok-text); font-weight: 700; }
+.mwh-audit-ASK { color: var(--mwh-status-warn-text); font-weight: 700; }
+.mwh-audit-BLOCK { color: var(--mwh-status-danger-text); font-weight: 700; }
 
 /* ---------- Approval island ---------- */
 /* 三态：胶囊 / 展开面板 / 隐藏。位置与尺寸由 mwhIslandLayout 通过 CSS 变量 + transform 驱动，
@@ -1577,7 +1611,7 @@ const INJECT_STYLE = `
 .mwh-drawer button:focus-visible,
 .mwh-subpanel button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.72);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.72);
 }
 @media (prefers-reduced-motion: reduce) {
   /* 动效归零：这是 !important 的白名单用法（见 docs/DESIGN.md 4.8 红线 4）。 */
@@ -1652,6 +1686,72 @@ const INJECT_STYLE = `
   color: var(--mwh-muted);
   line-height: 1.6;
 }
+
+/* ---------- Spotlight Onboarding Tour (docs/DESIGN.md 4.9) ---------- */
+.mwh-tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100020;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--mwh-dur-overlay) var(--mwh-ease-color);
+}
+.mwh-tour-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mwh-tour-spotlight {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(10, 11, 14, 0.62), 0 0 0 2px #6366F1;
+  pointer-events: none;
+  transition:
+    top var(--mwh-dur-panel) var(--mwh-ease-standard),
+    left var(--mwh-dur-panel) var(--mwh-ease-standard),
+    width var(--mwh-dur-panel) var(--mwh-ease-standard),
+    height var(--mwh-dur-panel) var(--mwh-ease-standard);
+}
+.mwh-tour-card {
+  position: fixed;
+  width: min(360px, calc(100vw - 32px));
+  border-radius: 18px;
+  background: var(--mwh-bg);
+  color: var(--mwh-text);
+  box-shadow: var(--mwh-shadow), 0 0 0 1px var(--mwh-border);
+  padding: 16px 18px;
+  z-index: 100025;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition:
+    top var(--mwh-dur-panel) var(--mwh-ease-standard),
+    left var(--mwh-dur-panel) var(--mwh-ease-standard);
+}
+.mwh-tour-step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: var(--mwh-accent-soft);
+  color: var(--mwh-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.mwh-tour-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.mwh-tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--mwh-subtle);
+  transition: width var(--mwh-dur-state) var(--mwh-ease-standard), background-color var(--mwh-dur-state) var(--mwh-ease-color);
+}
+.mwh-tour-dot.active {
+  width: 18px;
+  background: var(--mwh-accent-grad);
+}
 `;
 
 function injectStyles() {
@@ -1690,6 +1790,85 @@ function emptyLiveTask() {
 
 let cachedRealToken = '';
 let isTokenPeeked = false;
+let isEndpointPeeked = false;
+let peekAutoHideTimer = null;
+const PEEK_AUTO_HIDE_MS = 15000;
+
+function clearPeekAutoHideTimer() {
+  if (peekAutoHideTimer) {
+    clearTimeout(peekAutoHideTimer);
+    peekAutoHideTimer = null;
+  }
+}
+
+function resetPrivacyPeeks() {
+  clearPeekAutoHideTimer();
+  isTokenPeeked = false;
+  isEndpointPeeked = false;
+}
+
+function schedulePeekAutoHide() {
+  clearPeekAutoHideTimer();
+  if (!isTokenPeeked && !isEndpointPeeked) return;
+  peekAutoHideTimer = setTimeout(function () {
+    peekAutoHideTimer = null;
+    if (isTokenPeeked || isEndpointPeeked) {
+      isTokenPeeked = false;
+      isEndpointPeeked = false;
+      scheduleRender(true);
+    }
+  }, PEEK_AUTO_HIDE_MS);
+}
+
+function maskEndpointUrl(rawUrl) {
+  const str = String(rawUrl || '').trim();
+  if (!str || isEndpointPeeked) return str;
+  if (/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(\/|$)/i.test(str)) {
+    return str;
+  }
+  return str.replace(/^(https?:\/\/)([^/?#]+)(.*)$/i, function (_m, proto, hostPort, rest) {
+    const parts = hostPort.split('.');
+    if (parts.length >= 2) {
+      const sub = parts[0];
+      const maskedSub = sub.length <= 4 ? sub.slice(0, 1) + '••••' : sub.slice(0, 3) + '••••' + sub.slice(-2);
+      return proto + [maskedSub].concat(parts.slice(1)).join('.') + rest;
+    }
+    return proto + hostPort.slice(0, 3) + '••••' + rest;
+  });
+}
+
+const TOUR_STEPS = [
+  {
+    id: 'activity-entry',
+    target: 'tour-activity-entry',
+    title: '左栏入口与健康状态',
+    body: '点击 Muse 左侧导航栏 MWH 紫蓝徽标随时呼出或收起控制抽屉；徽标右下角圆点实时反映宿主守护与公网隧道连通状态（冰川青蓝为就绪，赤陶珊瑚红为离线）。',
+  },
+  {
+    id: 'permission-modes',
+    target: 'tour-permission-modes',
+    title: '四档权限与 2 小时自动降级',
+    body: '按任务风险一键切换「计划模式（只读） / 变更前确认（默认） / 自主模式（自动快照） / 完全访问（跨盘放行）」。开启完全访问时支持 2 小时自动降级保护。',
+  },
+  {
+    id: 'endpoints-credentials',
+    target: 'tour-endpoints-credentials',
+    title: '端点防窥脱敏与一键配对',
+    body: '公网 MCP/REST 端点与 Bearer Token 默认自动脱敏防截屏泄露（点击眼睛图标可临时查看 15 秒）；点击「复制配对口令」或「复制 MCP JSON」即可一键填入 Muse 连接器。',
+  },
+  {
+    id: 'advanced-center',
+    target: 'tour-advanced-center',
+    title: '四栏高级配置中心',
+    body: '展开右侧伴随子面板，集中管理「连接与权限」、「工作区与代理（目录白名单与 ACP 引擎）」、「资源库（本机 MCP 与 Skill 原地开关）」及「审计日志（Git Shadow 写前快照单条回滚）」。',
+  },
+  {
+    id: 'approval-island',
+    target: 'tour-approval-island',
+    title: '底部实时审批灵动岛',
+    body: '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。',
+  },
+];
 
 async function fetchRealTokenIfNeeded() {
   if (!cachedRealToken) {
@@ -1721,6 +1900,8 @@ const state = {
   settings: null,
   drawerOpen: false,
   activeSection: null,
+  tourOpen: false,
+  tourStepIndex: 0,
   themeDark: true,
   lastThemeSent: null,
   islandAutoExpandedTaskId: null,
@@ -2070,6 +2251,7 @@ function applyThemeClass() {
     document.getElementById('mwh-confirm-dialog'),
     document.getElementById('mwh-drawer-backdrop'),
     document.getElementById('mwh-activity-btn'),
+    document.getElementById('mwh-tour-card'),
   ];
   for (const node of targets) {
     if (!node) continue;
@@ -2237,7 +2419,7 @@ function renderDrawer() {
       '</span>' +
       (isLoading
         ? '<span class="mwh-spin-tag">' + ICON.spinner + '</span>'
-        : (active ? '<span style="color:' + (danger ? '#f87171' : '#8AB8FF') + '">' + ICON.check + '</span>' : '')) +
+        : (active ? '<span style="color:' + (danger ? '#F28B82' : '#A5B4FC') + '">' + ICON.check + '</span>' : '')) +
       '</div>' +
       '<div class="mwh-mode-desc">' +
       esc(prof.tagline || prof.subtitle.slice(0, 10)) +
@@ -2259,9 +2441,15 @@ function renderDrawer() {
   const displayToken = isTokenPeeked
     ? (cachedRealToken || '正在读取...')
     : (t.bearerToken || '未生成');
+  const displayMcpEndpoint = state.settingsLive
+    ? maskEndpointUrl(pairing.mcpEndpoint || '未拿到端点')
+    : '未连接宿主';
+  const displayRestEndpoint = state.settingsLive
+    ? maskEndpointUrl(pairing.restEndpoint || '未拿到端点')
+    : '未连接宿主';
 
   const tunnelStatusBadge = isTunnelActive
-    ? '<span class="mwh-pill mwh-pill-green"><span class="mwh-dot" style="background:#22c55e"></span><span>公网活跃</span></span>'
+    ? '<span class="mwh-pill mwh-pill-green"><span class="mwh-dot" style="background:#38BDF8"></span><span>公网活跃</span></span>'
     : '<span class="mwh-pill"><span class="mwh-dot" style="background:#71717a"></span><span>仅本地</span></span>';
 
   const quickTunnelToggleBtn = isQuick
@@ -2282,12 +2470,17 @@ function renderDrawer() {
     SVG_LOGO +
     '<span>本地宿主引擎 (MWH)</span>' +
     '</div>' +
+    '<div style="display:flex;align-items:center;gap:4px">' +
+    '<button type="button" class="mwh-icon-btn" data-action="open-tour" title="功能使用引导" aria-label="功能使用引导">' +
+    ICON.help +
+    '</button>' +
     '<button type="button" class="mwh-icon-btn" data-action="close-drawer" title="关闭面板" aria-label="关闭面板">' +
     ICON.close +
     '</button>' +
     '</div>' +
+    '</div>' +
     '<div class="mwh-drawer-body">' +
-    '<div class="mwh-card">' +
+    '<div class="mwh-card" data-tour-id="tour-permission-modes">' +
     '<div class="mwh-section-title">' +
     ICON.shield +
     '<span>权限模式</span>' +
@@ -2299,25 +2492,32 @@ function renderDrawer() {
     modeCards +
     '</div>' +
     '</div>' +
-    '<div class="mwh-card">' +
+    '<div class="mwh-card" data-tour-id="tour-endpoints-credentials">' +
     '<div class="mwh-section-title">' +
     ICON.link +
     '<span>连接端点与凭据</span>' +
     '<span style="margin-left:auto;display:flex;align-items:center;gap:6px">' +
+    '<button type="button" class="mwh-icon-btn" style="width:24px;height:24px" data-action="toggle-endpoint-peek" title="' +
+    (isEndpointPeeked ? '隐藏完整端点域名' : '临时显示完整端点域名 (15s)') +
+    '" aria-label="' +
+    (isEndpointPeeked ? '隐藏完整端点域名' : '临时显示完整端点域名') +
+    '">' +
+    (isEndpointPeeked ? ICON.eyeOff : ICON.eye) +
+    '</button>' +
     tunnelStatusBadge +
     quickTunnelToggleBtn +
     '</span>' +
     '</div>' +
-    '<div class="mwh-endpoint-row"><span class="mwh-ep-label">MCP</span><span class="mwh-truncate mwh-mono" style="color:var(--mwh-muted)" title="' + esc(pairing.mcpEndpoint || '') + '">' +
-    esc(state.settingsLive ? (pairing.mcpEndpoint || '未拿到端点') : '未连接宿主') +
+    '<div class="mwh-endpoint-row"><span class="mwh-ep-label">MCP</span><span class="mwh-truncate mwh-mono" style="color:var(--mwh-muted)" title="' + esc(displayMcpEndpoint) + '">' +
+    esc(displayMcpEndpoint) +
     '</span>' +
     '<button type="button" class="mwh-icon-btn" style="width:24px;height:24px" data-action="copy" data-copy="' +
     esc(pairing.mcpEndpoint) +
     '" title="复制完整 MCP URL">' +
     ICON.copy +
     '</button></div>' +
-    '<div class="mwh-endpoint-row"><span class="mwh-ep-label">REST</span><span class="mwh-truncate mwh-mono" style="color:var(--mwh-muted)" title="' + esc(pairing.restEndpoint || '') + '">' +
-    esc(state.settingsLive ? (pairing.restEndpoint || '未拿到端点') : '未连接宿主') +
+    '<div class="mwh-endpoint-row"><span class="mwh-ep-label">REST</span><span class="mwh-truncate mwh-mono" style="color:var(--mwh-muted)" title="' + esc(displayRestEndpoint) + '">' +
+    esc(displayRestEndpoint) +
     '</span>' +
     '<button type="button" class="mwh-icon-btn" style="width:24px;height:24px" data-action="copy" data-copy="' +
     esc(pairing.restEndpoint) +
@@ -2328,7 +2528,7 @@ function renderDrawer() {
     esc(displayToken) +
     '</span><span style="display:flex;align-items:center;gap:3px">' +
     '<button type="button" class="mwh-icon-btn" style="width:24px;height:24px" data-action="toggle-token-peek" title="' +
-    (isTokenPeeked ? '隐藏明文' : '查看完整明文') +
+    (isTokenPeeked ? '隐藏明文' : '查看完整明文 (15s 自动隐藏)') +
     '">' +
     (isTokenPeeked ? ICON.eyeOff : ICON.eye) +
     '</button>' +
@@ -2345,10 +2545,10 @@ function renderDrawer() {
     '<span>复制 MCP JSON</span></button>' +
     '</div>' +
     '</div>' +
-    '<div class="mwh-card mwh-adv-hero-card" data-action="open-advanced-modal" style="cursor:pointer;background:var(--mwh-card-2);border:none;margin-top:8px;transition:all 0.18s ease">' +
+    '<div class="mwh-card mwh-adv-hero-card" data-tour-id="tour-advanced-center" data-action="open-advanced-modal" style="cursor:pointer;background:var(--mwh-card-2);border:none;margin-top:8px;transition:all 0.18s ease">' +
     '<div class="mwh-row">' +
     '<div style="display:flex;align-items:center;gap:10px">' +
-    '<div class="mwh-adv-hero-icon" style="width:34px;height:34px;border-radius:10px;background:rgba(43,127,255,0.16);color:#2B7FFF;display:flex;align-items:center;justify-content:center">' +
+    '<div class="mwh-adv-hero-icon" style="width:34px;height:34px;border-radius:10px;background:rgba(99,102,241,0.16);color:#A5B4FC;display:flex;align-items:center;justify-content:center">' +
     ICON.grid +
     '</div>' +
     '<div>' +
@@ -2380,7 +2580,7 @@ function renderDrawer() {
     '</div>' +
     '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;font-size:11px;color:var(--mwh-muted)">' +
     '<span style="display:inline-flex;align-items:center;gap:6px">' +
-    '<span style="width:7px;height:7px;border-radius:50%;background:' + (conn.connected ? '#22c55e' : '#71717a') + ';display:inline-block;box-shadow:0 0 5px ' + (conn.connected ? 'rgba(34,197,94,0.8)' : 'rgba(113,113,122,0.4)') + '"></span>' +
+    '<span style="width:7px;height:7px;border-radius:50%;background:' + (conn.connected ? '#38BDF8' : '#71717a') + ';display:inline-block;box-shadow:0 0 5px ' + (conn.connected ? 'rgba(56,189,248,0.8)' : 'rgba(113,113,122,0.4)') + '"></span>' +
     '<span>Muse 连通: ' + esc(conn.connected ? '已连通 Muse 连接器' : '待连接 / 未接入') + '</span></span>' +
     '<span class="mwh-mono">' + esc(conn.connected ? 'ONLINE' : 'OFFLINE') + '</span>' +
     '</div>' +
@@ -2407,6 +2607,8 @@ function renderConnectors(settings) {
   const displayToken = isTokenPeeked
     ? (cachedRealToken || '正在读取...')
     : (t.bearerToken || '未生成');
+  const displayMcpEndpoint = maskEndpointUrl(pairing.mcpEndpoint);
+  const displayRestEndpoint = maskEndpointUrl(pairing.restEndpoint);
 
   const drivers = [
     {
@@ -2549,14 +2751,23 @@ function renderConnectors(settings) {
     '<div class="mwh-section-title">' +
     ICON.link +
     '<span>服务端点与认证密钥</span>' +
+    '<span style="margin-left:auto">' +
+    '<button type="button" class="mwh-btn" style="padding:3px 8px;font-size:11px" data-action="toggle-endpoint-peek" title="' +
+    (isEndpointPeeked ? '隐藏端点完整域名' : '查看完整端点域名 (15s 自动恢复脱敏)') +
+    '">' +
+    (isEndpointPeeked ? ICON.eyeOff : ICON.eye) +
+    ' <span>' +
+    (isEndpointPeeked ? '隐藏端点域名' : '显示完整域名') +
+    '</span></button>' +
+    '</span>' +
     '</div>' +
     '<div class="mwh-list-row" style="margin-bottom:6px"><span class="mwh-mono mwh-truncate">MCP: ' +
-    esc(pairing.mcpEndpoint) +
+    esc(displayMcpEndpoint) +
     '</span><button type="button" class="mwh-btn" data-action="copy" data-copy="' +
     esc(pairing.mcpEndpoint) +
     '">复制</button></div>' +
     '<div class="mwh-list-row" style="margin-bottom:6px"><span class="mwh-mono mwh-truncate">REST: ' +
-    esc(pairing.restEndpoint) +
+    esc(displayRestEndpoint) +
     '</span><button type="button" class="mwh-btn" data-action="copy" data-copy="' +
     esc(pairing.restEndpoint) +
     '">复制</button></div>' +
@@ -2618,7 +2829,7 @@ function renderPermissions(settings) {
       '" title="' +
       esc(prof.title + '\n' + prof.subtitle) +
       '" style="' +
-      (danger && selected ? 'border-color:#ef4444;background:rgba(239,68,68,0.12)' : '') +
+      (danger && selected ? 'border-color:#E06C60;background:rgba(224,108,96,0.14)' : '') +
       '">' +
       '<div class="mwh-row">' +
       '<div style="display:flex;align-items:center;gap:7px;min-width:0">' +
@@ -2630,7 +2841,7 @@ function renderPermissions(settings) {
       '</span></div>' +
       (selected
         ? '<span class="mwh-mono" style="font-size:10.5px;color:' +
-          (danger ? '#f87171' : '#8AB8FF') +
+          (danger ? '#F28B82' : '#A5B4FC') +
           '">当前生效</span>'
         : '') +
       '</div>' +
@@ -2700,7 +2911,7 @@ function renderDaemon(settings) {
             '<span class="mwh-mono mwh-truncate">' +
             esc(rootPath) +
             '</span>' +
-            '<button type="button" class="mwh-icon-btn" style="color:#f87171" data-action="workspace-remove" data-path="' +
+            '<button type="button" class="mwh-icon-btn" style="color:#F28B82" data-action="workspace-remove" data-path="' +
             esc(rootPath) +
             '" title="移除工作区" aria-label="移除工作区">' +
             ICON.trash +
@@ -2716,7 +2927,7 @@ function renderDaemon(settings) {
     '<div class="mwh-row">' +
     '<span style="font-size:13px;font-weight:600">Windows 本地守护进程 (mwh-daemon.exe)</span>' +
     '<span class="mwh-mono" style="font-size:11px;color:' +
-    (d.connected ? '#4ade80' : '#9A9BA4') +
+    (d.connected ? '#7DD3FC' : '#9A9BA4') +
     '">' +
     (d.connected ? '在线 (127.0.0.1:19820)' : '离线 · 未连接本地守护进程') +
     '</span>' +
@@ -2774,7 +2985,7 @@ function renderSubagents(settings) {
             esc(profile.id) +
             '</span>' +
             '<span class="mwh-mono" style="font-size:10px;color:' +
-            (profile.detected ? '#4ade80' : '#fbbf24') +
+            (profile.detected ? '#7DD3FC' : '#EAB364') +
             '">' +
             (profile.detected ? '可执行文件就绪' : '未找到可执行文件') +
             '</span>' +
@@ -2799,7 +3010,7 @@ function renderSubagents(settings) {
             '" title="编辑 ACP 代理">' +
             ICON.edit +
             '</button>' +
-            '<button type="button" class="mwh-icon-btn" style="color:#f87171" data-action="acp-delete" data-id="' +
+            '<button type="button" class="mwh-icon-btn" style="color:#F28B82" data-action="acp-delete" data-id="' +
             esc(profile.id) +
             '" title="删除 ACP 代理">' +
             ICON.trash +
@@ -2815,10 +3026,10 @@ function renderSubagents(settings) {
     let probeBlock = '';
     if (acp.probe && acp.probe.tested) {
       probeBlock = acp.probe.available
-        ? '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#4ade80">可执行文件已就绪: ' +
+        ? '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#7DD3FC">可执行文件已就绪: ' +
           esc(acp.probe.path || '') +
           '</div>'
-        : '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#fbbf24">未找到可执行文件 (' +
+        : '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#EAB364">未找到可执行文件 (' +
           esc(acp.probe.error || '检查路径拼写') +
           ')</div>';
     }
@@ -2885,7 +3096,7 @@ function renderSubagents(settings) {
             '<div class="mwh-card-flat" style="margin-bottom:7px">' +
             '<div class="mwh-row" style="flex-wrap:wrap;align-items:flex-start">' +
             '<div class="mwh-mono mwh-hint mwh-truncate" style="flex:1">' +
-            '<span style="color:#8AB8FF;font-weight:600">' +
+            '<span style="color:#A5B4FC;font-weight:600">' +
             esc(wt.id) +
             '</span> · ' +
             esc(wt.branchName || '') +
@@ -3085,7 +3296,7 @@ function renderSnapshotsAudit(settings) {
                 '<button type="button" class="mwh-btn mwh-snap-rollback" data-action="snapshot-rollback" data-id="' +
                 esc(snap.id) +
                 '" style="' +
-                (snap.rolledBack ? 'background:rgba(34,197,94,0.15);color:#4ade80' : '') +
+                (snap.rolledBack ? 'background:rgba(56,189,248,0.14);color:#7DD3FC' : '') +
                 '">' +
                 (isRollbackLoading
                   ? ICON.spinner + '<span>回滚中...</span>'
@@ -3385,12 +3596,12 @@ function renderResources(settings) {
       if (form.probeResult.ok) {
         const toolCount = form.probeResult.tools ? form.probeResult.tools.length : 0;
         probeBlock =
-          '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#4ade80">探测成功' +
+          '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#7DD3FC">探测成功' +
           (toolCount > 0 ? ' (发现 ' + toolCount + ' 个工具)' : '') +
           '</div>';
       } else {
         probeBlock =
-          '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#fbbf24">探测失败: ' +
+          '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#EAB364">探测失败: ' +
           esc(form.probeResult.error || form.probeResult.faultReason || '连接失败') +
           '</div>';
       }
@@ -3471,7 +3682,7 @@ function renderResources(settings) {
       : '';
 
     html +=
-      '<div class="mwh-card" style="margin-bottom:12px;border:1px solid rgba(43,127,255,0.25)">' +
+      '<div class="mwh-card" style="margin-bottom:12px;border:1px solid rgba(99,102,241,0.28)">' +
       '<div class="mwh-row" style="margin-bottom:10px">' +
       '<div style="font-size:13px;font-weight:600;color:var(--mwh-text)">' +
       (form.editingId ? '编辑资源' : '添加本机资源') +
@@ -3521,12 +3732,12 @@ function renderResources(settings) {
         let statusBadge = '<span class="mwh-pill">已关闭</span>';
         if (isFault) {
           statusBadge =
-            '<span class="mwh-pill" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-weight:600">' +
+            '<span class="mwh-pill" style="background:rgba(234,179,100,0.16);color:#EAB364;font-weight:600">' +
             esc(entry.faultReason || '启动故障') +
             '</span>';
         } else if (isRunning) {
           statusBadge =
-            '<span class="mwh-pill" style="background:rgba(34,197,94,0.15);color:#4ade80">运行正常</span>';
+            '<span class="mwh-pill" style="background:rgba(56,189,248,0.14);color:#7DD3FC">运行正常</span>';
         }
 
         const readonlyBadge = entry.readonly
@@ -3566,7 +3777,7 @@ function renderResources(settings) {
             '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05)">' +
             '<div style="font-size:11.5px;font-weight:600;color:var(--mwh-muted);margin-bottom:6px">将出现在 Muse 的 tools/list</div>' +
             (isFault
-              ? '<div style="color:#f59e0b;font-size:11px;margin-bottom:6px">已暂时从 /mcp 撤下，修复后会自动恢复</div>'
+              ? '<div style="color:#EAB364;font-size:11px;margin-bottom:6px">已暂时从 /mcp 撤下，修复后会自动恢复</div>'
               : '') +
             toolsHtml +
             '</div>';
@@ -3612,7 +3823,7 @@ function renderResources(settings) {
           '" title="编辑">' +
           ICON.edit +
           '</button>' +
-          '<button type="button" class="mwh-icon-btn" style="color:#f87171" data-action="resource-delete" data-id="' +
+          '<button type="button" class="mwh-icon-btn" style="color:#F28B82" data-action="resource-delete" data-id="' +
           esc(entry.id) +
           '" title="删除">' +
           ICON.trash +
@@ -3649,11 +3860,11 @@ function renderResources(settings) {
         // 故障（SKILL.md 缺失等）不能显示成绿色「已就绪」，否则就是谎报可用性。
         const skillFault = Boolean(entry.faultReason || entry.runtimeStatus === 'fault');
         const statusBadge = skillFault
-          ? '<span class="mwh-pill" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-weight:600">' +
+          ? '<span class="mwh-pill" style="background:rgba(234,179,100,0.16);color:#EAB364;font-weight:600">' +
             esc(entry.faultReason || '不可用') +
             '</span>'
           : entry.enabled
-          ? '<span class="mwh-pill" style="background:rgba(34,197,94,0.15);color:#4ade80">已就绪</span>'
+          ? '<span class="mwh-pill" style="background:rgba(56,189,248,0.14);color:#7DD3FC">已就绪</span>'
           : '<span class="mwh-pill">已关闭</span>';
 
         let expandedBlock = '';
@@ -3700,7 +3911,7 @@ function renderResources(settings) {
           '" title="编辑">' +
           ICON.edit +
           '</button>' +
-          '<button type="button" class="mwh-icon-btn" style="color:#f87171" data-action="resource-delete" data-id="' +
+          '<button type="button" class="mwh-icon-btn" style="color:#F28B82" data-action="resource-delete" data-id="' +
           esc(entry.id) +
           '" title="删除">' +
           ICON.trash +
@@ -3924,7 +4135,7 @@ function renderSubpanel(force) {
     '<div class="mwh-subpanel-header">' +
     '<div class="mwh-subpanel-top-row">' +
     '<div style="display:flex;align-items:center;gap:8px">' +
-    '<div class="mwh-adv-hero-icon" style="width:24px;height:24px;border-radius:6px;background:rgba(43,127,255,0.16);color:#2B7FFF;display:flex;align-items:center;justify-content:center">' +
+    '<div class="mwh-adv-hero-icon" style="width:24px;height:24px;border-radius:6px;background:rgba(99,102,241,0.16);color:#A5B4FC;display:flex;align-items:center;justify-content:center">' +
     ICON.grid +
     '</div>' +
     '<span style="font-size:13.5px;font-weight:600;color:var(--mwh-text)">高级配置中心</span>' +
@@ -4419,7 +4630,7 @@ function renderApprovalIsland() {
     if (loadIslandLayout().capsule) {
       inner =
         '<div class="mwh-island-head">' +
-        '<span style="color:#fbbf24;display:inline-flex;align-items:center">' +
+        '<span style="color:#EAB364;display:inline-flex;align-items:center">' +
         ICON.alert +
         '</span>' +
         '<span class="mwh-island-capsule-label">待授权</span>' +
@@ -4429,7 +4640,7 @@ function renderApprovalIsland() {
       inner =
         '<div class="mwh-island-head">' +
         '<div class="mwh-island-title">' +
-        '<span style="color:#fbbf24">' +
+        '<span style="color:#EAB364">' +
         ICON.alert +
         '</span><span class="mwh-truncate">' +
         esc(waitingTitle) +
@@ -4472,7 +4683,7 @@ function renderApprovalIsland() {
     if (loadIslandLayout().capsule) {
       inner =
         '<div class="mwh-island-head">' +
-        '<span class="mwh-spin" style="color:#4A8CFF;display:inline-flex;align-items:center">' +
+        '<span class="mwh-spin" style="color:#A5B4FC;display:inline-flex;align-items:center">' +
         ICON.spinner +
         '</span>' +
         '<span class="mwh-island-capsule-label">运行中</span>' +
@@ -4493,7 +4704,7 @@ function renderApprovalIsland() {
       inner =
         '<div class="mwh-island-head">' +
         '<div class="mwh-island-title">' +
-        '<span class="mwh-spin" style="color:#4A8CFF;display:inline-flex">' +
+        '<span class="mwh-spin" style="color:#A5B4FC;display:inline-flex">' +
         ICON.spinner +
         '</span>' +
         agentBadge +
@@ -4551,7 +4762,7 @@ function renderApprovalIsland() {
     if (loadIslandLayout().capsule) {
       inner =
         '<div class="mwh-island-head">' +
-        '<span style="color:#4ade80;display:inline-flex;align-items:center">' +
+        '<span style="color:#7DD3FC;display:inline-flex;align-items:center">' +
         ICON.checkCircle +
         '</span>' +
         '<span class="mwh-island-capsule-label">已完成</span>' +
@@ -4565,7 +4776,7 @@ function renderApprovalIsland() {
       inner =
         '<div class="mwh-island-head">' +
         '<div class="mwh-island-title">' +
-        '<span style="color:#4ade80">' +
+        '<span style="color:#7DD3FC">' +
         ICON.checkCircle +
         '</span><span class="mwh-island-capsule-label">' +
         esc(completedText) +
@@ -4642,6 +4853,7 @@ function scheduleRender(force) {
       renderSubpanel(forceNow);
     }
     renderApprovalIsland();
+    if (state.tourOpen) renderTour();
     applyThemeClass();
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
@@ -4653,7 +4865,161 @@ function renderAll(force) {
   renderDrawer();
   renderSubpanel(Boolean(force));
   renderApprovalIsland();
+  if (state.tourOpen) renderTour();
   applyThemeClass();
+}
+
+/* ------------------------------------------------------------------ *
+ * Spotlight Onboarding Tour (docs/DESIGN.md 4.9)
+ * ------------------------------------------------------------------ */
+
+function openTour() {
+  ensureShell();
+  if (!state.drawerOpen) {
+    openDrawer();
+  }
+  state.tourOpen = true;
+  state.tourStepIndex = 0;
+  renderTour();
+}
+
+function closeTour() {
+  if (!state.tourOpen) return;
+  state.tourOpen = false;
+  const overlay = document.getElementById('mwh-tour-overlay');
+  if (overlay) {
+    overlay.classList.remove('open');
+    overlay.innerHTML = '';
+  }
+}
+
+function stepTour(delta) {
+  if (!state.tourOpen) return;
+  const nextIdx = state.tourStepIndex + delta;
+  if (nextIdx < 0) return;
+  if (nextIdx >= TOUR_STEPS.length) {
+    closeTour();
+    return;
+  }
+  state.tourStepIndex = nextIdx;
+  const step = TOUR_STEPS[state.tourStepIndex];
+  if (step && step.id === 'advanced-center' && !state.activeSection) {
+    state.activeSection = 'connectors';
+    renderSubpanel(true);
+  }
+  renderTour();
+}
+
+function renderTour() {
+  const overlay = document.getElementById('mwh-tour-overlay');
+  if (!overlay) return;
+  if (!state.tourOpen) {
+    overlay.classList.remove('open');
+    overlay.innerHTML = '';
+    return;
+  }
+  const idx = Math.max(0, Math.min(TOUR_STEPS.length - 1, state.tourStepIndex || 0));
+  const step = TOUR_STEPS[idx];
+  let targetEl = document.querySelector('[data-tour-id="' + step.target + '"]');
+  if (step.id === 'advanced-center' && state.activeSection) {
+    const subpanelEl = document.getElementById('mwh-subpanel');
+    if (subpanelEl && subpanelEl.classList.contains('open')) {
+      targetEl = subpanelEl;
+    }
+  }
+
+  const vw = Math.max(320, window.innerWidth || 1280);
+  const vh = Math.max(240, window.innerHeight || 800);
+  let spotTop = Math.round(vh * 0.25);
+  let spotLeft = Math.round(vw * 0.25);
+  let spotWidth = 280;
+  let spotHeight = 120;
+
+  if (targetEl && typeof targetEl.getBoundingClientRect === 'function') {
+    const r = targetEl.getBoundingClientRect();
+    if (r.width > 4 && r.height > 4) {
+      const pad = 6;
+      spotTop = Math.max(8, Math.round(r.top - pad));
+      spotLeft = Math.max(8, Math.round(r.left - pad));
+      spotWidth = Math.min(vw - spotLeft - 8, Math.round(r.width + pad * 2));
+      spotHeight = Math.min(vh - spotTop - 8, Math.round(r.height + pad * 2));
+    }
+  }
+
+  const cardW = Math.min(360, vw - 32);
+  const cardH = 210;
+  let cardLeft = spotLeft + spotWidth + 16;
+  let cardTop = spotTop;
+  if (cardLeft + cardW > vw - 16) {
+    cardLeft = Math.max(16, spotLeft - cardW - 16);
+  }
+  if (cardLeft < 16 || (cardLeft + cardW > spotLeft && cardLeft < spotLeft + spotWidth)) {
+    cardLeft = Math.max(16, Math.min(vw - cardW - 16, spotLeft));
+    cardTop = spotTop + spotHeight + 14;
+    if (cardTop + cardH > vh - 16) {
+      cardTop = Math.max(16, spotTop - cardH - 14);
+    }
+  }
+  cardTop = Math.max(16, Math.min(vh - cardH - 16, cardTop));
+
+  const dotsHtml = TOUR_STEPS.map(function (s, i) {
+    return '<span class="mwh-tour-dot' + (i === idx ? ' active' : '') + '" title="' + esc(s.title) + '"></span>';
+  }).join('');
+
+  const isFirst = idx === 0;
+  const isLast = idx === TOUR_STEPS.length - 1;
+
+  overlay.innerHTML =
+    '<div class="mwh-tour-spotlight" style="top:' +
+    spotTop +
+    'px;left:' +
+    spotLeft +
+    'px;width:' +
+    spotWidth +
+    'px;height:' +
+    spotHeight +
+    'px"></div>' +
+    '<div id="mwh-tour-card" class="mwh-tour-card' +
+    (!state.themeDark ? ' mwh-light' : '') +
+    '" role="dialog" aria-modal="true" aria-label="MWH 功能使用引导" style="top:' +
+    cardTop +
+    'px;left:' +
+    cardLeft +
+    'px">' +
+    '<div class="mwh-row" style="margin-bottom:10px">' +
+    '<span class="mwh-tour-step-badge">步骤 ' +
+    (idx + 1) +
+    ' / ' +
+    TOUR_STEPS.length +
+    '</span>' +
+    '<div class="mwh-tour-dots">' +
+    dotsHtml +
+    '</div>' +
+    '<button type="button" class="mwh-icon-btn" data-action="tour-close" title="结束引导 (Esc)" aria-label="结束引导">' +
+    ICON.close +
+    '</button>' +
+    '</div>' +
+    '<div style="font-size:14px;font-weight:600;color:var(--mwh-text);margin-bottom:6px">' +
+    esc(step.title) +
+    '</div>' +
+    '<div class="mwh-hint" style="font-size:12px;line-height:1.6;margin-bottom:14px">' +
+    esc(step.body) +
+    '</div>' +
+    '<div class="mwh-row" style="justify-content:space-between">' +
+    '<button type="button" class="mwh-btn mwh-btn-ghost" data-action="tour-close" style="font-size:11.5px;padding:6px 10px">跳过引导</button>' +
+    '<div style="display:flex;align-items:center;gap:6px">' +
+    (!isFirst
+      ? '<button type="button" class="mwh-btn" data-action="tour-prev" style="font-size:11.5px;padding:6px 12px">上一步</button>'
+      : '') +
+    '<button type="button" class="mwh-btn mwh-btn-primary" data-action="' +
+    (isLast ? 'tour-close' : 'tour-next') +
+    '" style="font-size:11.5px;padding:6px 14px">' +
+    (isLast ? '完成引导' : '下一步') +
+    '</button>' +
+    '</div>' +
+    '</div>' +
+    '</div>';
+  overlay.classList.add('open');
 }
 
 function setLoading(actionName) {
@@ -4829,7 +5195,30 @@ async function handleSubpanelAction(action, target) {
     if (isTokenPeeked && !cachedRealToken) {
       await fetchRealTokenIfNeeded();
     }
+    schedulePeekAutoHide();
     scheduleRender(true);
+    return;
+  }
+  if (action === 'toggle-endpoint-peek') {
+    isEndpointPeeked = !isEndpointPeeked;
+    schedulePeekAutoHide();
+    scheduleRender(true);
+    return;
+  }
+  if (action === 'open-tour') {
+    openTour();
+    return;
+  }
+  if (action === 'tour-prev') {
+    stepTour(-1);
+    return;
+  }
+  if (action === 'tour-next') {
+    stepTour(1);
+    return;
+  }
+  if (action === 'tour-close') {
+    closeTour();
     return;
   }
   if (action === 'copy-pairing') {
@@ -5788,6 +6177,8 @@ function openDrawer() {
 
 function closeDrawer() {
   state.drawerOpen = false;
+  resetPrivacyPeeks();
+  closeTour();
   const backdrop = document.getElementById('mwh-drawer-backdrop');
   if (backdrop) backdrop.classList.remove('open');
   const drawer = document.getElementById('mwh-drawer');
@@ -5846,6 +6237,7 @@ function ensureShell() {
     island.className = 'mwh-approval-island';
     island.setAttribute('role', 'region');
     island.setAttribute('aria-label', 'MWH 底部任务与审批面板');
+    island.setAttribute('data-tour-id', 'tour-approval-island');
     island.addEventListener('click', function (event) {
       const target = event.target.closest('[data-action]');
       if (!target) return;
@@ -5862,6 +6254,21 @@ function ensureShell() {
     toast.id = 'mwh-toast';
     toast.className = 'mwh-toast';
     document.body.appendChild(toast);
+  }
+  if (!document.getElementById('mwh-tour-overlay')) {
+    const tourOverlay = document.createElement('div');
+    tourOverlay.id = 'mwh-tour-overlay';
+    tourOverlay.className = 'mwh-tour-overlay';
+    tourOverlay.addEventListener('click', function (event) {
+      const target = event.target.closest('[data-action]');
+      if (!target) {
+        if (event.target === tourOverlay) closeTour();
+        return;
+      }
+      event.stopPropagation();
+      handleSubpanelAction(target.getAttribute('data-action'), target).catch(function () {});
+    });
+    document.body.appendChild(tourOverlay);
   }
   bindBindings();
   detectAndSyncTheme(true);
@@ -5937,6 +6344,7 @@ function tryAttachToActivityBar() {
     btn.type = 'button';
     btn.className = 'mwh-activity-btn mwh-disconnected';
     btn.setAttribute('aria-label', 'MWH 本地宿主');
+    btn.setAttribute('data-tour-id', 'tour-activity-entry');
     btn.innerHTML =
       SVG_LOGO + '<div class="mwh-tooltip">本地宿主 (MWH) · 未连接 PC</div>';
 
@@ -6058,6 +6466,23 @@ function initObservers() {
   }
 
   window.addEventListener('keydown', function (e) {
+    if (state.tourOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeTour();
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepTour(1);
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepTour(-1);
+        return;
+      }
+    }
     if (e.key === 'Escape') closeDrawer();
   });
 

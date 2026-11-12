@@ -25,6 +25,7 @@ import { scanLocalResources } from '../dist/resources/scan.js';
 import { MAX_EXPOSED_TOOL_NAME_LENGTH, makeExposedToolName } from '../dist/resources/toolNames.js';
 import { MUSE_TOOLS, getExposedMuseTools } from '../dist/tools/definitions.js';
 import { readSkillContent } from '../dist/resources/skillRead.js';
+import { toStandardMcpJson, toStandardSkillsJson } from '../dist/resources/registry.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
@@ -478,11 +479,24 @@ async function main() {
     assert.equal(preserved.enabled, true, 'rescan must not disable an enabled entry');
     assert.equal(preserved.displayName, 'renamed-fixture', 'rescan must not reset a user rename');
 
-    // The registry lives in .mwh and only references secret keys, never values.
+    // The catalogue lives in .mwh and only references secret keys, never values.
     const registryFile = path.join(workspace, '.mwh', 'resources.json');
     assert.ok(fs.existsSync(registryFile), 'registry must be persisted under .mwh');
     const registryText = fs.readFileSync(registryFile, 'utf-8');
     assert.ok(registryText.includes('mwh-resources/v1'));
+
+    // Enabled Skill is also projected to the standard skills.json pointer file.
+    const skillsFile = path.join(workspace, '.mwh', 'skills.json');
+    assert.ok(fs.existsSync(skillsFile), 'enabled Skills must be projected to .mwh/skills.json');
+    const skillsJson = JSON.parse(fs.readFileSync(skillsFile, 'utf-8'));
+    const skillPaths = Object.values(skillsJson.skills || {}).map((item) => item.path);
+    assert.ok(
+      skillPaths.includes(preserved.skillDir),
+      `enabled Skill path missing from skills.json: ${JSON.stringify(skillsJson)}`
+    );
+    const mcpJson = JSON.parse(fs.readFileSync(path.join(workspace, '.mwh', 'mcp.json'), 'utf-8'));
+    assert.ok(mcpJson.mcpServers && typeof mcpJson.mcpServers === 'object');
+    assert.ok(!JSON.stringify(mcpJson).toLowerCase().includes('dpapi'), 'mcp.json must not contain secrets');
 
     scanManager.disposeAll();
     rmrf(fixtureRoot);
@@ -504,6 +518,151 @@ async function main() {
     assert.equal(outcome.discovered[0].enabled, false);
     assert.equal(outcome.discovered[0].readonly, false);
     rmrf(fixtureRoot);
+  });
+
+  // -------------------------------------- 5b. standard mcp.json / skills.json
+  await test('toStandardMcpJson emits Claude/Cursor-shaped mcpServers without secrets', () => {
+    const used = toStandardMcpJson([
+      {
+        id: 'off',
+        kind: 'mcp',
+        displayName: 'Off Server',
+        enabled: false,
+        source: 'manual',
+        sourceLabel: '手动添加',
+        readonly: false,
+        transport: 'stdio',
+        command: 'C:\\hidden\\mcp.exe',
+        args: ['serve']
+      },
+      {
+        id: 'stdio1',
+        kind: 'mcp',
+        displayName: 'Windows-MCP',
+        enabled: true,
+        source: 'manual',
+        sourceLabel: '手动添加',
+        readonly: false,
+        transport: 'stdio',
+        command: 'C:\\tools\\windows-mcp.exe',
+        args: ['serve'],
+        cwd: 'C:\\tools',
+        envSecretKeys: ['API_TOKEN']
+      },
+      {
+        id: 'http1',
+        kind: 'mcp',
+        displayName: 'Local HTTP',
+        enabled: true,
+        source: 'manual',
+        sourceLabel: '手动添加',
+        readonly: false,
+        transport: 'http',
+        httpUrl: 'http://127.0.0.1:8000/mcp',
+        httpHeaderSecretKey: 'http1::headers'
+      }
+    ]);
+    assert.deepEqual(Object.keys(used.mcpServers).sort(), ['Local-HTTP', 'Windows-MCP']);
+    assert.deepEqual(used.mcpServers['Windows-MCP'], {
+      command: 'C:\\tools\\windows-mcp.exe',
+      args: ['serve'],
+      cwd: 'C:\\tools'
+    });
+    assert.deepEqual(used.mcpServers['Local-HTTP'], { url: 'http://127.0.0.1:8000/mcp' });
+    const dumped = JSON.stringify(used);
+    assert.ok(!dumped.includes('API_TOKEN'), 'env secret key names must not appear in mcp.json');
+    assert.ok(!dumped.includes('headers'), 'header secret refs must not appear in mcp.json');
+    assert.ok(!dumped.includes('Off Server') && !dumped.includes('hidden'), 'disabled MCP must be omitted');
+  });
+
+  await test('enabling projects a standard mcp.json and disabling withdraws it', async () => {
+    const workspace = mkTemp('mwh_res_std_');
+    const skillDir = path.join(workspace, 'a-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# A\n\nA fixture skill.\n', 'utf-8');
+
+    const mgr = new ResourcesManager({
+      workspaceRoot: workspace,
+      homeDir: path.join(workspace, 'home'),
+      appDataDir: path.join(workspace, 'appdata'),
+      retryDelaysMs: [700],
+      startTimeoutMs: 15000,
+      callTimeoutMs: 15000
+    });
+
+    await mgr.add({
+      kind: 'mcp',
+      displayName: 'Idle Server',
+      transport: 'stdio',
+      command: process.execPath,
+      args: ['--version'],
+      enable: false
+    });
+    let mcp = JSON.parse(fs.readFileSync(path.join(workspace, '.mwh', 'mcp.json'), 'utf-8'));
+    assert.deepEqual(mcp.mcpServers, {}, 'disabled MCP must not appear in mcp.json');
+
+    const running = await mgr.add({
+      kind: 'mcp',
+      displayName: 'Fake MCP',
+      transport: 'stdio',
+      command: process.execPath,
+      args: [fakeMcpPath],
+      enable: true
+    });
+    await waitFor(
+      () => mgr.getStatusSummary().mcp.some((item) => item.id === running.id && item.status === 'running'),
+      20000,
+      'projected fake MCP to become running'
+    );
+    mcp = JSON.parse(fs.readFileSync(path.join(workspace, '.mwh', 'mcp.json'), 'utf-8'));
+    const server = mcp.mcpServers['Fake-MCP'] || mcp.mcpServers[Object.keys(mcp.mcpServers)[0]];
+    assert.ok(server, `expected a stdio server in ${JSON.stringify(mcp)}`);
+    assert.equal(server.command, process.execPath);
+    assert.deepEqual(server.args, [fakeMcpPath]);
+    assert.ok(!('env' in server), 'mcp.json must not carry env secrets');
+
+    const skill = await mgr.add({
+      kind: 'skill',
+      displayName: 'a-skill',
+      skillDir,
+      enable: true
+    });
+    const skills = JSON.parse(fs.readFileSync(path.join(workspace, '.mwh', 'skills.json'), 'utf-8'));
+    assert.equal(skills.skills['a-skill'].path, path.resolve(skillDir));
+
+    await mgr.toggle(running.id, false);
+    mcp = JSON.parse(fs.readFileSync(path.join(workspace, '.mwh', 'mcp.json'), 'utf-8'));
+    assert.deepEqual(mcp.mcpServers, {}, 'disabled MCP must be withdrawn from mcp.json');
+    await mgr.toggle(skill.id, false);
+    const skillsOff = JSON.parse(fs.readFileSync(path.join(workspace, '.mwh', 'skills.json'), 'utf-8'));
+    assert.deepEqual(skillsOff.skills, {}, 'disabled Skill must be withdrawn from skills.json');
+
+    mgr.disposeAll();
+    rmrf(workspace);
+  });
+
+  await test('mcp.json alone can bootstrap the catalogue', () => {
+    const workspace = mkTemp('mwh_res_boot_');
+    fs.mkdirSync(path.join(workspace, '.mwh'), { recursive: true });
+    const command = 'C:\\tools\\windows-mcp.exe';
+    fs.writeFileSync(
+      path.join(workspace, '.mwh', 'mcp.json'),
+      JSON.stringify({ mcpServers: { 'Windows-MCP': { command, args: ['serve'] } } }),
+      'utf-8'
+    );
+    const mgr = new ResourcesManager({
+      workspaceRoot: workspace,
+      homeDir: path.join(workspace, 'home'),
+      appDataDir: path.join(workspace, 'appdata')
+    });
+    const entries = mgr.getEntries();
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].displayName, 'Windows-MCP');
+    assert.equal(entries[0].enabled, true);
+    assert.equal(entries[0].command, command);
+    assert.deepEqual(entries[0].args, ['serve']);
+    mgr.disposeAll();
+    rmrf(workspace);
   });
 
   // ---------------------------------------------------------------- 6. audits

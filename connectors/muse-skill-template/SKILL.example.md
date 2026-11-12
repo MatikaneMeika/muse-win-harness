@@ -54,9 +54,12 @@ Creates deterministic snapshots of tracked and untracked files and provides 1-cl
 
 ## 本机资源库 (Local Resource Library)
 
-This section is generated at runtime from the local MCP / Skill registry
-(`.mwh/resources.json`) and only lists entries the user has enabled. It is not a
-second connector: every MCP tool below lives on this same `/mcp` endpoint.
+This section is generated at runtime from the local MCP / Skill registry.
+Enabled MCP servers are stored in `.mwh/mcp.json` (standard `mcpServers` shape)
+and enabled Skills in `.mwh/skills.json`; the full catalogue, including disabled
+entries, is `.mwh/resources.json`. It is not a second connector: every MCP tool
+below lives on this same `/mcp` endpoint, so Muse can say "use X to do Y"
+the same way it would in a local harness.
 
 Example shape of the generated section (a real one lists only enabled entries):
 

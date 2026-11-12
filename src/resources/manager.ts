@@ -4,7 +4,7 @@
  * `skill_read`, the generated SKILL.md and the settings REST surface.
  *
  * One instance per process (see `getResourcesManager`). Entries live in
- * `.mwh/resources.json`; runtime sessions are in-memory only.
+ * `.mwh/resources.json`, with enabled MCP / Skill projected to standard `.mwh/mcp.json` and `.mwh/skills.json`; runtime sessions are in-memory only.
  */
 
 import fs from 'node:fs';

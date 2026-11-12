@@ -1,9 +1,11 @@
 /**
  * Local MCP / Skill resource library — shared types.
  *
- * The registry lives in `.mwh/resources.json` (git-ignored, machine-local).
- * Enabled state only ever exists there: scanning external products is
- * read-only and never writes Claude / Cursor / Muse Code configuration back.
+ * Enabled MCP / Skill pointers live in `.mwh/mcp.json` and `.mwh/skills.json`
+ * (industry-standard shapes, git-ignored, machine-local). The full catalogue
+ * including disabled entries is `.mwh/resources.json`. Scanning external
+ * products is read-only and never writes Claude / Cursor / Muse Code
+ * configuration back.
  */
 
 export type ResourceKind = 'mcp' | 'skill';

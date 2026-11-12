@@ -91,6 +91,13 @@ export interface ExecutionContext {
   hmacSecret?: string;
   tunnelUrl?: string;
   desktopHandsEnabled?: boolean;
+  /**
+   * When true, non-HMAC approvals (medium everyday writes and high-risk
+   * tools such as subagent dispatch) execute once Muse's official HITL
+   * card has already run on the client. Critical / HMAC-gated actions
+   * still pause on the local island. Defaults to false (original island).
+   */
+  multiDeviceApproval?: boolean;
   /** Per-dispatch subagent wall-clock budget inherited by child dispatches. */
   subagentTimeoutMs?: number;
   /** Per-dispatch ReAct step ceiling inherited by child dispatches. */

@@ -29,6 +29,7 @@ import {
   normalizeTunnelMode
 } from './network/tunnels.js';
 import { setUiSessionSecret } from './network/uiStatic.js';
+import { loadUserSettings } from './config/userSettings.js';
 import { PipelineKernel } from './pipeline/pipeline.js';
 import { getResourcesManager } from './resources/manager.js';
 import {
@@ -225,13 +226,15 @@ async function main() {
     maxSteps: subagentMaxSteps
   });
 
+  const userSettings = loadUserSettings(workspaceRoot);
   const kernel = new PipelineKernel({
     confinementMode,
     approvalPolicy,
     workspaceRoot,
     desktopHandsEnabled,
     subagentTimeoutMs,
-    subagentMaxSteps
+    subagentMaxSteps,
+    multiDeviceApproval: userSettings.multiDeviceApproval
   });
 
   // ------------------------------------------------------------------

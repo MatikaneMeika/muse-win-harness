@@ -2029,6 +2029,7 @@ function normalizeSettings(raw) {
     approvalPolicy: s.approvalPolicy || 'smart-risk',
     autoDowngradeTwoHours: s.autoDowngradeTwoHours === true,
     autoDowngradeRemainingSec: Number(s.autoDowngradeRemainingSec) || 0,
+    multiDeviceApproval: s.multiDeviceApproval === true,
     workspaceRoots: Array.isArray(s.workspaceRoots) ? s.workspaceRoots.slice() : [],
     alwaysAllowedWorkspaces: Array.isArray(s.alwaysAllowedWorkspaces)
       ? s.alwaysAllowedWorkspaces.slice()
@@ -2878,6 +2879,18 @@ function renderPermissions(settings) {
       action: 'toggle-auto-downgrade',
       label: '完全访问 2 小时自动降级',
       title: settings.autoDowngradeTwoHours ? '已开启，点击关闭' : '已关闭，点击开启'
+    }) +
+    '</div>' +
+    '</div>' +
+    '<div class="mwh-card">' +
+    '<div class="mwh-list-row">' +
+    '<div><div style="font-size:12px;font-weight:600">多端审批</div>' +
+    '<div class="mwh-hint" style="margin-top:2px">关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。</div></div>' +
+    renderSwitchHtml({
+      checked: settings.multiDeviceApproval,
+      action: 'toggle-multi-device-approval',
+      label: '多端审批',
+      title: settings.multiDeviceApproval ? '已开启，点击关闭' : '已关闭，点击开启'
     }) +
     '</div>' +
     '</div>' +
@@ -5384,6 +5397,26 @@ async function handleSubpanelAction(action, target) {
       showToast('切换失败: ' + String((err && err.message) || err));
     } finally {
       pendingSwitchKeys.delete('auto-downgrade');
+    }
+    return;
+  }
+  if (action === 'toggle-multi-device-approval') {
+    if (pendingSwitchKeys.has('multi-device-approval')) return;
+    const on = Boolean(settings.multiDeviceApproval);
+    const startedAt = Date.now();
+    const switchEl = resolveSwitchNode(target);
+    pendingSwitchKeys.set('multi-device-approval', startedAt);
+    paintSwitch(switchEl, !on);
+    try {
+      await invokeDaemon('mwh:toggle-multi-device-approval', { enabled: !on });
+      await holdSwitchMin(startedAt);
+      await refreshSettings();
+    } catch (err) {
+      if (switchEl && switchEl.isConnected) paintSwitch(switchEl, on);
+      else scheduleRender(true);
+      showToast('切换失败: ' + String((err && err.message) || err));
+    } finally {
+      pendingSwitchKeys.delete('multi-device-approval');
     }
     return;
   }

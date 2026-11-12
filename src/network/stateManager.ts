@@ -45,6 +45,7 @@ import type { BearerAuthGuard } from './authGuard.js';
 import { resolveConfiguredTokenTtlMs, savePersistedSecrets } from '../security/secretStore.js';
 import { NamedTunnelDriver, QuickTunnelDriver, SkillTemplateGenerator, assertTokenEntropy } from './tunnels.js';
 import { rotateUiSessionSecret } from './uiStatic.js';
+import { saveUserSettings } from '../config/userSettings.js';
 
 export const MAX_SSE_CLIENTS = 16;
 
@@ -142,6 +143,7 @@ export interface MwhState {
   approvalPolicy: ApprovalPolicy;
   autoDowngradeTwoHours: boolean;
   autoDowngradeRemainingSec: number;
+  multiDeviceApproval: boolean;
   workspaceRoots: string[];
   alwaysAllowedWorkspaces: string[];
   tunnel: {
@@ -537,6 +539,7 @@ export class MwhControlPlane {
       approvalPolicy: ctx.approvalPolicy,
       autoDowngradeTwoHours: this.autoDowngradeTwoHours,
       autoDowngradeRemainingSec: this.remainingSec(),
+      multiDeviceApproval: ctx.multiDeviceApproval === true,
       workspaceRoots: [...this.workspaceRoots],
       alwaysAllowedWorkspaces: [...this.alwaysAllowedWorkspaces],
       tunnel: {
@@ -810,6 +813,11 @@ export class MwhControlPlane {
       if (pathname === '/api/v1/security/auto-downgrade' && method === 'POST') {
         const body = await this.readJson(req);
         await this.postAutoDowngrade(res, body, this.resolveRequestActor(req, body));
+        return true;
+      }
+      if (pathname === '/api/v1/security/multi-device-approval' && method === 'POST') {
+        const body = await this.readJson(req);
+        await this.postMultiDeviceApproval(res, body, this.resolveRequestActor(req, body));
         return true;
       }
       if (pathname === '/api/v1/tunnel/driver' && method === 'POST') {
@@ -1497,6 +1505,38 @@ export class MwhControlPlane {
       autoDowngradeTwoHours: this.autoDowngradeTwoHours,
       autoDowngradeRemainingSec: this.remainingSec()
     });
+  }
+
+  private async postMultiDeviceApproval(
+    res: http.ServerResponse,
+    body: any,
+    actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
+  ): Promise<void> {
+    const ctx = this.kernel.getContext();
+    const enabled =
+      typeof body?.enabled === 'boolean' ? body.enabled === true : ctx.multiDeviceApproval !== true;
+    this.kernel.updateContext({ multiDeviceApproval: enabled });
+    let persisted = true;
+    let persistNote = '';
+    try {
+      saveUserSettings(ctx.workspaceRoot, { multiDeviceApproval: enabled });
+    } catch (err: any) {
+      persisted = false;
+      persistNote = ' (in-memory; persist failed: ' + String(err?.message || err).slice(0, 160) + ')';
+    }
+    this.appendAudit({
+      decision: 'ALLOW',
+      actor,
+      toolName: 'multi_device_approval',
+      commandOrPath: String(enabled),
+      reason: '[' + actor + '] set multiDeviceApproval=' + String(enabled) + persistNote,
+      status: 'SUCCESS'
+    });
+    this.broadcastSse({
+      multiDeviceApproval: enabled,
+      auditLogs: this.readAuditTail(ctx.workspaceRoot, 50)
+    });
+    this.send(res, 200, { ok: true, multiDeviceApproval: enabled, persisted });
   }
 
   private async postTunnelDriver(

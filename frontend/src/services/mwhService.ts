@@ -231,6 +231,7 @@ export interface MwhState {
   approvalPolicy: ApprovalPolicy;
   autoDowngradeTwoHours: boolean;
   autoDowngradeRemainingSec: number;
+  multiDeviceApproval: boolean;
   workspaceRoots: string[];
   alwaysAllowedWorkspaces: string[];
   tunnel: TunnelDriverConfig;
@@ -297,6 +298,7 @@ function createInitialState(): MwhState {
     approvalPolicy: 'smart-risk',
     autoDowngradeTwoHours: true,
     autoDowngradeRemainingSec: 7200,
+    multiDeviceApproval: false,
     workspaceRoots: [],
     alwaysAllowedWorkspaces: [],
     tunnel: {
@@ -525,6 +527,12 @@ export class MwhDaemonService {
     this.state = { ...this.state, approvalPolicy };
     this.emit();
     void this.request('POST', '/api/v1/security/policy', { approvalPolicy, source: 'ui_island' });
+  }
+
+  public toggleMultiDeviceApproval() {
+    const enabled = !this.state.multiDeviceApproval;
+    this.patchState({ multiDeviceApproval: enabled });
+    void this.request('POST', '/api/v1/security/multi-device-approval', { enabled, source: 'ui_island' });
   }
 
   public toggleAutoDowngradeTwoHours() {

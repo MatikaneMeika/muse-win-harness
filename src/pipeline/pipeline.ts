@@ -56,7 +56,8 @@ const SENSITIVE_CONTEXT_KEYS: (keyof ExecutionContext)[] = [
   'tunnelUrl',
   'desktopHandsEnabled',
   'subagentTimeoutMs',
-  'subagentMaxSteps'
+  'subagentMaxSteps',
+  'multiDeviceApproval'
 ];
 
 // Any of these characters enables chaining / command substitution / redirection
@@ -483,6 +484,22 @@ export class PipelineKernel {
     );
 
     if (!isPreApproved) {
+      // "多端审批" (multiDeviceApproval), default off: keep the original
+      // floating-island flow. When the user turns it on, everyday writes and
+      // non-HMAC high-risk actions (e.g. subagent dispatch) skip the
+      // Windows-only island and execute once tools/call arrives — Muse's
+      // official HITL cards already ran on every client (Mac, phone, web)
+      // before the call was sent. Critical / HMAC-gated actions (rm -rf,
+      // git push -f, ...) always pause here: Muse's "Always allow" is
+      // per-tool, not per-command.
+      const deferToMuseHitl =
+        context.multiDeviceApproval === true &&
+        riskEval.requiresMobileHmac !== true &&
+        riskEval.riskLevel !== 'critical';
+      if (deferToMuseHitl) {
+        return { status: 'SUCCESS', riskLevel: riskEval.riskLevel };
+      }
+
       // Create pending approval
       const { approvalRecord, approvalUrl } = this.approvalEngine.createApproval(
         request.id,

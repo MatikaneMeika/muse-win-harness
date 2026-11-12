@@ -1267,6 +1267,13 @@ function registerIpc() {
     })
   );
 
+  ipcMain.handle('mwh:toggle-multi-device-approval', (_event, payload) =>
+    daemonFetch('POST', '/api/v1/security/multi-device-approval', {
+      enabled: payload?.enabled,
+      source: 'ui_island',
+    })
+  );
+
   ipcMain.handle('mwh:set-tunnel-driver', (_event, payload) =>
     daemonFetch('POST', '/api/v1/tunnel/driver', {
       driver: payload?.driver,

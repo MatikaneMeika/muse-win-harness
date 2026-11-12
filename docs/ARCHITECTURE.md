@@ -52,13 +52,13 @@ Muse-Win-Harness（简称 **MWH**，当前版本 `v0.1.0`）是专为 Windows 10
 
 ### 2.0 启动与预检链路（Launch → Preflight → Shell）
 
-双击 `MWH启动.cmd` 时，宿主先于窗口就绪，避免"空壳看起来像已启动"：
+双击 `MWH启动.cmd` 时先做宿主预检，再打开窗口。预检失败也开窗，顶栏写明原因，避免空壳假装已经就绪：
 
 1. 启动器校验 `shell\node_modules\electron\dist\electron.exe` 与 `dist\cli.js`（缺失则先构建）。
 2. 以前台方式执行 `electron.exe . --ensure-daemon-only`：`shell/main.cjs` 进入纯预检分支——只调用 `ensureDaemon()`，不建窗、不建托盘、不注册 IPC；结果以 `{ ok, adopted, reason }` 结构化输出并以退出码 `0` / `2` 返回。
 3. `ensureDaemon()` 的判定语义：端口已开且 `GET /api/v1/state` 通过鉴权 → 接管现有宿主（`adopted`）；端口被占但鉴权失败 → `PORT_OCCUPIED_UNAUTHORIZED`；自拉起后 20 秒内仍不可用 → `DAEMON_START_TIMEOUT`；`spawn` 报 `ENOENT` 时回退到 `process.execPath` + `ELECTRON_RUN_AS_NODE=1`。
-4. 预检失败时启动器打印原因并停住，**不打开窗口**；成功后才 `start` 壳进程，且不把 `ELECTRON_RUN_AS_NODE` 继承给壳。
-5. 壳内再次 `ensureDaemon()`：成功则正常建窗；失败时 `chrome.html` 顶部显示「宿主未连接（原因）」提示条，并由 `mwh:daemon-status` 通道上报状态，界面不再伪报「宿主守护就绪」。
+4. 启动器在任何 electron 之前清空 `ELECTRON_RUN_AS_NODE`。预检失败只打印原因，**仍然 start 壳**。没有 `dist\cli.js` 且构建失败时才不打开窗口。
+5. 壳内再次 `ensureDaemon()`。失败时顶栏显示「宿主未连接」并带上 reason/detail，不伪报就绪。预检在 `app.exit` 前把结果写入 `.mwh/logs/exit-reason.log`。状态探测有约 2 秒超时，且整段等待有 20 秒墙钟上限。
 
 ### 2.1 双协议网关（Dual-Protocol Gateway）
 - **Streamable HTTP MCP (`/mcp`)**：遵循 JSON-RPC 2.0 规范，完整实现 `initialize`（`serverInfo.version = "0.1.0"`）、`tools/list`、`tools/call`、`ping` 等指令，并支持基于 Server-Sent Events（SSE）的流式通知与会话绑定（`Mcp-Session-Id`）。

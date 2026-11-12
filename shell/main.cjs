@@ -6,7 +6,7 @@
  */
 
 const { app, BrowserWindow, BrowserView, ipcMain, Tray, Menu, nativeImage, session, screen, shell } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
@@ -549,14 +549,55 @@ function stateProbeOk(probe) {
   );
 }
 
-/** 端口开着不等于宿主可用。用当前令牌打一次 /api/v1/state，401 时重读 secrets 再试。 */
+/** 端口开着不等于宿主可用。用当前令牌打一次 /api/v1/state，仅 401 时重读 secrets 再试。 */
 async function probeDaemonAuth() {
   loadPersistedSecrets();
-  const first = await daemonFetch('GET', '/api/v1/state');
+  const first = await daemonFetch('GET', '/api/v1/state', undefined, 2000);
   if (stateProbeOk(first)) return true;
+  if (!(first && first.status === 401)) return false;
   loadPersistedSecrets();
-  const second = await daemonFetch('GET', '/api/v1/state');
+  const second = await daemonFetch('GET', '/api/v1/state', undefined, 2000);
   return stateProbeOk(second);
+}
+
+/** Windows-only listener lookup. Any failure returns '' so callers keep the original detail. */
+function describePortListener(port) {
+  if (process.platform !== 'win32') return '';
+  try {
+    const netstatOut = execFileSync('netstat', ['-ano', '-p', 'tcp'], {
+      windowsHide: true,
+      timeout: 2000,
+      encoding: 'utf8',
+    });
+    const target = `127.0.0.1:${port}`;
+    let pid = '';
+    for (const raw of String(netstatOut).split(/\r?\n/)) {
+      const cols = raw.trim().split(/\s+/);
+      if (cols.length < 4) continue;
+      const local = cols[1] || '';
+      const state = cols[3] || '';
+      if (local === target && /^LISTENING$/i.test(state)) {
+        pid = cols[cols.length - 1] || '';
+        break;
+      }
+    }
+    if (!/^\d+$/.test(pid)) return '';
+    let image = '';
+    try {
+      const taskOut = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        windowsHide: true,
+        timeout: 2000,
+        encoding: 'utf8',
+      });
+      const match = String(taskOut).match(/^"([^"]+)"/);
+      image = match ? match[1] : '';
+    } catch {
+      image = '';
+    }
+    return ` listener pid=${pid} image=${image}`;
+  } catch {
+    return '';
+  }
 }
 
 function resolveNodeBin() {
@@ -606,7 +647,8 @@ async function ensureDaemon() {
     }
     const detail =
       `127.0.0.1:${DAEMON_PORT} is listening but GET /api/v1/state was rejected. ` +
-      `Not starting a second daemon. Inspect the listener with: netstat -ano | findstr :${DAEMON_PORT}`;
+      `Not starting a second daemon. Inspect the listener with: netstat -ano | findstr :${DAEMON_PORT}` +
+      describePortListener(DAEMON_PORT);
     console.error(`[MWH-SHELL] ${detail}`);
     lastDaemonStatus = { ok: false, reason: 'PORT_OCCUPIED_UNAUTHORIZED', detail };
     return lastDaemonStatus;
@@ -640,9 +682,9 @@ async function ensureDaemon() {
 
   ownedDaemon = attach(startDaemonProcess(resolveNodeBin(), cli, null, ENSURE_DAEMON_ONLY));
 
-  // 40 x 500ms = 20s: long enough for a cold tsc-built daemon on a busy disk,
-  // and still abortable by the caller instead of silently opening a dead shell.
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  // Wall-clock 20s cap: probes have their own timeout so this cannot stretch into minutes.
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
     if (spawnError && spawnError.code === 'ENOENT' && !retriedWithElectron) {
       retriedWithElectron = true;
       const detail = `spawn '${resolveNodeBin()}' failed with ENOENT; retrying via Electron as Node (ELECTRON_RUN_AS_NODE=1)`;
@@ -656,7 +698,9 @@ async function ensureDaemon() {
       lastDaemonStatus = { ok: true, adopted: false };
       return lastDaemonStatus;
     }
-    await sleep(500);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(500, remaining));
   }
 
   const detail = spawnError
@@ -1015,7 +1059,7 @@ function createWindow() {
  * Generic local daemon REST bridge. Every IPC route funnels through here so the
  * runtime Bearer token is attached in exactly one place and never logged.
  */
-async function daemonFetch(method, route, body) {
+async function daemonFetch(method, route, body, timeoutMs) {
   if (!isValidTokenStr(token)) loadPersistedSecrets();
   const url = `http://127.0.0.1:${DAEMON_PORT}${route}`;
   const headers = {};
@@ -1027,11 +1071,17 @@ async function daemonFetch(method, route, body) {
     headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
+  let abortTimer = null;
+  if (Number(timeoutMs) > 0) {
+    const controller = new AbortController();
+    init.signal = controller.signal;
+    abortTimer = setTimeout(() => controller.abort(), Number(timeoutMs));
+  }
   try {
     let res = await fetch(url, init);
     if (res.status === 401) {
       loadPersistedSecrets();
-      if (isValidTokenStr(token)) {
+      if (isValidTokenStr(token) && !(init.signal && init.signal.aborted)) {
         headers.Authorization = `Bearer ${token}`;
         res = await fetch(url, init);
       }
@@ -1051,6 +1101,8 @@ async function daemonFetch(method, route, body) {
     return data === null ? { ok: true } : data;
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : 'DAEMON_UNREACHABLE' };
+  } finally {
+    if (abortTimer) clearTimeout(abortTimer);
   }
 }
 
@@ -1436,6 +1488,12 @@ app.whenReady().then(async () => {
     ownedDaemon = null;
     stopOwnedDaemonPromise = null;
     console.log('[MWH-PREFLIGHT] ' + JSON.stringify(result));
+    recordShellExitReason(result.ok ? 'preflight_ok' : 'preflight_failed', 'ENSURE_DAEMON_ONLY', {
+      ok: result.ok,
+      adopted: result.adopted,
+      daemonReason: result.reason,
+      detail: result.detail,
+    });
     // [Site #6]
     app.exit(result.ok ? 0 : 2);
     return;

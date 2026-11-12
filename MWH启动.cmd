@@ -1,9 +1,10 @@
 @echo off
 setlocal
-rem MWH launcher: verify the host daemon FIRST, then open the desktop shell.
-rem If the daemon cannot be started and authenticated, no window is opened at all.
+rem MWH launcher: run daemon preflight, then open the desktop shell.
+rem Preflight failure no longer blocks the window; the chrome banner shows the real host status.
 rem Exit MWH via the tray icon (MWH logo) -> Quit.
 
+set "ELECTRON_RUN_AS_NODE="
 set "ROOT=%~dp0"
 set "ELECTRON_EXE=%ROOT%shell\node_modules\electron\dist\electron.exe"
 
@@ -38,11 +39,8 @@ popd
 
 if not "%PREFLIGHT_EXIT%"=="0" (
   echo.
-  echo [ERROR] daemon preflight failed ^(exit %PREFLIGHT_EXIT%^). Window NOT opened.
-  echo         Read the output above, or inspect the port owner with:
-  echo           netstat -ano ^| findstr :19820
-  pause
-  exit /b 1
+  echo [WARN] daemon preflight failed ^(exit %PREFLIGHT_EXIT%^). Opening the shell anyway.
+  echo         The chrome banner will show the real host status.
 )
 
 rem Never leak the preflight-only flag into the shell process.

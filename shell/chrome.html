@@ -237,7 +237,18 @@
             return;
           }
           const reason = (status && status.reason) || 'UNKNOWN';
-          banner.textContent = '宿主未连接（' + reason + '），请重新运行 MWH启动.cmd';
+          const detail = status && status.detail ? String(status.detail) : '';
+          const listener = detail.match(/listener pid=(\d+) image=(\S+)/);
+          let text = '宿主未连接（' + reason + '）';
+          if (listener && listener[2]) {
+            text += '：' + listener[2] + ' 占用了本机 19820（pid ' + listener[1] + '），没有启动第二个宿主';
+          } else if (detail) {
+            text += ' ' + (detail.length > 160 ? detail.slice(0, 160) + '...' : detail);
+          } else {
+            text += '，请重新运行 MWH启动.cmd';
+          }
+          banner.title = detail || reason;
+          banner.textContent = text;
           banner.hidden = false;
         }).catch(() => {});
       }

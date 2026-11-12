@@ -292,6 +292,10 @@ assert(
   'MWH启动.cmd must run the daemon preflight (--ensure-daemon-only) before opening the shell'
 );
 assert(
+  launcherSource.includes('Opening the shell anyway'),
+  'MWH启动.cmd must still open the shell after preflight failure (Opening the shell anyway)'
+);
+assert(
   !/taskkill/i.test(launcherSource),
   'MWH启动.cmd must not kill processes by image name (taskkill)'
 );

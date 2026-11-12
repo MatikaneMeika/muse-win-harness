@@ -397,4 +397,4 @@
 8. 文案是否 ≤ 2 行、无感叹号、无 AI 提示语？
 9. 动效是否只用了 3.4 的时长/曲线令牌，且只动 4.8 白名单里的属性？
 10. 状态切换是否原地绘制（不靠整块 `innerHTML` 重绘）？开着"减少动效"时是否还有动画残留？
-11. `npm run test:ui-contract` 是否通过？
+11. `npm run test:ui-contract` 与 `npm run test:resources` 是否通过？

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
+  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：Muse をあなたの Windows につなぐ" width="100%">
 </p>
 
 <p align="center">
   <a href="../../README.md">English</a> |
-  <a href="./README_zh.md">简体中文</a> |
-  <a href="./README_zh-TW.md">繁體中文</a> |
+  <a href="./README_zh.md">簡体字中国語</a> |
+  <a href="./README_zh-TC.md">繁体字中国語</a> |
   <a href="./README_ja.md"><b>日本語</b></a> |
   <a href="../README.md">ドキュメント一覧</a>
 </p>
@@ -31,7 +31,7 @@
 </p>
 
 <p align="center">
-  <sub>示意图</sub>
+  <sub>概略図</sub>
 </p>
 
 ## 主な特徴
@@ -39,6 +39,8 @@
 - **ワンクリックで切り替えられる 4 段階の権限モード**：左サイドバーの MWH ドロワーから `plan`（読み取り専用）、`confirm`（変更前に確認・デフォルト）、`autonomous`（ワークスペース内で自動スナップショット＆実行）、`full-access`（2 時間自動ダウングレード付き）を即座に切り替え可能。`rm -rf`・`git push --force`・`.env*` / `~/.ssh` などの危険な操作はどのモードでも必ず人間の承認を要求します。
 - **画面右下の承認アイランドで即座に完了**：チャット欄に「承認」と入力する必要はありません。フローティングアイランドで「1 回許可」をクリックすれば即座に実行・レシート記録され、Muse 側が `job_control(action="poll")` で結果を受け取ります。
 - **変更前の自動スナップショット＆プロセスツリーごと緊急停止**：すべてのファイル変更前にスナップショットを保存し、いつでも 1 クリックでロールバック可能。停止時は親プロセスだけでなく派生した子・孫プロセスまで一括終了します。
+
+- **ローカル MCP・Skill リソースライブラリ**：「高級設定センター → リソースライブラリ」でローカルの MCP サーバーと Skill を一元管理できます。有効化すると、その MCP のツールが同じ `/mcp` エンドポイントに載り、Muse から直接使えます。項目は既定で全て無効で、有効化した MCP は現在の Windows ユーザー権限で動作し、追加のサンドボックスはありません。
 
 ## クイックスタート
 
@@ -56,7 +58,7 @@ npm run build
 
 ## ドキュメント
 
-- **英語版フルドキュメント (Primary)**: [`README.md`](../../README.md)
+- **英語版フルドキュメント**: [`README.md`](../../README.md)
 - **簡体字中国語フルドキュメント**: [`docs/readme/README_zh.md`](./README_zh.md)
 - **ドキュメント一覧**: [`docs/README.md`](../README.md)
 - **ペアリング＆復旧ガイド**: [`docs/PAIRING.md`](../PAIRING.md)

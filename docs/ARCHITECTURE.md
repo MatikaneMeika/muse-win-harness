@@ -72,9 +72,9 @@ Muse-Win-Harness（简称 **MWH**，当前版本 `v0.1.0`）是专为 Windows 10
 
 | 统一权限档位 (`profile`) | 底层 `ConfinementMode` | 底层 `ApprovalPolicy` | 核心行为契约 |
 | :--- | :--- | :--- | :--- |
-| **`plan`（计划模式）** | `read-only` | `always-ask` | 仅允许只读文件探查与白名单只读探针命令，拒绝一切写操作。 |
-| **`confirm`（变更前确认，默认）** | `workspace-write` | `always-ask` | 工作区内读操作静默放行；写文件、执行脚本或派发代理需经桌面浮岛或移动端 HMAC 审批，执行前自动创建 Git Shadow 快照。 |
-| **`autonomous`（自主模式）** | `workspace-write` | `smart-risk` | 授权工作区白名单内的常规读写自动快照并放行；越界或高风险命令弹窗询问。 |
+| **`plan`（计划模式）** | `read-only` | `smart-risk` | 仅允许只读文件探查与白名单只读探针命令，拒绝一切写操作。 |
+| **`confirm`（变更前确认，默认）** | `workspace-write` | `smart-risk` | 工作区内读操作静默放行；写文件、执行脚本或派发代理需经桌面浮岛或移动端 HMAC 审批，执行前自动创建 Git Shadow 快照。 |
+| **`autonomous`（自主模式）** | `workspace-write` | `auto-workspace` | 授权工作区白名单内的常规读写自动快照并放行；越界或高风险命令弹窗询问。 |
 | **`full-access`（完全访问）** | `danger-full-access` | `unattended-yolo` | 跨工作区目录的普通读写不再因目录边界单独触发拦截；但高危破坏性命令（`rm -rf`、`git push --force`、`format` 等）与敏感凭据路径（`.ssh`、`.aws`、`.env*`）仍强制拦截并要求人工审批。支持 2 小时自动降级保护。 |
 
 > **注**：底层枚举中的 `workspace-acl-experimental` 为未实装预留项，调用时严格按 Fail-Closed 拒绝执行。

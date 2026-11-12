@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="./assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
+  <img src="./assets/brand/mwh-cover.svg" alt="Muse-Win-Harness: Connect Muse to your Windows" width="100%">
 </p>
 
 <p align="center">
   <a href="./README.md"><b>English</b></a> |
-  <a href="./docs/readme/README_zh.md">简体中文</a> |
-  <a href="./docs/readme/README_zh-TW.md">繁體中文</a> |
-  <a href="./docs/readme/README_ja.md">日本語</a> |
+  <a href="./docs/readme/README_zh.md">Simplified Chinese</a> |
+  <a href="./docs/readme/README_zh-TC.md">Traditional Chinese</a> |
+  <a href="./docs/readme/README_ja.md">Japanese</a> |
   <a href="./docs/README.md">Docs Map</a>
 </p>
 
@@ -24,7 +24,7 @@
 > [!IMPORTANT]
 > **Honest Boundaries & Vibe Coding Disclosure (`v0.1.0` Early Preview)**
 >
-> 1. **No OS-Kernel Sandbox (`无 OS 级真沙箱，依赖路径围栏+进程树管控+审批流`)**: MWH runs under your normal Windows user account. Instead of virtualization, it relies on physical path fencing, process-tree termination (Win32 Job Objects), pre-write snapshots, and human-in-the-loop approvals. See the full [Security Disclosure](./docs/SECURITY_DISCLOSURE.md).
+> 1. **No OS-Kernel Sandbox**: MWH runs under your normal Windows user account. Instead of virtualization, it relies on physical path fencing, process-tree termination (Win32 Job Objects), pre-write snapshots, and human-in-the-loop approvals. See the full [Security Disclosure](./docs/SECURITY_DISCLOSURE.md).
 > 2. **Born from Vibe Coding**: This project was built through **vibe coding / AI-assisted iterative engineering** alongside automated verification gates. AI-assisted code can still have blind spots—please review destructive commands before clicking approve, keep backups of critical work, and read [`DISCLAIMER.md`](./DISCLAIMER.md).
 
 ## Table of Contents
@@ -67,7 +67,7 @@
     </td>
     <td width="50%" valign="top">
       <b>Checks the engine before opening the window.</b><br>
-      Double-clicking <code>MWH启动.cmd</code> verifies that the local daemon on <code>127.0.0.1:19820</code> is healthy and authenticated before opening the desktop window. If the daemon ever disconnects, the top bar tells you plainly instead of pretending to be ready.
+      Double-clicking <code>MWH启动.cmd</code> checks the local daemon on <code>127.0.0.1:19820</code> first. If the daemon is not ready, the window still opens and the top bar shows the real host status (including which process holds port 19820) instead of pretending to be ready.
     </td>
   </tr>
 </table>
@@ -79,10 +79,11 @@
 </p>
 
 <p align="center">
-  <sub>示意图</sub>
+  <sub>Schematic</sub>
 </p>
 
-- **Left Sidebar Drawer (Quick Controls)**: Flush against the left navigation rail. Lets you switch between the 4 permission gears, start or stop a Cloudflare Quick Tunnel, copy your MCP endpoint / Bearer Token / pairing prompt, or open the 5-tab **Advanced Configuration Center** (`Connectors` · `Permissions` · `Workspaces` · `Subagents` · `Audit & Snapshots`).
+- **Left Sidebar Drawer (Quick Controls)**: Flush against the left navigation rail. Lets you switch between the 4 permission gears, start or stop a Cloudflare Quick Tunnel, copy your MCP endpoint / Bearer Token / pairing prompt, or open the 4-tab **Advanced Configuration Center** (`Connectors & Permissions` · `Workspaces & Subagents` · `Resource Library` · `Audit Log`).
+- **Local Resource Library**: Manage local MCP servers and Skills from **Advanced Configuration Center → Resource Library**. Switch a server on and its tools appear on this same `/mcp` endpoint for Muse to use — no second connector, no cloud setup. Entries are off by default, and an enabled MCP runs with your Windows user privileges, without an extra OS sandbox.
 - **Bottom-Right Approval Floating Island**: Stays tucked away as a compact status pill when idle, expands automatically when a task needs your approval or is actively running, and can be dragged anywhere inside the window.
 
 ## Quick Start & 3-Step Pairing
@@ -120,7 +121,7 @@ Double-click [`MWH启动.cmd`](./MWH启动.cmd) in the repository root. It autom
 
 ## Tools Reference (7 Default + 1 Optional)
 
-MWH exposes **7 tools by default** over Streamable HTTP MCP (`/mcp`) and REST (`/api/v1/tools/:name`). An 8th desktop-automation tool (`desktop_hands`) stays completely hidden unless you explicitly enable it in `config.yaml`.
+MWH exposes **7 tools by default** over Streamable HTTP MCP (`/mcp`) and REST (`/api/v1/tools/:name`). An 8th desktop-automation tool (`desktop_hands`) stays completely hidden unless you explicitly enable it in `config.yaml`. Enabling an MCP server in the Resource Library exposes its tools on the same `/mcp` endpoint as additional tools.
 
 | Tool Name | Category | Default | What It Does & Supported `action` Values |
 | :--- | :--- | :---: | :--- |
@@ -157,9 +158,9 @@ Every mode and emergency kill path is continuously tested by automated verificat
 | Document | What's Inside |
 | :--- | :--- |
 | [`docs/README.md`](./docs/README.md) | Complete documentation index |
-| [`docs/readme/README_zh.md`](./docs/readme/README_zh.md) | Simplified Chinese full guide (简体中文完整说明) |
-| [`docs/readme/README_zh-TW.md`](./docs/readme/README_zh-TW.md) | Traditional Chinese overview (繁體中文說明) |
-| [`docs/readme/README_ja.md`](./docs/readme/README_ja.md) | Japanese overview (日本語ドキュメント) |
+| [`docs/readme/README_zh.md`](./docs/readme/README_zh.md) | Simplified Chinese full guide |
+| [`docs/readme/README_zh-TC.md`](./docs/readme/README_zh-TC.md) | Traditional Chinese overview |
+| [`docs/readme/README_ja.md`](./docs/readme/README_ja.md) | Japanese overview |
 | [`docs/PAIRING.md`](./docs/PAIRING.md) | Step-by-step Muse pairing, quick-tunnel URL updates, and `401`/`403` recovery |
 | [`docs/SECURITY_DISCLOSURE.md`](./docs/SECURITY_DISCLOSURE.md) | Full 4-gear × 8-action verified matrix, 3-layer emergency stop, SSRF rules, and residual risks |
 | [`docs/UI.md`](./docs/UI.md) | Companion window architecture, drawer/subpanel layout, and inspection checklist |
@@ -169,7 +170,7 @@ Every mode and emergency kill path is continuously tested by automated verificat
 
 ### Verification & Environment Doctor
 
-If a tunnel or daemon fails to start, run `npm run doctor` to inspect the build, daemon port, token state, and `cloudflared` binary in one shot. To run the automated verification suites based on your local changes, use `npm run verify` (or `npm run test:ui-contract` and `npm run test:kernel-safety`).
+If a tunnel or daemon fails to start, run `npm run doctor` to inspect the build, daemon port, token state, and `cloudflared` binary in one shot. To run the automated verification suites based on your local changes, use `npm run verify` (or `npm run test:ui-contract`, `npm run test:resources`, and `npm run test:kernel-safety`).
 
 ### License & Independence
 

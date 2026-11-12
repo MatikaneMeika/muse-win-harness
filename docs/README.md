@@ -1,6 +1,6 @@
 # Muse-Win-Harness (MWH) Documentation Index / 文档地图
 
-> **Language / 语言切换：** [English](../README.md) | [简体中文](./readme/README_zh.md) | [繁體中文](./readme/README_zh-TW.md) | [日本語](./readme/README_ja.md)
+> **语言切换：** [English](../README.md) | [简体中文](./readme/README_zh.md) | [繁体中文](./readme/README_zh-TC.md) | [日文](./readme/README_ja.md)
 
 本目录按「**正式规范文档**」与「**多语言 README**」两层组织，所有正式规范文档均直接位于 `docs/` 根目录下，严禁在 `docs/` 根目录堆放带日期的一次性临时文件。
 
@@ -22,8 +22,8 @@
 | :--- | :--- | :--- |
 | **English (Primary)** | [`../README.md`](../README.md) | 仓库根主文档（English） |
 | **简体中文 (Primary ZH)** | [`./readme/README_zh.md`](./readme/README_zh.md) | 简体中文完整版主文档 |
-| **繁體中文** | [`./readme/README_zh-TW.md`](./readme/README_zh-TW.md) | 繁體中文精要版文档 |
-| **日本語** | [`./readme/README_ja.md`](./readme/README_ja.md) | 日本語精要版ドキュメント |
+| **繁体中文** | [`./readme/README_zh-TC.md`](./readme/README_zh-TC.md) | 繁体中文精要版文档 |
+| **日文** | [`./readme/README_ja.md`](./readme/README_ja.md) | 日文精要版文档 |
 
 ## FAQ：本地图片在 VSCode 预览不显示
 

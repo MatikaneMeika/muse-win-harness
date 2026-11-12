@@ -431,7 +431,7 @@ for (const rel of [
   'docs/ADR.md',
   'docs/WORKFLOW_BRANCH_TESTING.md',
   'docs/readme/README_zh.md',
-  'docs/readme/README_zh-TW.md',
+  'docs/readme/README_zh-TC.md',
   'docs/readme/README_ja.md',
   'assets/brand/mwh-logo.svg',
   'assets/brand/mwh-cover.svg',

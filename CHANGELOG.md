@@ -12,6 +12,8 @@ x64 but the surface area (tool schemas, config keys, UI contract) may still chan
 
 ### Added
 
+- **Local Resource Library (MCP/Skill registry)** — a new **Resource Library** tab in the Advanced Configuration Center: scan the machine for local MCP servers and Skills, enable them with an iOS-style switch, and their tools are exposed on the existing `/mcp` endpoint (no second connector). Entries are off by default; enabled MCPs run with your Windows user privileges and no extra OS sandbox. Enabled servers are projected to the standard `.mwh/mcp.json` (`mcpServers` shape) and enabled Skills to `.mwh/skills.json`; the full catalogue lives in `.mwh/resources.json`. Resource mutations (add/toggle/probe) are Bearer-authenticated control-plane calls and do not go through the desktop approval island (see `docs/SECURITY_DISCLOSURE.md` §4.8). Covered by a dedicated `test:resources` suite (`node scripts/test_resources.mjs`).
+- **Four-tab Advanced Configuration Center & iOS-style switches** — the settings subpanel is now four tabs (`Connectors & Permissions` / `Workspaces & Subagents` / `Resource Library` / `Audit Log`) with a parameter-level visual spec in `docs/DESIGN.md`; toggles are iOS-style switches with in-place animation. Resource requests from the panel go through the main-process `mwh:daemon-http` IPC bridge (the panel can no longer fetch `127.0.0.1` directly from the `muse.ai` page origin).
 - **Bearer Token & Secret Defense Line Hardening (6 Security Closures)** —
   1. **Win32 DPAPI Encrypted Secret Store (`src/security/secretStore.ts`)**: `.mwh/secrets.json` now encrypts `token`, `signingKey`, `cookieSecret`, and `tokenExpiresAt` at rest using `crypt32.dll` `CryptProtectData` / `CryptUnprotectData` (`schema: "mwh-secrets/v2-dpapi"`, bound to the current Windows user SID via `koffi`, zero new npm dependencies) with atomic temp-file writes, automatic one-version plaintext migration, and non-overwrite protection when ephemeral env tokens are used.
   2. **Token TTL & Persistent Rotation**: `BearerAuthGuard` enforces `tokenExpiresAt` (default 30 days, configurable via `MWH_TOKEN_TTL_DAYS` / `MWH_TOKEN_TTL_MS`, returning `401 TOKEN_EXPIRED`), and `POST /api/v1/tunnel/rotate-token` now persists rotated tokens and rotated UI cookie secrets to `.mwh/secrets.json` via DPAPI while immediately revoking the previous token and active `/ui` session cookies.
@@ -45,7 +47,7 @@ x64 but the surface area (tool schemas, config keys, UI contract) may still chan
   `negative_test_p3.mjs` C13/C14), Emergency-Kill + Immediate Rollback cross-verification in `gate1`
   (5G), and 3-layer emergency-kill E2E verification in `gate5` (G5B).
 - **Multi-language READMEs & Synthetic Vector Brand Assets** — added English primary `README.md`,
-  `docs/readme/README_zh.md`, `README_zh-TW.md`, `README_ja.md`, `docs/README.md` index,
+  `docs/readme/README_zh.md`, `README_zh-TC.md`, `README_ja.md`, `docs/README.md` index,
   and hand-crafted SVG mockups under `assets/brand/` (`mwh-logo.svg`,
   `mwh-cover.svg`, `mwh-ui-mockup.svg`).
 - **`docs/PAIRING.md`** — the operator-facing pairing and recovery guide: first pairing, quick-tunnel
@@ -86,10 +88,11 @@ x64 but the surface area (tool schemas, config keys, UI contract) may still chan
   so a stopped tunnel cannot leave an orphan holding the old hostname.
 - **`npm run doctor`** — a one-shot environment self-check (build, daemon, token, `cloudflared`,
   leftover processes) with `--fix` to vendor a discovered binary into `.mwh/bin`.
-- **`MWH启动.cmd` no longer opens a shell without a daemon.** The launcher now runs
-  `electron.exe . --ensure-daemon-only` first (start, wait up to 20s, verify `/api/v1/state`), and
-  stops with a readable error instead of opening an empty window. The global `taskkill` by image
-  name is gone.
+- **`MWH启动.cmd` preflight no longer blocks the window.** The launcher still runs
+  `electron.exe . --ensure-daemon-only` first (start, wait up to 20s, verify `/api/v1/state`), but a
+  preflight failure now opens the shell anyway and the chrome banner shows the real host status
+  (including the listener PID/image when port 19820 is held by another process). The global
+  `taskkill` by image name is gone.
 - **`ensureDaemon()` reports structured results** (`adopted` / `spawned` /
   `PORT_OCCUPIED_UNAUTHORIZED` / `DAEMON_START_TIMEOUT` / `SPAWN_FAILED`) and falls back to
   `ELECTRON_RUN_AS_NODE=1` via Electron when no system `node` is found.

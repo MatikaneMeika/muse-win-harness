@@ -5,8 +5,8 @@
 <p align="center">
   <a href="../../README.md">English</a> |
   <a href="./README_zh.md"><b>简体中文</b></a> |
-  <a href="./README_zh-TW.md">繁體中文</a> |
-  <a href="./README_ja.md">日本語</a> |
+  <a href="./README_zh-TC.md">繁体中文</a> |
+  <a href="./README_ja.md">日文</a> |
   <a href="../README.md">文档地图</a>
 </p>
 
@@ -67,7 +67,7 @@
     </td>
     <td width="50%" valign="top">
       <b>开机先自检，连不上绝不装作「已就绪」。</b><br>
-      双击 <code>MWH启动.cmd</code> 时，程序会先在后台核验本地守护进程（<code>127.0.0.1:19820</code>）与鉴权状态，通过后再打开桌面窗口；万一后台未启动或端口被占，窗口顶栏会直接亮起醒目提示条告诉你原因。
+      双击 <code>MWH启动.cmd</code> 时，程序会先在后台核验本地守护进程（<code>127.0.0.1:19820</code>）与鉴权状态；即使后台未就绪，窗口照样打开，顶栏提示条会直接告诉你原因（包括是哪个进程占了 19820）。
     </td>
   </tr>
 </table>
@@ -82,8 +82,10 @@
   <sub>示意图</sub>
 </p>
 
-- **左侧栏 MWH 快捷抽屉**：紧贴左侧导航栏展开。上半区提供**四档权限卡片（2×2 网格）**，中间提供**公网隧道开关、MCP/REST 端点与一键复制配对口令**，底部可一键呼出包含 5 个标签页的**高级配置中心**（`连接` · `权限` · `工作区` · `代理` · `审计`）。
+- **左侧栏 MWH 快捷抽屉**：紧贴左侧导航栏展开。上半区提供**四档权限卡片（2×2 网格）**，中间提供**公网隧道开关、MCP/REST 端点与一键复制配对口令**，底部可一键呼出包含 4 个标签页的**高级配置中心**（`连接与权限` · `工作区与代理` · `资源库` · `审计日志`）。
 - **右下角实时审批浮岛**：平时收起为一枚不挡视线的小胶囊（「待命 / 待授权」）；当有任务等待你批准或正在后台执行时自动展开，支持自由拖拽位置与单击折叠。
+
+- **本机资源库**：在「高级配置中心 → 资源库」里统一管理本机 MCP 与 Skill。打开开关后，该 MCP 的工具就挂到同一个 `/mcp` 端点上供 Muse 调用，不用另建连接器；条目默认全部关闭，启用的 MCP 以当前 Windows 用户权限运行，没有额外沙箱。
 
 ## 3. 三步快速上手与 Muse 配对
 
@@ -115,7 +117,7 @@ npm run build
 
 ## 4. 暴露的本地工具箱 (7 默认 + 1 可选)
 
-MWH 默认通过 `/mcp` 与 `/api/v1/tools/:name` 向云端暴露 **7 个正交核心工具**；第 8 个桌面键鼠自动化工具 `desktop_hands` 默认彻底隐藏，只有你在 `config.yaml` 中显式开启时才会注册。
+MWH 默认通过 `/mcp` 与 `/api/v1/tools/:name` 向云端暴露 **7 个正交核心工具**；第 8 个桌面键鼠自动化工具 `desktop_hands` 默认彻底隐藏，只有你在 `config.yaml` 中显式开启时才会注册。在「资源库」里启用的本机 MCP 工具会作为额外工具动态挂在同一个 `/mcp` 上。
 
 | 工具名 | 类别 | 默认暴露 | 它是干什么的 & 支持的 `action` |
 | :--- | :--- | :---: | :--- |
@@ -139,7 +141,7 @@ MWH 默认通过 `/mcp` 与 `/api/v1/tools/:name` 向云端暴露 **7 个正交�
 | **`autonomous`（自主模式）** | 信任当前项目，让 AI 自己改代码跑测试 | 直接放行 | **自动留快照并放行** | **全部拦截** | 敏感凭据**直接拦截**；高危命令**强制单次审批** |
 | **`full-access`（完全访问）** | 需要跨文件夹处理任务（带 2 小时自动降级） | 直接放行 | **自动留快照并放行** | **普通文件放行** | **永远强制人工单次审批**（绝不豁免） |
 
-## 6. 已知限制（Known Limitations）
+## 6. 已知限制
 
 1. **应用层围栏，而非操作系统内核虚拟机**：MWH 运行在当前登录的 Windows 用户权限下，不使用 Hyper-V 或 WSL2 虚拟化。一旦你在浮岛上点击批准某条命令，该命令即拥有当前用户的常规权限（详见 [`docs/SECURITY_DISCLOSURE.md`](../SECURITY_DISCLOSURE.md)）。
 2. **第三方本地 CLI 代理的边界**：通过 `subagent_dispatch` 启动的外部 CLI 代理作为子进程运行。MWH 能管住它的启动权限上限、工作树分支隔离、敏感环境变量剥离以及进程树强杀，但无法深入第三方二进制内部拦截其原生系统调用。
@@ -152,12 +154,12 @@ MWH 默认通过 `/mcp` 与 `/api/v1/tools/:name` 向云端暴露 **7 个正交�
 | 文档路径 | 内容简介 |
 | :--- | :--- |
 | [`docs/README.md`](../README.md) | 全部文档总索引 |
-| [`README.md`](../../README.md) | 英文版完整主文档 (English Primary README) |
-| [`docs/readme/README_zh-TW.md`](./README_zh-TW.md) | 繁体中文概览说明 (繁體中文說明) |
-| [`docs/readme/README_ja.md`](./README_ja.md) | 日文概览说明 (日本語ドキュメント) |
+| [`README.md`](../../README.md) | 英文版完整主文档 |
+| [`docs/readme/README_zh-TC.md`](./README_zh-TC.md) | 繁体中文概览说明 |
+| [`docs/readme/README_ja.md`](./README_ja.md) | 日文概览说明 |
 | [`docs/PAIRING.md`](../PAIRING.md) | Muse 配对三步法、临时隧道换域名更新与 `401`/`403` 恢复指南 |
 | [`docs/SECURITY_DISCLOSURE.md`](../SECURITY_DISCLOSURE.md) | 四档权限完整实测矩阵、三层全局急停、SSRF 防护网段与残余风险披露 |
-| [`docs/UI.md`](../UI.md) | 桌面伴随壳架构、抽屉与五栏高级配置中心说明、日常巡检清单 |
+| [`docs/UI.md`](../UI.md) | 桌面伴随壳架构、抽屉与四栏高级配置中心说明、日常巡检清单 |
 | [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) | 启动预检链路、双协议网关、单流水线内核与 ACP 代理调度架构 |
 | [`docs/ADR.md`](../ADR.md) | 架构决策记录（ADR-001 至 ADR-012） |
 | [`DISCLAIMER.md`](../../DISCLAIMER.md) | **独立互操作声明与 Vibe Coding / AI 辅助开发免责声明** |
@@ -169,6 +171,7 @@ MWH 默认通过 `/mcp` 与 `/api/v1/tools/:name` 向云端暴露 **7 个正交�
 ```powershell
 npm run doctor
 npm run verify   # 按你本地修改过的文件智能选择对应的验证门禁
+npm run test:resources   # 资源库专项测试
 ```
 
 ### 许可证与独立性声明

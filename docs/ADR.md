@@ -238,13 +238,13 @@ Token 读取顺序固定为：`window.mwhWindow.getRuntimeToken()`（preload 桥
    - 主窗口下部客户区（`y = 38 .. height`）挂载 `BrowserView`（`museView`），直接加载 `https://muse.ai`，并通过 `museView.setBounds` 随主窗客户区同步缩放。
 2. **受控 Preload UI 注入与主题同步（`shell/muse-settings-preload.cjs`）**：
    - `museView` 挂载 `shell/muse-settings-preload.cjs`（启用 `contextIsolation: true`，不暴露 Node 原语、不读取或外传 `muse.ai` 登录 Cookie/Token）。
-   - 在 `muse.ai` DOM 中以独立命名空间（`#mwh-drawer-backdrop`、`#mwh-drawer`、`#mwh-subpanel`、`#mwh-approval-island`、`.mwh-activity-slot`）挂载左侧活动栏图标、20px 圆角抽屉、24px 圆角五栏高级配置面板（连接 / 权限 / 工作区 / 代理 / 审计）与底部实时审批灵动岛。
+   - 在 `muse.ai` DOM 中以独立命名空间（`#mwh-drawer-backdrop`、`#mwh-drawer`、`#mwh-subpanel`、`#mwh-approval-island`、`.mwh-activity-slot`）挂载左侧活动栏图标、20px 圆角抽屉、24px 圆角四栏高级配置面板（连接与权限 / 工作区与代理 / 资源库 / 审计日志）与底部实时审批灵动岛。
    - 通过 `MutationObserver` 与透明感知色彩采样（`parseOpaqueRgb`）实时检测 `muse.ai` 明暗主题，并经 `mwh:theme-sync` IPC 同步更新主窗 `chrome.html` 顶栏背景色及 Windows 11 DWM 标题栏/边框属性（`applyDwmTheme`）。
 3. **`frontend/dist` 产物退库与 `uiStatic.ts` 自闭环回退（更新 ADR-006）**：
    - `.gitignore` 将 `!frontend/dist/` 改为 `frontend/dist/`，从 Git 索引中移除构建产物。
    - 当用户尚未运行 `npm run build:ui` 而直接在浏览器访问 `http://127.0.0.1:19820/ui` 时，`src/network/uiStatic.ts` 返回内置的引导 HTML（保留 `#root` 挂载点契约并提示执行 `npm run build:ui` 或使用桌面壳）。
 
 ### 效果
-- 彻底消除双窗口焦点切换与透明窗口合成黑屏隐患，伴随抽屉、五栏配置中心与底部审批浮岛同 `muse.ai` 界面浑然一体。
+- 彻底消除双窗口焦点切换与透明窗口合成黑屏隐患，伴随抽屉、四栏配置中心与底部审批浮岛同 `muse.ai` 界面浑然一体。
 - `npm run gate5`（G10）通过 CDP 同时校验 `chrome.html` 顶栏目标与 `muse.ai` `BrowserView` 注入目标（纯净 UA + `#mwh-drawer` + `#mwh-approval-island` + 真实渲染截图 `>5000 bytes`），形成端到端回归闭环。
 

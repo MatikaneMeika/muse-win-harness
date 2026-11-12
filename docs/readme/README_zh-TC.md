@@ -4,9 +4,9 @@
 
 <p align="center">
   <a href="../../README.md">English</a> |
-  <a href="./README_zh.md">简体中文</a> |
-  <a href="./README_zh-TW.md"><b>繁體中文</b></a> |
-  <a href="./README_ja.md">日本語</a> |
+  <a href="./README_zh.md">簡體中文</a> |
+  <a href="./README_zh-TC.md"><b>繁體中文</b></a> |
+  <a href="./README_ja.md">日文</a> |
   <a href="../README.md">文檔地圖</a>
 </p>
 
@@ -21,7 +21,7 @@
 **讓 [Muse](https://muse.ai) 接入你的 Windows。** 這就是 Muse-Win-Harness。
 
 > [!IMPORTANT]
-> **誠實安全邊界與 Vibe Coding 來源聲明（No Security Washing）**
+> **誠實安全邊界與 Vibe Coding 來源聲明（不粉飾安全）**
 >
 > 1. **無 OS 級真沙箱，依賴路徑圍欄+進程樹管控+審批流**：MWH 運行於當前 Windows 使用者權限下，透過實體路徑圍欄、Win32 Job Object 處理程序樹強控、寫前快照與桌面人工審批守住邊界。完整實測矩陣請參閱 [`docs/SECURITY_DISCLOSURE.md`](../SECURITY_DISCLOSURE.md)。
 > 2. **源於 Vibe Coding / AI 輔助開發**：本專案由開發者與編碼 Agent 透過 **Vibe Coding（AI 輔助迭代工程）** 協作完成並配合自動化門禁驗證。AI 輔助生成程式碼仍可能存在未預見的邊界問題，請務必妥善備份重要資料並參閱 [`DISCLAIMER.md`](../../DISCLAIMER.md)。
@@ -39,6 +39,8 @@
 - **四檔權限一鍵切換**：在左側欄 MWH 抽屜自由切換 `plan`（唯讀探查）、`confirm`（變更前彈窗確認，預設）、`autonomous`（授權工作區內自動留快照放行）、`full-access`（跨目錄讀寫 + 2 小時自動降級保護；`rm -rf`、`git push --force` 與 `.env*`/`~/.ssh` 永遠強制要求單次人工審批）。
 - **右下角浮島即點即批**：在桌面右下角浮島點擊「允許一次」後立即執行並寫入脫敏回執，Muse 直接透過 `job_control(action="poll")` 取得結果，不必回聊天框打字確認。
 - **寫前自動快照與整棵處理程序樹急停**：每次改檔前自動建立快照，支援按工作區單步一鍵回滾；「強殺」與「全域急停」可連同派生子孫程序一起終結，全程無黑框閃爍。
+
+- **本機 MCP 與 Skill 資源庫**：在「高級配置中心 → 資源庫」統一管理本機 MCP 與 Skill。開啟後，該 MCP 的工具便掛到同一個 `/mcp` 端點供 Muse 使用，不必另建連接器；項目預設全部關閉，啟用的 MCP 以當前 Windows 使用者權限執行，沒有額外沙箱。
 
 ## 快速開始
 

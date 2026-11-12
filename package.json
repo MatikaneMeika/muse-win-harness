@@ -16,6 +16,7 @@
     "gate5": "node scripts/gate5_ui_e2e.mjs",
     "test:kernel-safety": "node dist/gates/gate1.js && node dist/gates/gate2.js && node dist/gates/gate3.js && node dist/gates/gate4.js && node dist/gates/gateAcp.js",
     "test:ui-contract": "node scripts/test_ui_contract.mjs",
+    "test:resources": "node scripts/test_resources.mjs",
     "verify": "node scripts/verify.mjs",
     "doctor": "node scripts/doctor.mjs"
   },

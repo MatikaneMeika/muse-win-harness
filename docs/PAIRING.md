@@ -8,7 +8,7 @@
 
 | 动作 | 谁来做 | 说明 |
 | :--- | :--- | :--- |
-| 启动宿主、开隧道、生成 MCP URL | MWH（本机） | 双击 `MWH启动.cmd`，宿主未就绪时脚本会停住且**不会开窗** |
+| 启动宿主、开隧道、生成 MCP URL | MWH（本机） | 双击 `MWH启动.cmd`，先预检宿主；即使预检失败窗口照样打开，顶栏横幅显示真实宿主状态 |
 | 复制 Bearer Token | 你（本机设置抽屉） | 「连接器与隧道 → 复制完整 Token」；Token 不随隧道变化 |
 | 新建 / 删除 / 重连连接器 | 你（Muse App） | 云端对话里的模型没有删除凭据的工具，重登记会被安全策略拒绝 |
 | 填写 Token、粘贴配对指令 | 你（Muse App / 会话） | 配对指令是模板文本，**不含真实密钥** |
@@ -18,7 +18,7 @@
 
 ## 1. 首次配对（实测可用路径）
 
-1. **启动 MWH**：双击仓库根目录 `MWH启动.cmd`。它先拉起宿主并等待 `127.0.0.1:19820` 可达且鉴权通过，失败会在控制台停住、**不会打开空壳窗口**。
+1. **启动 MWH**：双击仓库根目录 `MWH启动.cmd`。它先拉起宿主并等待 `127.0.0.1:19820` 可达且鉴权通过；即使预检失败窗口照样打开，顶栏横幅会显示真实宿主状态（包括是哪个进程占了 19820）。
 2. **开隧道**：点击 Muse 左侧导航栏 **MWH** 图标 → 打开高级配置中心 → **连接器与隧道** → 选择 `Cloudflare Quick Tunnel` → 启动，得到形如 `https://<random>.trycloudflare.com` 的公网地址。
 3. **取两个值**：同一页复制 **MCP 端点**（`https://<random>.trycloudflare.com/mcp`）与 **Bearer Token**（点「复制完整 Token」）。
 4. **在 Muse App 里建连接器**：新建 `custom.mwh`，填入上面的 MCP URL 与 Token。**Token 不要贴在聊天里**。
@@ -89,8 +89,8 @@
 | `403` | 连接器被断开、凭据不可取 | 走第 3 节：删除旧连接器 → 新旁聊 → 重发指令 → 重建 → 填 Token |
 | 工具列表里没有 `pc_status` 等 | 连接器没建立或端点不是 `/mcp` | 核对 URL 是否以 `/mcp` 结尾 |
 | Muse 里重复发送配对指令没反应 | 同一会话对同一 provider 的重复登记被拒 | 新开旁聊再发；不要反复重试同一句 |
-| 窗口只有顶栏、下方显示「宿主未连接（…）」 | 宿主没起来或 19820 被别的进程占用 | 重新运行 `MWH启动.cmd`；按提示 `netstat -ano \| findstr :19820` 查占用者 |
-| 双击 `MWH启动.cmd` 后控制台停住且没开窗 | 预检失败（宿主起不来 / 端口被占用且鉴权不通过） | 这是**预期行为**：按控制台输出定位，不要绕过脚本手动开壳 |
+| 窗口只有顶栏、下方显示「宿主未连接（…）」 | 宿主没起来或 19820 被别的进程占用 | 横幅会直接显示占用进程的映像名与 PID；仍可用 `netstat -ano \| findstr :19820` 核对，确认后重新运行 `MWH启动.cmd` |
+| 双击 `MWH启动.cmd` 后窗口打开但顶栏提示宿主未连接 | 预检失败（宿主起不来 / 端口被占用且鉴权不通过） | 这是**预期行为**：窗口照样打开，顶栏横幅显示真实原因与占用进程；按横幅提示定位，不要绕过脚本手动开壳 |
 | 点「启动临时隧道」返回 `QUICK_TUNNEL_START_FAILED` / `CLOUDFLARED_MISSING` | 本机找不到 `cloudflared.exe`（MWH 不内置它） | 跑 `npm run doctor` 看探测链；一次性修好：`node scripts/doctor.mjs --fix --cloudflared "<你的 versions 目录>"`（会把二进制固化到 `<仓库>/.mwh/bin/`，之后与 PATH 无关） |
 | 点「停止临时隧道」返回 `TUNNEL_STOP_FAILED` | 子进程没被真正杀掉 | 同上跑 `npm run doctor`，看「Leftover processes」一节按 PID 处置；**不要按进程名杀**，同名进程可能属于其他工具 |
 
@@ -112,11 +112,11 @@
 
 ---
 
-## English Quick Summary
+## 快速小结
 
-1. Run `MWH启动.cmd` — it starts the daemon first and refuses to open a window when the daemon is not ready.
-2. Start `Cloudflare Quick Tunnel` in **MWH → Connectors**, copy the `…/mcp` URL and the Bearer token.
-3. In the Muse app, create a `custom.mwh` connector with that URL + token (never paste the token into chat).
-4. Paste the pairing prompt (a **template**, never "already connected") into a **new** chat, then make Muse call `pc_status`.
-5. When the quick-tunnel hostname changes, **only the MCP URL changes** — the token lives in `.mwh/secrets.json` and only rotates on demand.
-6. If the connector goes stale: delete it in the Muse app → open a new side chat → re-paste the prompt → accept **Rebuild** → fill the current token → verify with `pc_status`.
+1. 运行 `MWH启动.cmd`——先拉起宿主做预检；即使预检失败窗口照样打开，顶栏横幅显示真实状态。
+2. 在 **MWH → 连接器**里启动 `Cloudflare Quick Tunnel`，复制 `…/mcp` 地址与 Bearer Token。
+3. 在 Muse App 里用该地址与 Token 新建 `custom.mwh` 连接器（Token 绝不贴进聊天）。
+4. 把配对口令（只是**模板**，不是“已接通”）粘到一个**新开的**会话里，然后让 Muse 调用 `pc_status`。
+5. 临时隧道换域名后，**只需换 MCP URL**——Token 存在 `.mwh/secrets.json`，只有手动轮换才会变。
+6. 连接器失效时：在 Muse App 里删除 → 新开旁聊 → 重贴口令 → 点**重建** → 填当前 Token → 用 `pc_status` 验证。

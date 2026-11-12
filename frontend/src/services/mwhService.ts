@@ -731,7 +731,16 @@ export class MwhDaemonService {
     return null;
   }
 
-  public async addResource(entry: Partial<PublicResourceEntry> & { id?: string; displayName: string; kind: ResourceKind }): Promise<boolean> {
+  public async addResource(
+    entry: Partial<PublicResourceEntry> & {
+      id?: string;
+      displayName: string;
+      kind: ResourceKind;
+      /* 后端 AddResourceInput 的真实字段名，与 PublicResourceEntry 的展示字段不同 */
+      enable?: boolean;
+      skillDir?: string;
+    }
+  ): Promise<boolean> {
     const res = await this.request('POST', '/api/v1/resources', entry);
     if (res && res.ok) {
       if (res.entries) {
@@ -801,7 +810,10 @@ export class MwhDaemonService {
     };
   }
 
-  public async updateResource(id: string, patch: Partial<PublicResourceEntry>): Promise<boolean> {
+  public async updateResource(
+    id: string,
+    patch: Partial<PublicResourceEntry> & { skillDir?: string }
+  ): Promise<boolean> {
     const res = await this.request('POST', '/api/v1/resources/update', { id, ...patch });
     if (res && res.ok) {
       if (res.entries) {

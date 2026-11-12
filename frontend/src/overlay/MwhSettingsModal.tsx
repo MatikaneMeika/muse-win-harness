@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { MwhSwitch } from './MwhSwitch';
 import {
   AuditDecision,
   ConfinementMode,
@@ -339,7 +340,7 @@ export const MwhSettingsModal: React.FC = () => {
         args: resArgs.split(/\s+/).filter(Boolean),
         cwd: resCwd.trim() || undefined,
         httpUrl: resHttpUrl.trim() || undefined,
-        skillDirDisplay: resSkillDir.trim() || undefined,
+        skillDir: resSkillDir.trim() || undefined,
         readonly: resReadonly,
       });
     } else {
@@ -352,8 +353,8 @@ export const MwhSettingsModal: React.FC = () => {
         args: resArgs.split(/\s+/).filter(Boolean),
         cwd: resCwd.trim() || undefined,
         httpUrl: resHttpUrl.trim() || undefined,
-        skillDirDisplay: resSkillDir.trim() || undefined,
-        enabled: resEnabled,
+        skillDir: resSkillDir.trim() || undefined,
+        enable: resEnabled,
         readonly: false,
       });
     }
@@ -1056,18 +1057,12 @@ export const MwhSettingsModal: React.FC = () => {
                                 {state.autoDowngradeRemainingSec % 60}s
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => mwhService.toggleAutoDowngradeTwoHours()}
-                              aria-pressed={state.autoDowngradeTwoHours}
-                              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-120 cursor-pointer whitespace-nowrap ${
-                                state.autoDowngradeTwoHours
-                                  ? 'bg-[#2B7FFF] text-white'
-                                  : 'bg-neutral-500/25 opacity-75'
-                              }`}
-                            >
-                              {state.autoDowngradeTwoHours ? '已开启 2h 自动降级' : '已关闭'}
-                            </button>
+                            <MwhSwitch
+                              checked={Boolean(state.autoDowngradeTwoHours)}
+                              onChange={() => mwhService.toggleAutoDowngradeTwoHours()}
+                              label="开启「完全访问」2 小时后自动降级"
+                              dark={chromeDark}
+                            />
                           </div>
                         </div>
 
@@ -1325,17 +1320,14 @@ export const MwhSettingsModal: React.FC = () => {
 
                                   <div className="flex items-center gap-2 shrink-0">
                                     {/* 启禁用开关 */}
-                                    <button
-                                      type="button"
-                                      onClick={() => mwhService.toggleAcpProfile(profile.id)}
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
-                                        profile.enabled
-                                          ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
-                                          : 'bg-neutral-500/20 text-neutral-400 hover:bg-neutral-500/30'
+                                    <MwhSwitch
+                                      checked={profile.enabled !== false}
+                                      onChange={() => mwhService.toggleAcpProfile(profile.id)}
+                                      label={`${profile.enabled !== false ? '停用' : '启用'} ${
+                                        profile.display_name || profile.id
                                       }`}
-                                    >
-                                      {profile.enabled ? '已启用' : '已停用'}
-                                    </button>
+                                      dark={chromeDark}
+                                    />
 
                                     {/* 编辑按钮 */}
                                     <button
@@ -1676,33 +1668,35 @@ export const MwhSettingsModal: React.FC = () => {
 
                             {/* Edit-only: 只读 option */}
                             {resEditingId && (
-                              <div className="flex items-center gap-2 pt-1">
-                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>只读控制</span>
-                                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={resReadonly}
-                                    onChange={(e) => setResReadonly(e.target.checked)}
-                                    className="rounded text-[#2B7FFF] focus:ring-0"
-                                  />
-                                  <span>标记为只读（在计划模式下放行探查）</span>
-                                </label>
+                              <div
+                                className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ${subtleBg}`}
+                              >
+                                <span className="text-xs leading-relaxed">
+                                  标记为只读（在计划模式下放行探查）
+                                </span>
+                                <MwhSwitch
+                                  checked={resReadonly}
+                                  onChange={setResReadonly}
+                                  label="标记为只读"
+                                  title="只读资源在计划模式下仍可被探查"
+                                  dark={chromeDark}
+                                />
                               </div>
                             )}
 
                             {/* Add-only: 立即启用 option (default false) */}
                             {!resEditingId && (
-                              <div className="flex items-center gap-2 pt-1">
-                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>启用选项</span>
-                                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={resEnabled}
-                                    onChange={(e) => setResEnabled(e.target.checked)}
-                                    className="rounded text-[#2B7FFF] focus:ring-0"
-                                  />
-                                  <span>立即启用（默认关闭）</span>
-                                </label>
+                              <div
+                                className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ${subtleBg}`}
+                              >
+                                <span className="text-xs leading-relaxed">立即启用（默认关闭）</span>
+                                <MwhSwitch
+                                  checked={resEnabled}
+                                  onChange={setResEnabled}
+                                  label="立即启用"
+                                  title="添加完成后立即对 Muse 生效"
+                                  dark={chromeDark}
+                                />
                               </div>
                             )}
 
@@ -1835,19 +1829,21 @@ export const MwhSettingsModal: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0">
-                                          <button
-                                            type="button"
-                                            onClick={() => mwhService.toggleResource(entry.id, !entry.enabled)}
-                                            className={`px-2.5 py-1 rounded-[10px] text-xs font-medium transition-colors cursor-pointer ${
-                                              entry.enabled || isFault
-                                                ? 'bg-[#2B7FFF] text-white'
-                                                : chromeDark
-                                                ? 'bg-white/10 text-neutral-400 hover:text-white'
-                                                : 'bg-black/10 text-neutral-600 hover:text-black'
+                                          <MwhSwitch
+                                            checked={entry.enabled}
+                                            onChange={(next) => mwhService.toggleResource(entry.id, next)}
+                                            label={`${entry.enabled ? '停用' : '启用'} ${
+                                              entry.displayName || entry.id
                                             }`}
-                                          >
-                                            {entry.enabled || isFault ? '已启用' : '已停用'}
-                                          </button>
+                                            title={
+                                              isFault
+                                                ? entry.faultReason || '启动故障，开关保持启用由你决定是否关闭'
+                                                : entry.enabled
+                                                  ? '已启用，点击停用'
+                                                  : '已停用，点击启用'
+                                            }
+                                            dark={chromeDark}
+                                          />
                                           <button
                                             type="button"
                                             onClick={() => handleOpenEditResource(entry)}
@@ -1927,6 +1923,10 @@ export const MwhSettingsModal: React.FC = () => {
                                 .map((entry) => {
                                   const isExpanded = Boolean(resExpandedIds[entry.id]);
                                   const isReady = entry.enabled;
+                                  // SKILL.md 缺失等故障不能显示成绿色「已就绪」。
+                                  const skillFault = Boolean(
+                                    entry.faultReason || entry.runtimeStatus === 'fault'
+                                  );
 
                                   return (
                                     <div
@@ -1963,7 +1963,11 @@ export const MwhSettingsModal: React.FC = () => {
                                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
                                             {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
                                           </span>
-                                          {isReady ? (
+                                          {skillFault ? (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold shrink-0">
+                                              {entry.faultReason || '不可用'}
+                                            </span>
+                                          ) : isReady ? (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 shrink-0">
                                               已就绪
                                             </span>
@@ -1975,19 +1979,15 @@ export const MwhSettingsModal: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0">
-                                          <button
-                                            type="button"
-                                            onClick={() => mwhService.toggleResource(entry.id, !entry.enabled)}
-                                            className={`px-2.5 py-1 rounded-[10px] text-xs font-medium transition-colors cursor-pointer ${
-                                              entry.enabled
-                                                ? 'bg-[#2B7FFF] text-white'
-                                                : chromeDark
-                                                ? 'bg-white/10 text-neutral-400 hover:text-white'
-                                                : 'bg-black/10 text-neutral-600 hover:text-black'
+                                          <MwhSwitch
+                                            checked={entry.enabled}
+                                            onChange={(next) => mwhService.toggleResource(entry.id, next)}
+                                            label={`${entry.enabled ? '停用' : '启用'} ${
+                                              entry.displayName || entry.id
                                             }`}
-                                          >
-                                            {entry.enabled ? '已启用' : '已停用'}
-                                          </button>
+                                            title={entry.enabled ? '已启用，点击停用' : '已停用，点击启用'}
+                                            dark={chromeDark}
+                                          />
                                           <button
                                             type="button"
                                             onClick={() => handleOpenEditResource(entry)}
@@ -2567,21 +2567,18 @@ export const MwhSettingsModal: React.FC = () => {
                       </div>
 
                       {/* 立即启用 */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <input
-                          type="checkbox"
-                          id="acp-enabled-toggle"
+                      <div
+                        className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ${subtleBg}`}
+                      >
+                        <span className="text-xs leading-relaxed">立即启用此代理</span>
+                        <MwhSwitch
                           checked={acpFormEnabled}
+                          onChange={setAcpFormEnabled}
+                          label="立即启用此代理"
+                          title="保存后立即参与代理调度"
                           disabled={acpSaving}
-                          onChange={(e) => setAcpFormEnabled(e.target.checked)}
-                          className="rounded border-white/10 text-sky-500 focus:ring-0 cursor-pointer"
+                          dark={chromeDark}
                         />
-                        <label
-                          htmlFor="acp-enabled-toggle"
-                          className="text-xs cursor-pointer select-none"
-                        >
-                          立即启用此代理
-                        </label>
                       </div>
 
                       {/* 弹窗底部操作按钮 */}

@@ -329,6 +329,21 @@ function getActiveBaseUrl(settings) {
  * ------------------------------------------------------------------ */
 
 const INJECT_STYLE = `
+/* ---------- Motion tokens ---------- *
+ * 文档真源 docs/DESIGN.md 3.4。挂在 :root 上是为了让遮罩、活动栏等
+ * 不在面板子树里的注入元素也能取到；名字统一 mwh- 前缀避免与宿主页面冲突。
+ * 组件里禁止再写裸时长/曲线。 */
+:root {
+  --mwh-dur-fast: 80ms;
+  --mwh-dur-base: 150ms;
+  --mwh-dur-state: 180ms;
+  --mwh-dur-overlay: 220ms;
+  --mwh-dur-panel: 240ms;
+  --mwh-ease-color: ease;
+  --mwh-ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --mwh-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* ---------- Left Activity Bar ---------- */
 .mwh-activity-btn {
   width: 44px !important;
@@ -454,6 +469,7 @@ const INJECT_STYLE = `
 /* ---------- Primary drawer ---------- */
 .mwh-drawer-backdrop {
   position: fixed;
+  /* 遮罩用 overlay 档，比面板略快，视觉上"底先暗、面后到" */
   top: 0;
   left: 0;
   right: 0;
@@ -463,7 +479,7 @@ const INJECT_STYLE = `
   z-index: 99985;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.22s ease;
+  transition: opacity var(--mwh-dur-overlay) var(--mwh-ease-color);
 }
 .mwh-drawer-backdrop.open {
   opacity: 1;
@@ -711,6 +727,75 @@ const INJECT_STYLE = `
   cursor: pointer;
   flex-shrink: 0;
 }
+/* ---------- Switch：iOS 式布尔开关（规格见 docs/DESIGN.md 4.1） ---------- */
+.mwh-switch {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--mwh-hover);
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition:
+    background-color var(--mwh-dur-state) var(--mwh-ease-color),
+    transform var(--mwh-dur-fast) var(--mwh-ease-color);
+}
+.mwh-switch:hover { background: rgba(255, 255, 255, 0.12); }
+.mwh-switch:active { transform: scale(0.97); }
+.mwh-switch.is-on { background: var(--mwh-accent); }
+.mwh-switch.is-on:hover { background: #1B6FEF; }
+.mwh-switch:focus-visible { box-shadow: 0 0 0 3px var(--mwh-accent-soft); }
+.mwh-switch-dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transform: translateX(0);
+  transition: transform var(--mwh-dur-state) var(--mwh-ease-standard);
+  pointer-events: none;
+}
+.mwh-switch.is-on .mwh-switch-dot { transform: translateX(18px); }
+.mwh-switch:disabled,
+.mwh-switch.is-disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.mwh-light .mwh-switch { background: rgba(0, 0, 0, 0.12); }
+.mwh-light .mwh-switch:hover { background: rgba(0, 0, 0, 0.16); }
+.mwh-light .mwh-switch.is-on { background: var(--mwh-accent); }
+.mwh-light .mwh-switch.is-on:hover { background: #1B6FEF; }
+/* 开关 + 文字的设置行：整行可点击，文字在左、开关在右 */
+.mwh-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--mwh-card-2);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.mwh-switch-row-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mwh-text);
+  line-height: 1.45;
+}
+.mwh-switch-row-sub {
+  font-size: 10.5px;
+  color: var(--mwh-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
 .mwh-dot {
   width: 7px;
   height: 7px;
@@ -784,7 +869,8 @@ const INJECT_STYLE = `
   background: var(--mwh-card-2);
   overflow: hidden;
   margin-top: 8px;
-  transition: all 0.2s ease;
+  /* <details> 是原生开合，不做高度动画；这里只留背景过渡，别再写 transition: all */
+  transition: background-color var(--mwh-dur-base) var(--mwh-ease-color);
 }
 .mwh-disclosure summary {
   padding: 9px 12px;
@@ -1469,8 +1555,30 @@ const INJECT_STYLE = `
   box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.72);
 }
 @media (prefers-reduced-motion: reduce) {
-  .mwh-approval-island { transition: none; }
+  /* 动效归零：这是 !important 的白名单用法（见 docs/DESIGN.md 4.8 红线 4）。 */
+  .mwh-drawer,
+  .mwh-drawer-backdrop,
+  .mwh-subpanel,
+  .mwh-toast,
+  .mwh-confirm-card,
+  .mwh-approval-island,
+  .mwh-switch,
+  .mwh-switch-dot,
+  .mwh-switch-row,
+  .mwh-btn,
+  .mwh-icon-btn,
+  .mwh-mode-card,
+  .mwh-list-row,
+  .mwh-subpanel-tab-btn,
+  .mwh-input,
+  .mwh-select,
+  .mwh-disclosure {
+    transition: none !important;
+  }
   .mwh-approval-island.mwh-island-pop { animation: none; }
+  .mwh-switch:active { transform: none; }
+  /* .mwh-spin 属于"加载中"的功能反馈而非装饰动效，减少动效下保留旋转，
+     否则界面会显示一个静止的环，看起来像卡死（WCAG 2.3.3 例外）。 */
 }
 
 /* 长按触发可拖动态的轻盈微弹提示。必须用 scale 属性：岛用 translate3d 定位，
@@ -1490,7 +1598,7 @@ const INJECT_STYLE = `
   position: fixed;
   left: 50%;
   bottom: 26px;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateX(-50%) translateY(6px);
   max-width: min(420px, calc(100vw - 32px));
   background: var(--mwh-card);
   color: var(--mwh-text);
@@ -1502,7 +1610,9 @@ const INJECT_STYLE = `
   z-index: 100002;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition:
+    opacity var(--mwh-dur-base) var(--mwh-ease-spring),
+    transform var(--mwh-dur-base) var(--mwh-ease-spring);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 .mwh-toast.open { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -2086,17 +2196,6 @@ function renderDrawer() {
     cachedRealToken
   );
 
-  const enabledResCount =
-    settings.resources &&
-    settings.resources.summary &&
-    typeof settings.resources.summary.enabledCount === 'number'
-      ? settings.resources.summary.enabledCount
-      : settings.resources && Array.isArray(settings.resources.entries)
-      ? settings.resources.entries.filter(function (e) {
-          return e.enabled;
-        }).length
-      : 0;
-
   const modeCards = PERMISSION_PROFILE_LIST.map(function (prof) {
     const active = activeProfile.id === prof.id;
     const danger = prof.id === 'full-access';
@@ -2221,20 +2320,6 @@ function renderDrawer() {
     '<span>复制 MCP JSON</span></button>' +
     '</div>' +
     '</div>' +
-    '<div class="mwh-card" data-action="open-advanced-modal" data-section="resources" style="cursor:pointer;background:var(--mwh-card-2);border:none;margin-top:8px;padding:9px 12px;transition:all 0.18s ease">' +
-    '<div class="mwh-row">' +
-    '<div style="display:flex;align-items:center;gap:8px">' +
-    '<span style="color:#2B7FFF">' +
-    ICON.folder +
-    '</span>' +
-    '<span style="font-size:12px;font-weight:600;color:var(--mwh-text)">资源库 · ' +
-    esc(enabledResCount) +
-    ' 个已启用</span>' +
-    '</div>' +
-    '<span style="color:var(--mwh-muted)">' +
-    ICON.chevronRight +
-    '</span>' +
-    '</div></div>' +
     '<div class="mwh-card mwh-adv-hero-card" data-action="open-advanced-modal" style="cursor:pointer;background:var(--mwh-card-2);border:none;margin-top:8px;transition:all 0.18s ease">' +
     '<div class="mwh-row">' +
     '<div style="display:flex;align-items:center;gap:10px">' +
@@ -2291,16 +2376,6 @@ function renderConnectors(settings) {
     cachedRealToken
   );
 
-  const enabledResCount =
-    settings.resources &&
-    settings.resources.summary &&
-    typeof settings.resources.summary.enabledCount === 'number'
-      ? settings.resources.summary.enabledCount
-      : settings.resources && Array.isArray(settings.resources.entries)
-      ? settings.resources.entries.filter(function (e) {
-          return e.enabled;
-        }).length
-      : 0;
   const t = settings.tunnel;
   const draft = state.ui.tunnelDraft || defaultTunnelDraft(settings);
 
@@ -2562,11 +2637,12 @@ function renderPermissions(settings) {
     '<div class="mwh-mono mwh-hint" style="margin-top:2px" data-countdown>剩余计时: ' +
     esc(remainingText(settings.autoDowngradeRemainingSec)) +
     '</div></div>' +
-    '<button type="button" class="mwh-btn mwh-btn-switch ' +
-    (settings.autoDowngradeTwoHours ? 'mwh-btn-primary' : '') +
-    '" data-action="toggle-auto-downgrade">' +
-    (settings.autoDowngradeTwoHours ? '已开启 2h 降级' : '已关闭') +
-    '</button>' +
+    renderSwitchHtml({
+      checked: settings.autoDowngradeTwoHours,
+      action: 'toggle-auto-downgrade',
+      label: '完全访问 2 小时自动降级',
+      title: settings.autoDowngradeTwoHours ? '已开启，点击关闭' : '已关闭，点击开启'
+    }) +
     '</div>' +
     '</div>' +
     '<details class="mwh-disclosure">' +
@@ -2686,11 +2762,13 @@ function renderSubagents(settings) {
               : '') +
             '</div></div>' +
             '<div style="display:flex;gap:4px;align-items:center">' +
-            '<button type="button" class="mwh-btn mwh-btn-switch" data-action="acp-toggle" data-id="' +
-            esc(profile.id) +
-            '">' +
-            (enabled ? '已启用' : '已停用') +
-            '</button>' +
+            renderSwitchHtml({
+              checked: enabled,
+              action: 'acp-toggle',
+              id: profile.id,
+              label: (enabled ? '停用 ' : '启用 ') + (profile.display_name || profile.id),
+              title: enabled ? '已启用，点击停用' : '已停用，点击启用'
+            }) +
             '<button type="button" class="mwh-icon-btn" data-action="acp-edit" data-id="' +
             esc(profile.id) +
             '" title="编辑 ACP 代理">' +
@@ -2750,10 +2828,14 @@ function renderSubagents(settings) {
       '<input class="mwh-input mwh-mono" data-bind="acp.args" value="' +
       esc(acp.args) +
       '" placeholder="以空格分隔，例如: C:\\path\\to\\agent.js --acp" /></div>' +
-      '<label class="mwh-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">' +
-      '<input type="checkbox" class="mwh-check" data-bind="acp.enabled" ' +
-      (acp.enabled ? 'checked' : '') +
-      ' /> 立即启用此代理</label>' +
+      '<div style="margin-bottom:8px">' +
+      renderSwitchRow({
+        bind: 'acp.enabled',
+        checked: acp.enabled,
+        label: '立即启用此代理',
+        title: '保存后立即参与代理调度'
+      }) +
+      '</div>' +
       '<div class="mwh-row" style="justify-content:flex-end">' +
       '<button type="button" class="mwh-btn" data-action="acp-cancel">取消</button>' +
       '<button type="button" class="mwh-btn mwh-btn-primary" data-action="acp-save">' +
@@ -3349,19 +3431,25 @@ function renderResources(settings) {
     }
 
     const editReadonly = form.editingId
-      ? '<label class="mwh-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer">' +
-        '<input type="checkbox" class="mwh-check" data-bind="resource.readonly" ' +
-        (form.readonly ? 'checked' : '') +
-        ' />' +
-        '<span>标记为只读（在计划模式下放行探查）</span></label>'
+      ? '<div style="margin-bottom:8px">' +
+        renderSwitchRow({
+          bind: 'resource.readonly',
+          checked: form.readonly,
+          label: '标记为只读（在计划模式下放行探查）',
+          title: '只读资源在计划模式下仍可被探查'
+        }) +
+        '</div>'
       : '';
 
     const addImmediateEnable = !form.editingId
-      ? '<label class="mwh-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer">' +
-        '<input type="checkbox" class="mwh-check" data-bind="resource.enabled" ' +
-        (form.enabled ? 'checked' : '') +
-        ' />' +
-        '<span>立即启用（默认关闭）</span></label>'
+      ? '<div style="margin-bottom:8px">' +
+        renderSwitchRow({
+          bind: 'resource.enabled',
+          checked: form.enabled,
+          label: '立即启用（默认关闭）',
+          title: '添加完成后立即对 Muse 生效'
+        }) +
+        '</div>'
       : '';
 
     html +=
@@ -3489,11 +3577,17 @@ function renderResources(settings) {
           '</span>' +
           '</div></div>' +
           '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
-          '<button type="button" class="mwh-btn mwh-btn-switch" data-action="resource-toggle" data-id="' +
-          esc(entry.id) +
-          '">' +
-          (entry.enabled || isFault ? '已启用' : '已停用') +
-          '</button>' +
+          renderSwitchHtml({
+            checked: entry.enabled,
+            action: 'resource-toggle',
+            id: entry.id,
+            label: (entry.enabled ? '停用 ' : '启用 ') + (entry.displayName || entry.id),
+            title: isFault
+              ? entry.faultReason || '启动故障，开关保持启用由你决定是否关闭'
+              : entry.enabled
+              ? '已启用，点击停用'
+              : '已停用，点击启用'
+          }) +
           '<button type="button" class="mwh-icon-btn" data-action="resource-open-edit" data-id="' +
           esc(entry.id) +
           '" title="编辑">' +
@@ -3533,7 +3627,13 @@ function renderResources(settings) {
         const isExpanded = Boolean(
           state.ui.resourceExpanded && state.ui.resourceExpanded[entry.id]
         );
-        const statusBadge = entry.enabled
+        // 故障（SKILL.md 缺失等）不能显示成绿色「已就绪」，否则就是谎报可用性。
+        const skillFault = Boolean(entry.faultReason || entry.runtimeStatus === 'fault');
+        const statusBadge = skillFault
+          ? '<span class="mwh-pill" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-weight:600">' +
+            esc(entry.faultReason || '不可用') +
+            '</span>'
+          : entry.enabled
           ? '<span class="mwh-pill" style="background:rgba(34,197,94,0.15);color:#4ade80">已就绪</span>'
           : '<span class="mwh-pill">已关闭</span>';
 
@@ -3569,11 +3669,13 @@ function renderResources(settings) {
           statusBadge +
           '</div></div>' +
           '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
-          '<button type="button" class="mwh-btn mwh-btn-switch" data-action="resource-toggle" data-id="' +
-          esc(entry.id) +
-          '">' +
-          (entry.enabled ? '已启用' : '已停用') +
-          '</button>' +
+          renderSwitchHtml({
+            checked: entry.enabled,
+            action: 'resource-toggle',
+            id: entry.id,
+            label: (entry.enabled ? '停用 ' : '启用 ') + (entry.displayName || entry.id),
+            title: entry.enabled ? '已启用，点击停用' : '已停用，点击启用'
+          }) +
           '<button type="button" class="mwh-icon-btn" data-action="resource-open-edit" data-id="' +
           esc(entry.id) +
           '" title="编辑">' +
@@ -3605,6 +3707,110 @@ function renderResources(settings) {
   return html;
 }
 
+/** 开关过渡时长（与 CSS 的 --mwh-dur-state 同值，见 docs/DESIGN.md 4.8）。 */
+const SWITCH_ANIM_MS = 180;
+
+/**
+ * 正在提交中的开关：key → 点击时刻。
+ *
+ * 一物两用：`has()` 拦截连点导致的相反双请求；`pendingSwitchMotionLeftMs()`
+ * 用它算出"还有多久动画才播完"，供 renderSubpanel 推迟整块重绘。
+ */
+const pendingSwitchKeys = new Map();
+
+/** 是否已经为当前这轮动画排过一次延迟重绘，避免每帧重复排。 */
+let switchRenderDeferred = false;
+
+/** 返回尚需等待的动画时长（ms）；没有开关在动时返回 0。 */
+function pendingSwitchMotionLeftMs() {
+  if (pendingSwitchKeys.size === 0) return 0;
+  const now = Date.now();
+  let left = 0;
+  pendingSwitchKeys.forEach(function (startedAt) {
+    const rest = SWITCH_ANIM_MS - (now - startedAt);
+    if (rest > left) left = rest;
+  });
+  return left;
+}
+
+/**
+ * 就地改开关外观：只写 class 与 aria-checked，不重建节点。
+ *
+ * 这是开关能动起来的前提——整块 innerHTML 重绘会让新节点一出生就是终点态，
+ * 浏览器没有"旧态 → 新态"的样式变化可过渡（见 docs/DESIGN.md 4.8 红线 5）。
+ */
+function paintSwitch(node, on) {
+  if (!node || !node.isConnected) return;
+  node.classList.toggle('is-on', Boolean(on));
+  node.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+/** 动作目标可能是开关本身，也可能是包着它的整行。 */
+function resolveSwitchNode(target) {
+  if (!target) return null;
+  if (target.getAttribute('role') === 'switch') return target;
+  return target.querySelector('[role="switch"]');
+}
+
+/** 至少让过渡播完再重绘，最多补 SWITCH_ANIM_MS。 */
+function holdSwitchMin(startedAt) {
+  const left = SWITCH_ANIM_MS - (Date.now() - startedAt);
+  if (left <= 0) return Promise.resolve();
+  return new Promise(function (resolve) {
+    setTimeout(resolve, left);
+  });
+}
+
+/**
+ * 渲染一枚 iOS 式开关。契约见 docs/DESIGN.md 4.1：
+ * - 必须是 button，保证 Enter / Space 原生可用；
+ * - role="switch" + aria-checked 必须随状态更新；
+ * - 列表行走 data-action="resource-toggle" + data-id，表单走 data-action="switch-bind" + data-bind。
+ */
+function renderSwitchHtml(options) {
+  const opts = options || {};
+  const checked = Boolean(opts.checked);
+  const action = opts.action || 'switch-bind';
+  let html =
+    '<button type="button" role="switch" aria-checked="' +
+    (checked ? 'true' : 'false') +
+    '" class="mwh-switch' +
+    (checked ? ' is-on' : '') +
+    (opts.className ? ' ' + opts.className : '') +
+    '"';
+  if (action) html += ' data-action="' + esc(action) + '"';
+  if (opts.bind) html += ' data-bind="' + esc(opts.bind) + '"';
+  if (opts.id) html += ' data-id="' + esc(opts.id) + '"';
+  if (opts.title) html += ' title="' + esc(opts.title) + '"';
+  if (opts.label) html += ' aria-label="' + esc(opts.label) + '"';
+  if (opts.disabled) html += ' disabled aria-disabled="true"';
+  html += '><span class="mwh-switch-dot"></span></button>';
+  return html;
+}
+
+/** 表单里的布尔行：左侧标题 + 右侧开关，整行可点。 */
+function renderSwitchRow(options) {
+  const opts = options || {};
+  return (
+    '<div class="mwh-switch-row" data-action="switch-bind-row" data-bind="' +
+    esc(opts.bind || '') +
+    '">' +
+    '<div style="min-width:0">' +
+    '<div class="mwh-switch-row-label">' +
+    esc(opts.label || '') +
+    '</div>' +
+    (opts.sub ? '<div class="mwh-switch-row-sub">' + esc(opts.sub) + '</div>' : '') +
+    '</div>' +
+    renderSwitchHtml({
+      checked: opts.checked,
+      bind: opts.bind,
+      title: opts.title,
+      label: opts.label
+    }) +
+    '</div>'
+  );
+}
+
 function renderSubpanel(force) {
   const root = document.getElementById('mwh-subpanel');
   if (!root) return;
@@ -3613,11 +3819,40 @@ function renderSubpanel(force) {
     return;
   }
   const body = document.getElementById('mwh-subpanel-body');
+  // 开关过渡期间推迟整块重绘。
+  //
+  // 服务端是"先广播 SSE 再回 200"，mwh:state-patch 会在请求返回前几十毫秒到达并
+  // 触发重绘；节点一旦被替换，动画就停在中途。这里按剩余动画时长推迟一次，
+  // 到点后强制重绘，拿到的仍是服务端真相（docs/DESIGN.md 4.8 红线 1/2）。
+  const motionLeftMs = pendingSwitchMotionLeftMs();
+  if (motionLeftMs > 0) {
+    if (!switchRenderDeferred) {
+      switchRenderDeferred = true;
+      setTimeout(function () {
+        switchRenderDeferred = false;
+        scheduleRender(true);
+      }, motionLeftMs + 16);
+    }
+    return;
+  }
   if (!force && body && body.contains(document.activeElement)) {
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
       state.subpanelDirty = true;
       return;
+    }
+  }
+  // 重绘会整体替换 body 的 DOM。先记住当前聚焦的是哪一枚开关，渲染后按
+  // data-bind / data-id 原样还原，键盘连续操作与 SSE 触发的重绘都不会把
+  // 焦点丢回 body。这里只比较属性值，不拼选择器，避免 id 里的引号破坏查询。
+  let switchFocusAttr = null;
+  let switchFocusKey = null;
+  const activeBeforeRender = document.activeElement;
+  if (body && activeBeforeRender && body.contains(activeBeforeRender) && activeBeforeRender.getAttribute) {
+    if (activeBeforeRender.getAttribute('role') === 'switch') {
+      if (activeBeforeRender.getAttribute('data-bind')) switchFocusAttr = 'data-bind';
+      else if (activeBeforeRender.getAttribute('data-id')) switchFocusAttr = 'data-id';
+      if (switchFocusAttr) switchFocusKey = activeBeforeRender.getAttribute(switchFocusAttr);
     }
   }
   const settings = getSettings();
@@ -3695,6 +3930,16 @@ function renderSubpanel(force) {
     const drawerW = drawer ? drawer.getBoundingClientRect().width : 320;
     return Math.max(280, window.innerWidth - 56 - drawerW - 32);
   });
+  // 把焦点还给重绘前正在操作的那一枚开关。
+  if (switchFocusAttr && switchFocusKey) {
+    const switchNodes = root.querySelectorAll('[role="switch"]');
+    for (let i = 0; i < switchNodes.length; i += 1) {
+      if (switchNodes[i].getAttribute(switchFocusAttr) === switchFocusKey) {
+        if (typeof switchNodes[i].focus === 'function') switchNodes[i].focus({ preventScroll: true });
+        break;
+      }
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -4517,6 +4762,30 @@ async function handleSubpanelAction(action, target) {
     scheduleRender(false);
     return;
   }
+  // 表单布尔项统一走开关（role="switch" 的 button）。点击不会触发 input/change
+  // 监听，因此状态必须在这里翻转；焦点由 renderSubpanel 依据 activeElement 还原。
+  if (action === 'switch-bind' || action === 'switch-bind-row') {
+    const switchBind = target.getAttribute('data-bind') || '';
+    if (!switchBind) return;
+    const switchNode = resolveSwitchNode(target);
+    // 这三个布尔值只影响开关外观与提交载荷，面板内没有第二处依赖它们，
+    // 因此就地改 class 即可，**不重绘**——重绘会把节点换掉，过渡就没了。
+    if (switchBind.indexOf('acp.') === 0 && switchBind.slice(4) === 'enabled') {
+      state.ui.acp.enabled = !state.ui.acp.enabled;
+      paintSwitch(switchNode, state.ui.acp.enabled);
+      return;
+    }
+    if (switchBind.indexOf('resource.') === 0) {
+      if (!state.ui.resourceForm) state.ui.resourceForm = defaultResourceForm();
+      const switchKey = switchBind.slice(9);
+      if (switchKey === 'enabled' || switchKey === 'readonly') {
+        state.ui.resourceForm[switchKey] = !state.ui.resourceForm[switchKey];
+        paintSwitch(switchNode, state.ui.resourceForm[switchKey]);
+        return;
+      }
+    }
+    return;
+  }
   if (action === 'copy') {
     const copyVal = target.getAttribute('data-copy');
     if (copyVal && copyVal.includes('****')) {
@@ -4690,8 +4959,24 @@ async function handleSubpanelAction(action, target) {
     return;
   }
   if (action === 'toggle-auto-downgrade') {
-    await invokeDaemon('mwh:toggle-auto-downgrade', { enabled: !settings.autoDowngradeTwoHours });
-    await refreshSettings();
+    // 先按目标态上色让过渡立刻开始，等服务端确认后再重绘（重绘会换掉节点）。
+    if (pendingSwitchKeys.has('auto-downgrade')) return;
+    const downgradeOn = Boolean(settings.autoDowngradeTwoHours);
+    const startedAt = Date.now();
+    const switchEl = resolveSwitchNode(target);
+    pendingSwitchKeys.set('auto-downgrade', startedAt);
+    paintSwitch(switchEl, !downgradeOn);
+    try {
+      await invokeDaemon('mwh:toggle-auto-downgrade', { enabled: !downgradeOn });
+      await holdSwitchMin(startedAt);
+      await refreshSettings();
+    } catch (err) {
+      if (switchEl && switchEl.isConnected) paintSwitch(switchEl, downgradeOn);
+      else scheduleRender(true);
+      showToast('切换失败: ' + String((err && err.message) || err));
+    } finally {
+      pendingSwitchKeys.delete('auto-downgrade');
+    }
     return;
   }
   if (action === 'emergency-kill') {
@@ -4825,8 +5110,24 @@ async function handleSubpanelAction(action, target) {
     const id = target.getAttribute('data-id');
     const profile = settings.acpProfiles.find(function (p) { return p.id === id; });
     if (!profile) return;
-    await invokeDaemon('mwh:acp-toggle', { id: id, enabled: profile.enabled === false });
-    await refreshSettings();
+    const pendingKey = 'acp:' + id;
+    if (pendingSwitchKeys.has(pendingKey)) return;
+    const acpWasOn = profile.enabled !== false;
+    const startedAt = Date.now();
+    const switchEl = resolveSwitchNode(target);
+    pendingSwitchKeys.set(pendingKey, startedAt);
+    paintSwitch(switchEl, !acpWasOn);
+    try {
+      await invokeDaemon('mwh:acp-toggle', { id: id, enabled: !acpWasOn });
+      await holdSwitchMin(startedAt);
+      await refreshSettings();
+    } catch (err) {
+      if (switchEl && switchEl.isConnected) paintSwitch(switchEl, acpWasOn);
+      else scheduleRender(true);
+      showToast('切换失败: ' + String((err && err.message) || err));
+    } finally {
+      pendingSwitchKeys.delete(pendingKey);
+    }
     return;
   }
   if (action === 'acp-delete') {
@@ -4966,7 +5267,8 @@ async function handleSubpanelAction(action, target) {
           args: String(form.args || '').split(/\s+/).filter(Boolean),
           cwd: String(form.cwd || '').trim() || undefined,
           httpUrl: String(form.httpUrl || '').trim() || undefined,
-          skillDirDisplay: String(form.skillDir || '').trim() || undefined,
+          // 后端契约（src/resources/manager.ts UpdateResourceInput）只认 skillDir
+          skillDir: String(form.skillDir || '').trim() || undefined,
           readonly: Boolean(form.readonly),
         };
         await daemonHttp('POST', '/api/v1/resources/update', { id: form.editingId, ...patch });
@@ -4980,8 +5282,10 @@ async function handleSubpanelAction(action, target) {
           args: String(form.args || '').split(/\s+/).filter(Boolean),
           cwd: String(form.cwd || '').trim() || undefined,
           httpUrl: String(form.httpUrl || '').trim() || undefined,
-          skillDirDisplay: String(form.skillDir || '').trim() || undefined,
-          enabled: Boolean(form.enabled),
+          // 后端契约（src/resources/manager.ts AddResourceInput）：字段名是
+          // skillDir 与 enable，写成 skillDirDisplay / enabled 会被静默丢弃。
+          skillDir: String(form.skillDir || '').trim() || undefined,
+          enable: Boolean(form.enabled),
           readonly: false,
         };
         await daemonHttp('POST', '/api/v1/resources', body);
@@ -5007,11 +5311,23 @@ async function handleSubpanelAction(action, target) {
       return e.id === id;
     });
     if (!entry) return;
+    const pendingKey = 'res:' + id;
+    if (pendingSwitchKeys.has(pendingKey)) return;
+    const resWasOn = Boolean(entry.enabled);
+    const startedAt = Date.now();
+    const switchEl = resolveSwitchNode(target);
+    pendingSwitchKeys.set(pendingKey, startedAt);
+    paintSwitch(switchEl, !resWasOn);
     try {
-      await daemonHttp('POST', '/api/v1/resources/toggle', { id: id, enabled: !entry.enabled });
+      await daemonHttp('POST', '/api/v1/resources/toggle', { id: id, enabled: !resWasOn });
+      await holdSwitchMin(startedAt);
       await refreshSettings();
     } catch (err) {
+      if (switchEl && switchEl.isConnected) paintSwitch(switchEl, resWasOn);
+      else scheduleRender(true);
       showToast('切换失败: ' + String((err && err.message) || err));
+    } finally {
+      pendingSwitchKeys.delete(pendingKey);
     }
     return;
   }

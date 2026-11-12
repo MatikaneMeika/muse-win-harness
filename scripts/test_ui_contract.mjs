@@ -194,6 +194,49 @@ for (const [label, src] of [
   );
 }
 
+/* 8b. Switch motion contract: in-place painting + tokenised transition - */
+// 开关必须原地绘制，靠整块 innerHTML 重绘会让过渡失效（见 docs/DESIGN.md 4.8 红线 1）。
+assert(
+  /\bfunction paintSwitch\s*\(/.test(preloadSource),
+  'preload is missing paintSwitch() — switch toggles must paint in place, not re-render'
+);
+assert(
+  /pendingSwitchKeys/.test(preloadSource),
+  'preload is missing pendingSwitchKeys double-click guard'
+);
+assert(
+  /holdSwitchMin/.test(preloadSource),
+  'preload is missing holdSwitchMin() — requests must not cut the switch animation short'
+);
+// SSE 先于 HTTP 响应到达，重绘必须给正在播放的过渡让路（DESIGN.md 4.8 红线 2）。
+assert(
+  /pendingSwitchMotionLeftMs/.test(preloadSource) && /switchRenderDeferred/.test(preloadSource),
+  'preload is missing the render hold that defers innerHTML rebuild during switch motion'
+);
+// 用带前导换行的选择器切片，避免被 .mwh-light 变体或后代规则误命中。
+const switchBlock = cssBlock(preloadSource, '\n.mwh-switch {');
+assert(
+  /--mwh-dur-state/.test(switchBlock) && /--mwh-dur-fast/.test(switchBlock),
+  '.mwh-switch transition must reference --mwh-dur-state / --mwh-dur-fast tokens'
+);
+const switchDotBlock = cssBlock(preloadSource, '\n.mwh-switch-dot {');
+assert(
+  /--mwh-ease-standard/.test(switchDotBlock),
+  '.mwh-switch-dot must use --mwh-ease-standard'
+);
+const reducedMotionStart = preloadSource.indexOf('@media (prefers-reduced-motion: reduce)');
+assert(reducedMotionStart !== -1, 'preload is missing the prefers-reduced-motion block');
+if (reducedMotionStart !== -1) {
+  const reducedBlock = preloadSource.slice(reducedMotionStart, preloadSource.indexOf('\n}', reducedMotionStart));
+  assert(/\.mwh-switch,/.test(reducedBlock), 'prefers-reduced-motion block must cover .mwh-switch');
+  assert(/\.mwh-switch-dot,/.test(reducedBlock), 'prefers-reduced-motion block must cover .mwh-switch-dot');
+  assert(/none !important/.test(reducedBlock), 'prefers-reduced-motion block must zero the transitions');
+}
+assert(
+  /:root \{[^}]*--mwh-dur-state/.test(preloadSource),
+  'motion tokens must be declared on :root so overlay/backdrop elements can use them'
+);
+
 /* 9. Full-screen backdrop (no left gap / black top border) ----------- */
 
 const backdropBlock = cssBlock(preloadSource, '.mwh-drawer-backdrop {');

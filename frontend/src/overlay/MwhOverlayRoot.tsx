@@ -36,7 +36,9 @@ export const MwhOverlayRoot: React.FC = () => {
             initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
-            transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+            transition={
+              prefersReducedMotion ? { duration: 0 } : { duration: 0.15, ease: [0.22, 1, 0.36, 1] }
+            }
             className="fixed top-14 right-4 z-50 pointer-events-auto px-4 py-2 rounded-full text-xs font-medium bg-[#18181B]/95 text-white border border-white/[0.06] shadow-lg backdrop-blur-md"
           >
             {state.lastCopiedToast}

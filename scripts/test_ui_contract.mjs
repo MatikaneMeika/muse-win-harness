@@ -117,6 +117,15 @@ for (const channel of [...used].sort()) {
   assert(registered.has(channel), `IPC channel not registered in main.cjs: ${channel}`);
 }
 assert(used.size > 0, 'no mwh:* IPC channels found in preloads');
+assert(
+  registered.has('mwh:daemon-http'),
+  'main.cjs must register mwh:daemon-http so the resource library can reach the daemon'
+);
+assert(
+  /async function daemonHttp[\s\S]{0,800}ipcRenderer\.invoke\(\s*['"]mwh:daemon-http['"]/.test(preloadSource),
+  'daemonHttp must proxy through mwh:daemon-http IPC, not a page-origin fetch to 127.0.0.1 (Chromium blocks that with Failed to fetch)'
+);
+
 
 /* 5. Drawer / sub-panel / sections / island ----------------------------- */
 

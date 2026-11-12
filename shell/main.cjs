@@ -1336,6 +1336,26 @@ function registerIpc() {
     daemonFetch('POST', '/api/v1/acp/probe', { command: payload?.command })
   );
 
+  // Resource-library mutations used to fetch 127.0.0.1 from the Muse page
+  // origin (HTTPS). Chromium blocks that as a private-network / mixed-content
+  // request and the panel shows "Failed to fetch" without the daemon ever
+  // seeing the click. Main-process fetch is not subject to that restriction.
+  ipcMain.handle('mwh:daemon-http', (_event, payload) => {
+    const method = String((payload && payload.method) || 'GET').toUpperCase();
+    const route = String((payload && payload.path) || '');
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      return { ok: false, error: 'INVALID_METHOD' };
+    }
+    if (!/^\/api\/v1\/[A-Za-z0-9/_-]*$/.test(route)) {
+      return { ok: false, error: 'INVALID_PATH' };
+    }
+    const slow =
+      route.includes('/resources/toggle') ||
+      route.includes('/resources/probe') ||
+      route.includes('/resources/scan');
+    return daemonFetch(method, route, payload && payload.body, slow ? 60000 : undefined);
+  });
+
   ipcMain.handle('mwh:worktree-spawn', (_event, payload) =>
     daemonFetch('POST', '/api/v1/worktrees/spawn', {
       agentId: payload?.agentId || 'builtin',

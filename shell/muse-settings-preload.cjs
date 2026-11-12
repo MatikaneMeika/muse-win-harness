@@ -3308,21 +3308,14 @@ const SECTION_HEADERS = {
 };
 
 async function daemonHttp(method, path, body) {
-  const token = await fetchRealTokenIfNeeded();
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-  const init = { method: method, headers: headers };
-  if (body !== undefined) {
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch('http://127.0.0.1:19820' + path, init);
-  const data = await res.json().catch(function () {
-    return {};
-  });
-  if (!res.ok || data.ok === false) {
-    throw new Error(data.error || data.reason || data.message || ('HTTP ' + res.status));
-  }
-  return data;
+  // Must go through the Electron main process. A page-origin fetch to
+  // http://127.0.0.1:19820 is blocked by Chromium (private network / mixed
+  // content) when this panel is injected into the Muse HTTPS page, and the
+  // user only sees "Failed to fetch".
+  const res = await ipcRenderer.invoke('mwh:daemon-http', { method: method, path: path, body: body });
+  const failure = daemonFailure(res);
+  if (failure) throw new Error(failure);
+  return res;
 }
 
 function renderResources(settings) {

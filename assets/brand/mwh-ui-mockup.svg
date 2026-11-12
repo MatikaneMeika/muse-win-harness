@@ -1,118 +1,242 @@
 <svg width="1280" height="860" viewBox="0 0 1280 860" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="mwhBlue" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="mwhBlue" x1="100%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#2B7FFF"/>
       <stop offset="100%" stop-color="#1B6FEF"/>
     </linearGradient>
+    <filter id="panelShadow" x="-8%" y="-6%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#111112" flood-opacity="0.14"/>
+    </filter>
+    <filter id="islandShadow" x="-10%" y="-10%" width="120%" height="124%">
+      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#111112" flood-opacity="0.22"/>
+    </filter>
   </defs>
 
-  <!-- Desktop -->
+  <!-- Desktop surround -->
   <rect width="1280" height="860" fill="#E6E4DE"/>
 
-  <!-- Frameless window -->
-  <rect x="16" y="16" width="1248" height="828" rx="12" fill="#FAF9F6"/>
+  <!-- Frameless window (x=16, y=16, w=1248, h=828, rx=12) -->
+  <rect x="16" y="16" width="1248" height="828" rx="12" fill="#F7F6F2"/>
+  <rect x="16.5" y="16.5" width="1247" height="827" rx="11.5" stroke="#1D1D1F" stroke-opacity="0.08"/>
 
-  <!-- 32px titlebar -->
-  <rect x="16" y="16" width="1248" height="32" rx="12" fill="#F4F4F5"/>
-  <rect x="16" y="32" width="1248" height="16" fill="#F4F4F5"/>
-  <circle cx="36" cy="32" r="6" fill="#2B7FFF"/>
-  <text x="48" y="37" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">Muse-Win-Harness</text>
-  <rect x="178" y="22" width="54" height="20" rx="10" fill="#000000" fill-opacity="0.05"/>
-  <text x="188" y="36" fill="#52525B" font-family="Segoe UI, system-ui, sans-serif" font-size="11">v0.1.0</text>
-  <line x1="1188" y1="32" x2="1198" y2="32" stroke="#52525B" stroke-width="1.4"/>
-  <rect x="1220" y="27" width="10" height="10" fill="none" stroke="#52525B" stroke-width="1.4"/>
-  <path d="M1252 27 L1262 37 M1262 27 L1252 37" stroke="#52525B" stroke-width="1.4"/>
+  <!-- 1. Custom Titlebar (shell/chrome.html: height 32px, y=16..48, #F4F4F5, 15px stroke logo) -->
+  <path d="M 16 28 C 16 21.3726 21.3726 16 28 16 H 1252 C 1258.63 16 1264 21.3726 1264 28 V 48 H 16 V 28 Z" fill="#F4F4F5"/>
+  <line x1="16" y1="48" x2="1264" y2="48" stroke="#000000" stroke-opacity="0.06"/>
 
-  <!-- Injected 56px activity rail (muse.ai column, MWH slot only) -->
-  <rect x="16" y="48" width="56" height="796" fill="#EFECE6"/>
-  <rect x="22" y="60" width="44" height="44" rx="11" fill="#2B7FFF" fill-opacity="0.18"/>
-  <rect x="24" y="76" width="3.5" height="16" rx="2" fill="#2B7FFF"/>
-  <circle cx="44" cy="82" r="6" fill="#2B7FFF"/>
-  <rect x="22" y="116" width="44" height="44" rx="11" fill="#000000" fill-opacity="0.04"/>
-  <rect x="22" y="168" width="44" height="44" rx="11" fill="#000000" fill-opacity="0.04"/>
+  <!-- Titlebar Left Brand: padding-left 10px -> x=26, y=24.5 (15x15 SVG viewBox 0 0 120 120 -> scale 0.125) -->
+  <g transform="translate(26, 24.5) scale(0.125)">
+    <g transform="rotate(12 60 60)">
+      <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+            fill="none" stroke="url(#mwhBlue)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="88" cy="82" r="11" fill="url(#mwhBlue)"/>
+    </g>
+  </g>
+  <text x="49" y="36.5" fill="#1A1A1A" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600" letter-spacing="-0.01em">Muse-Win-Harness</text>
+  <rect x="168" y="23" width="48" height="18" rx="9" fill="#000000" fill-opacity="0.05" stroke="#000000" stroke-opacity="0.1"/>
+  <text x="176" y="35.5" fill="#52525B" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="500">v0.1.0</text>
 
-  <!-- Abstract light session canvas (not a screenshot) -->
-  <rect x="72" y="48" width="1192" height="796" fill="#F7F6F2"/>
-  <rect x="420" y="88" width="420" height="18" rx="9" fill="#E6E4DE"/>
-  <rect x="360" y="128" width="540" height="72" rx="14" fill="#FFFFFF"/>
-  <rect x="380" y="148" width="280" height="10" rx="5" fill="#E6E4DE"/>
-  <rect x="380" y="168" width="200" height="10" rx="5" fill="#E6E4DE"/>
-  <rect x="720" y="220" width="360" height="56" rx="14" fill="#FFFFFF"/>
-  <rect x="740" y="242" width="220" height="10" rx="5" fill="#E6E4DE"/>
+  <!-- Titlebar Right Window Controls (3 x 44px buttons: 1132..1176, 1176..1220, 1220..1264) -->
+  <line x1="1149" y1="32" x2="1159" y2="32" stroke="#52525B" stroke-width="1.2"/>
+  <rect x="1193.5" y="27.5" width="9" height="9" fill="none" stroke="#52525B" stroke-width="1.2"/>
+  <path d="M 1237 27 L 1247 37 M 1247 27 L 1237 37" stroke="#52525B" stroke-width="1.2"/>
 
-  <!-- Backdrop -->
-  <rect x="72" y="48" width="1192" height="796" fill="#000000" fill-opacity="0.18"/>
+  <!-- 2. Muse.ai Client Area (y=48..844, height=796px) -->
+  <!-- Left 56px Activity Rail (x=16..72, y=48..844) -->
+  <path d="M 16 48 H 72 V 844 H 28 C 21.3726 844 16 838.627 16 832 V 48 Z" fill="#EFECE6"/>
+  <line x1="72" y1="48" x2="72" y2="844" stroke="#000000" stroke-opacity="0.06"/>
 
-  <!-- Drawer 300px / r20 / #efece6 -->
-  <g transform="translate(88, 108)">
-    <rect width="300" height="520" rx="20" fill="#EFECE6"/>
-    <rect width="300" height="56" rx="20" fill="#EFECE6"/>
-    <line x1="0" y1="56" x2="300" y2="56" stroke="#000000" stroke-opacity="0.06"/>
-    <text x="18" y="34" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13.5" font-weight="600">Muse-Win-Harness</text>
-    <rect x="198" y="18" width="82" height="22" rx="11" fill="#FFFFFF"/>
-    <circle cx="210" cy="29" r="3.5" fill="#16A34A"/>
-    <text x="218" y="33" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="11">宿主就绪</text>
+  <!-- Host app top navigation placeholders (neutral, understated) -->
+  <rect x="26" y="64" width="36" height="36" rx="10" fill="#000000" fill-opacity="0.05"/>
+  <rect x="35" y="75" width="18" height="14" rx="3" fill="none" stroke="#63636A" stroke-width="1.6"/>
+  <rect x="26" y="112" width="36" height="36" rx="10" fill="#000000" fill-opacity="0.03"/>
+  <circle cx="44" cy="130" r="7" fill="none" stroke="#63636A" stroke-width="1.6"/>
 
-    <rect x="16" y="72" width="268" height="78" rx="12" fill="#F7F6F2"/>
-    <text x="28" y="94" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">Cloudflare Quick Tunnel</text>
-    <text x="28" y="114" fill="#1B6FEF" font-family="Consolas, ui-monospace, monospace" font-size="11">https://example.trycloudflare.com/mcp</text>
-    <rect x="28" y="124" width="110" height="18" rx="9" fill="url(#mwhBlue)"/>
-    <text x="44" y="137" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">复制配对口令</text>
+  <!-- Injected MWH Activity Slot (.mwh-activity-slot / .mwh-activity-btn.active, 44x44 at x=22, y=732 above bottom action icon) -->
+  <g transform="translate(22, 732)">
+    <rect width="44" height="44" rx="11" fill="#2B7FFF" fill-opacity="0.18"/>
+    <!-- .mwh-activity-dot (left: 2px, width: 3.5px, height: 16px, rx: 2px) -->
+    <rect x="2" y="14" width="3.5" height="16" rx="1.75" fill="#2B7FFF"/>
+    <!-- SVG_LOGO (36x36 centred inside 44x44 -> translate(4,4) scale(0.3)) -->
+    <g transform="translate(4, 4) scale(0.3)">
+      <g transform="rotate(12 60 60)">
+        <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+              fill="none" stroke="url(#mwhBlue)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="88" cy="82" r="11" fill="#2B7FFF"/>
+      </g>
+    </g>
+  </g>
+  <!-- Host bottom settings placeholder -->
+  <rect x="26" y="788" width="36" height="36" rx="10" fill="#000000" fill-opacity="0.04"/>
+  <circle cx="44" cy="806" r="6.5" fill="none" stroke="#63636A" stroke-width="1.5"/>
 
-    <text x="18" y="174" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="600">权限模式</text>
+  <!-- Abstract Muse Chat Canvas (x=72..1264, y=48..844) -->
+  <rect x="460" y="88" width="360" height="16" rx="8" fill="#E6E4DE"/>
+  <rect x="460" y="124" width="680" height="84" rx="16" fill="#FFFFFF"/>
+  <rect x="484" y="146" width="340" height="10" rx="5" fill="#E6E4DE"/>
+  <rect x="484" y="166" width="480" height="10" rx="5" fill="#E6E4DE"/>
+  <rect x="484" y="186" width="240" height="10" rx="5" fill="#E6E4DE"/>
 
-    <rect x="16" y="184" width="268" height="44" rx="10" fill="#F7F6F2"/>
-    <text x="30" y="211" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5">计划模式</text>
+  <rect x="680" y="228" width="460" height="64" rx="16" fill="#FFFFFF"/>
+  <rect x="704" y="250" width="300" height="10" rx="5" fill="#E6E4DE"/>
+  <rect x="704" y="270" width="190" height="10" rx="5" fill="#E6E4DE"/>
 
-    <rect x="16" y="234" width="268" height="48" rx="10" fill="#FFFFFF" stroke="#2B7FFF" stroke-width="1.5"/>
-    <text x="30" y="254" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">变更前确认 · 默认</text>
-    <text x="30" y="272" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">写文件与命令前浮岛确认</text>
+  <!-- Subtle backdrop dimming over chat canvas when drawer is open -->
+  <path d="M 72 48 H 1264 V 832 C 1264 838.627 1258.63 844 1252 844 H 72 V 48 Z" fill="#000000" fill-opacity="0.12"/>
 
-    <rect x="16" y="288" width="268" height="44" rx="10" fill="#F7F6F2"/>
-    <text x="30" y="315" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5">自主模式</text>
+  <!-- 3. Primary Settings Drawer (.mwh-drawer: left=var(--mwh-rail)=56px -> x=72; top=12.5vh -> y=148; height=75vh -> h=596; w=336; rx=20) -->
+  <g transform="translate(72, 148)" filter="url(#panelShadow)">
+    <rect width="336" height="596" rx="20" fill="#EFECE6"/>
+    <rect x="0.5" y="0.5" width="335" height="595" rx="19.5" stroke="#000000" stroke-opacity="0.06"/>
 
-    <rect x="16" y="338" width="268" height="44" rx="10" fill="#F7F6F2"/>
-    <text x="30" y="365" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5">完全访问</text>
+    <!-- Drawer Header (56px high) -->
+    <line x1="0" y1="56" x2="336" y2="56" stroke="#000000" stroke-opacity="0.06"/>
+    <!-- SVG_LOGO (36x36 at x=16, y=10) -->
+    <g transform="translate(16, 10) scale(0.3)">
+      <g transform="rotate(12 60 60)">
+        <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+              fill="none" stroke="url(#mwhBlue)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="88" cy="82" r="11" fill="#2B7FFF"/>
+      </g>
+    </g>
+    <text x="61" y="33" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13.5" font-weight="600">本地宿主引擎 (MWH)</text>
+    <!-- Close button -->
+    <path d="M 303 23 L 313 33 M 313 23 L 303 33" stroke="#63636A" stroke-width="1.8" stroke-linecap="round"/>
 
-    <rect x="16" y="400" width="178" height="36" rx="10" fill="#FFFFFF"/>
-    <text x="36" y="423" fill="#1B6FEF" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">打开高级配置</text>
-    <rect x="202" y="400" width="82" height="36" rx="10" fill="#FEECEC"/>
-    <text x="218" y="423" fill="#B3261E" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">全局急停</text>
+    <!-- Card 1: 权限模式 (2x2 .mwh-mode-grid) -->
+    <g transform="translate(14, 70)">
+      <rect width="308" height="172" rx="14" fill="#F7F6F2"/>
+      <!-- Shield icon + title + 2h pill -->
+      <path d="M 21 25 C 21 25 26 22.5 26 18.5 V 14 L 21 12 L 16 14 V 18.5 C 16 22.5 21 25 21 25 Z" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linejoin="round"/>
+      <text x="32" y="23" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">权限模式</text>
+      <rect x="200" y="10" width="94" height="20" rx="10" fill="#22C55E" fill-opacity="0.12"/>
+      <text x="212" y="24" fill="#16A34A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">2h 降级 · 120m</text>
+
+      <!-- 2x2 Mode Cards -->
+      <!-- (1,1) 计划 (只读) -->
+      <rect x="14" y="38" width="136" height="56" rx="12" fill="#E6E4DE"/>
+      <text x="26" y="60" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">计划 (只读)</text>
+      <text x="26" y="79" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">仅探查不修改</text>
+
+      <!-- (1,2) 变更前确认 (Active) -->
+      <rect x="158" y="38" width="136" height="56" rx="12" fill="#DAD7CE" stroke="#1D1D1F" stroke-opacity="0.16"/>
+      <text x="170" y="60" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">变更前确认</text>
+      <polyline points="278,51 273,57 270,54" fill="none" stroke="#2B7FFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="170" y="79" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="11">写前弹窗确认</text>
+
+      <!-- (2,1) 自主模式 -->
+      <rect x="14" y="102" width="136" height="56" rx="12" fill="#E6E4DE"/>
+      <text x="26" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">自主模式</text>
+      <text x="26" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">自动快照放行</text>
+
+      <!-- (2,2) 完全访问 -->
+      <rect x="158" y="102" width="136" height="56" rx="12" fill="#E6E4DE"/>
+      <text x="170" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">完全访问</text>
+      <text x="170" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">跨盘普通放行</text>
+    </g>
+
+    <!-- Card 2: 连接端点与凭据 -->
+    <g transform="translate(14, 252)">
+      <rect width="308" height="202" rx="14" fill="#F7F6F2"/>
+      <text x="16" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">连接端点与凭据</text>
+      <rect x="148" y="11" width="66" height="20" rx="10" fill="#22C55E" fill-opacity="0.14"/>
+      <circle cx="159" cy="21" r="3" fill="#22C55E"/>
+      <text x="167" y="25" fill="#16A34A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">公网活跃</text>
+      <rect x="220" y="9" width="74" height="24" rx="8" fill="#E6E4DE"/>
+      <text x="235" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="500">停止隧道</text>
+
+      <!-- MCP Row -->
+      <rect x="14" y="40" width="280" height="32" rx="9" fill="#E6E4DE"/>
+      <text x="24" y="60" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11">MCP</text>
+      <text x="58" y="60" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">https://example.trycloudflare.com/mcp</text>
+
+      <!-- REST Row -->
+      <rect x="14" y="78" width="280" height="32" rx="9" fill="#E6E4DE"/>
+      <text x="24" y="98" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11">REST</text>
+      <text x="58" y="98" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">https://example.trycloudflare.com/api/v1</text>
+
+      <!-- Token Row -->
+      <rect x="14" y="116" width="280" height="32" rx="9" fill="#E6E4DE"/>
+      <text x="24" y="136" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11">Token</text>
+      <text x="64" y="136" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">mwh_live_************************</text>
+
+      <!-- 2-Column Pairing Buttons -->
+      <rect x="14" y="156" width="136" height="32" rx="10" fill="url(#mwhBlue)"/>
+      <text x="44" y="176" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">复制配对口令</text>
+      <rect x="158" y="156" width="136" height="32" rx="10" fill="#E6E4DE"/>
+      <text x="184" y="176" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="500">复制 MCP JSON</text>
+    </g>
+
+    <!-- Card 3: 打开高级配置中心 (.mwh-adv-hero-card) -->
+    <g transform="translate(14, 464)">
+      <rect width="308" height="60" rx="14" fill="#E6E4DE"/>
+      <rect x="14" y="13" width="34" height="34" rx="10" fill="#2B7FFF" fill-opacity="0.16"/>
+      <rect x="23" y="22" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#2B7FFF" stroke-width="1.6"/>
+      <rect x="32.5" y="22" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#2B7FFF" stroke-width="1.6"/>
+      <rect x="23" y="31.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#2B7FFF" stroke-width="1.6"/>
+      <rect x="32.5" y="31.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#2B7FFF" stroke-width="1.6"/>
+      <text x="58" y="28" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">打开高级配置中心</text>
+      <text x="58" y="45" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">网络隧道 · 权限边界 · 工作区 · ACP · 快照</text>
+      <rect x="236" y="20" width="56" height="20" rx="10" fill="#000000" fill-opacity="0.05"/>
+      <text x="244" y="33.5" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10" font-weight="500">5 个配置域</text>
+    </g>
+
+    <!-- Drawer Footer (2 status rows at bottom y=540..596) -->
+    <path d="M 0 540 H 336 V 576 C 336 587.046 327.046 596 316 596 H 20 C 8.9543 596 0 587.046 0 576 V 540 Z" fill="#E6E4DE"/>
+    <line x1="0" y1="540" x2="336" y2="540" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="20" cy="556" r="3.5" fill="#22C55E"/>
+    <text x="30" y="560" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">宿主守护就绪</text>
+    <text x="232" y="560" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="10.5">PID 14820 · 42 MB</text>
+
+    <circle cx="20" cy="576" r="3.5" fill="#22C55E"/>
+    <text x="30" y="580" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">Muse 连通: 已连通 Muse 连接器</text>
+    <text x="282" y="580" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="10.5">ONLINE</text>
   </g>
 
-  <!-- Expanded approval island 624x384 r20 -->
-  <g transform="translate(430, 400)">
-    <rect width="624" height="384" rx="20" fill="#E6E4DE"/>
-    <rect width="624" height="56" fill="#E6E4DE" rx="20"/>
-    <circle cx="28" cy="28" r="6" fill="#F59E0B"/>
-    <text x="44" y="33" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">等待本地执行确认</text>
-    <rect x="188" y="16" width="118" height="22" rx="11" fill="#FFFFFF"/>
-    <text x="200" y="32" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">WAITING_APPROVAL</text>
-    <rect x="540" y="14" width="68" height="28" rx="8" fill="#FFFFFF"/>
-    <text x="552" y="33" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">收起</text>
-
-    <text x="24" y="84" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="700">fs_mutate · write</text>
-    <text x="24" y="108" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="12">工作区/demo/src/app.ts</text>
-    <text x="24" y="132" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="12">批准后自动写前 Git Shadow 快照 · 回执 CONSUMED</text>
-
-    <rect x="24" y="156" width="576" height="140" rx="12" fill="#F7F6F2"/>
-    <text x="40" y="184" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="12">+ export function boot() {</text>
-    <text x="40" y="206" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="12">+   return startDaemon();</text>
-    <text x="40" y="228" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="12">+ }</text>
-    <text x="40" y="262" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">medium · once · 写前快照 chk_demo</text>
-
-    <rect x="250" y="316" width="112" height="36" rx="18" fill="url(#mwhBlue)"/>
-    <text x="270" y="339" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">允许一次</text>
-    <rect x="372" y="316" width="80" height="36" rx="18" fill="#FFFFFF"/>
-    <text x="394" y="339" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">拒绝</text>
-    <rect x="462" y="316" width="80" height="36" rx="18" fill="#FEECEC"/>
-    <text x="484" y="339" fill="#B3261E" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">强杀</text>
+  <!-- 4. Bottom-Right Approval Floating Island (.mwh-approval-island: default dock bottom-right, non-overlapping with drawer) -->
+  <!-- Collapsed Capsule preview badge (108x42, shown above right to illustrate capsule state) -->
+  <g transform="translate(1132, 368)" filter="url(#panelShadow)">
+    <rect width="108" height="42" rx="21" fill="#E6E4DE" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="24" cy="21" r="4.5" fill="#F59E0B"/>
+    <text x="36" y="25.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">待授权</text>
   </g>
+  <text x="1008" y="393" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11.5">收起态胶囊 (单击切换) →</text>
 
-  <!-- Capsule 108x42 -->
-  <g transform="translate(1148, 792)">
-    <rect width="108" height="42" rx="21" fill="#E6E4DE"/>
-    <circle cx="18" cy="21" r="5" fill="#F59E0B"/>
-    <text x="32" y="26" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">待授权</text>
+  <!-- Expanded Approval Island (624x372 at x=616, y=428) -->
+  <g transform="translate(616, 428)" filter="url(#islandShadow)">
+    <rect width="624" height="372" rx="20" fill="#E6E4DE"/>
+    <rect x="0.5" y="0.5" width="623" height="371" rx="19.5" stroke="#000000" stroke-opacity="0.08"/>
+
+    <!-- Island Header (52px high) -->
+    <path d="M 24 20 L 16 34 H 32 L 24 20 Z" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linejoin="round"/>
+    <text x="40" y="32" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="600">等待本机执行授权 · Muse Cloud MCP</text>
+    <text x="424" y="31" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">风险 MEDIUM · 写前自动快照</text>
+    <!-- Collapse chevron button -->
+    <rect x="584" y="12" width="28" height="28" rx="8" fill="#000000" fill-opacity="0.04"/>
+    <polyline points="593,24 598,29 603,24" fill="none" stroke="#63636A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Island Body -->
+    <text x="18" y="72" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12">请求修改工作区文件（批准后自动生成 Git Shadow 写前快照，随时可一键回滚）：</text>
+
+    <!-- Code box (--mwh-code: #F2F1EC) -->
+    <rect x="16" y="86" width="592" height="218" rx="12" fill="#F2F1EC"/>
+    <text x="32" y="114" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">$ fs_mutate (action="edit", mode="confirm")</text>
+    <text x="32" y="138" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">目标路径: &lt;workspace&gt;/src/app.ts</text>
+    <line x1="32" y1="152" x2="592" y2="152" stroke="#000000" stroke-opacity="0.06"/>
+    <text x="32" y="176" fill="#B3261E" font-family="Consolas, ui-monospace, monospace" font-size="12">- export function boot() { return false; }</text>
+    <text x="32" y="200" fill="#16A34A" font-family="Consolas, ui-monospace, monospace" font-size="12">+ export function boot() { return startDaemon(); }</text>
+    <text x="32" y="232" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">写前检查点: chk_2026_demo · 批准后自动写入脱敏回执 CONSUMED</text>
+    <text x="32" y="256" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">安全围栏: realpath 物理路径校验通过 · 非敏感凭据文件</text>
+
+    <!-- Island Footer (.mwh-island-foot: right-aligned 3 pill buttons) -->
+    <g transform="translate(0, 320)">
+      <rect x="284" y="0" width="76" height="34" rx="17" fill="#000000" fill-opacity="0.06"/>
+      <text x="309" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">拒绝</text>
+
+      <rect x="368" y="0" width="132" height="34" rx="17" fill="#000000" fill-opacity="0.06"/>
+      <text x="386" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">本工作区始终允许</text>
+
+      <rect x="508" y="0" width="100" height="34" rx="17" fill="url(#mwhBlue)"/>
+      <text x="533" y="21.5" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">允许一次</text>
+    </g>
   </g>
 </svg>

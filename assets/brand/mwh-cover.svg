@@ -8,12 +8,29 @@
       <stop offset="0%" stop-color="#2B7FFF"/>
       <stop offset="100%" stop-color="#1B6FEF"/>
     </linearGradient>
+    <filter id="logoShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#1B6FEF" flood-opacity="0.14"/>
+    </filter>
   </defs>
 
   <rect width="1200" height="360" rx="24" fill="url(#coverBg)"/>
   <rect x="1" y="1" width="1198" height="358" rx="23" stroke="#1D1D1F" stroke-opacity="0.06"/>
 
-  <g transform="translate(56, 92)">
+  <!-- Subtle decorative right-side abstract card motif -->
+  <g opacity="0.72" transform="translate(860, 88)">
+    <rect x="0" y="0" width="284" height="184" rx="18" fill="#FFFFFF" stroke="#1D1D1F" stroke-opacity="0.06"/>
+    <rect x="18" y="20" width="116" height="10" rx="5" fill="#E6E4DE"/>
+    <circle cx="256" cy="25" r="5" fill="#22C55E"/>
+    <rect x="18" y="46" width="248" height="44" rx="10" fill="#F7F6F2"/>
+    <text x="32" y="73" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="12">$ fs_mutate · auto-snapshot</text>
+    <rect x="18" y="102" width="248" height="32" rx="8" fill="#EFECE6"/>
+    <text x="32" y="122" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11.5">写前快照已就绪 · 支持单步回滚</text>
+    <rect x="174" y="144" width="92" height="26" rx="13" fill="url(#coverBlue)"/>
+    <text x="196" y="161" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="11.5" font-weight="600">允许一次</text>
+  </g>
+
+  <!-- Brand Icon -->
+  <g transform="translate(56, 86)" filter="url(#logoShadow)">
     <rect width="88" height="88" rx="22" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
     <g transform="translate(8,8) scale(0.3)">
       <g transform="rotate(12 120 120)">
@@ -24,23 +41,31 @@
     </g>
   </g>
 
-  <text x="172" y="128" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="34" font-weight="700">Muse-Win-Harness</text>
-  <text x="172" y="164" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="16">Windows 上的本地 Agent 受控执行底座 · 先问再改</text>
+  <!-- Title & Human-friendly Value Proposition -->
+  <text x="172" y="122" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="36" font-weight="700" letter-spacing="-0.02em">Muse-Win-Harness</text>
+  <text x="172" y="156" fill="#3F3F46" font-family="Segoe UI, system-ui, sans-serif" font-size="16.5" font-weight="500">让云端 AI 在你的 Windows 电脑上动手干活 · 目录有围栏，改前留快照，高危先问你</text>
+  <text x="172" y="182" fill="#71717A" font-family="Segoe UI, system-ui, sans-serif" font-size="13">Give cloud AI a safe pair of hands on native Windows — fenced workspaces, 1-click undo snapshots, and live desktop approvals.</text>
 
+  <!-- Feature Pills (Human-readable capabilities) -->
   <g font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">
-    <rect x="172" y="196" width="132" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
-    <circle cx="192" cy="214" r="4" fill="#2B7FFF"/>
-    <text x="204" y="219" fill="#1D1D1F">路径围栏</text>
+    <rect x="172" y="210" width="136" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="192" cy="228" r="4" fill="#2B7FFF"/>
+    <text x="204" y="233" fill="#1D1D1F">只碰授权目录</text>
 
-    <rect x="316" y="196" width="168" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
-    <circle cx="336" cy="214" r="4" fill="#2B7FFF"/>
-    <text x="348" y="219" fill="#1D1D1F">Win32 Job Object</text>
+    <rect x="320" y="210" width="150" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="340" cy="228" r="4" fill="#2B7FFF"/>
+    <text x="352" y="233" fill="#1D1D1F">改文件自动留快照</text>
 
-    <rect x="496" y="196" width="148" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
-    <circle cx="516" cy="214" r="4" fill="#2B7FFF"/>
-    <text x="528" y="219" fill="#1D1D1F">审批浮岛</text>
+    <rect x="482" y="210" width="150" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="502" cy="228" r="4" fill="#2B7FFF"/>
+    <text x="514" y="233" fill="#1D1D1F">子进程一键全停</text>
+
+    <rect x="644" y="210" width="150" height="36" rx="18" fill="#FFFFFF" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="664" cy="228" r="4" fill="#2B7FFF"/>
+    <text x="676" y="233" fill="#1D1D1F">危险操作先问你</text>
   </g>
 
-  <rect x="980" y="44" width="176" height="28" rx="14" fill="#2B7FFF" fill-opacity="0.12"/>
-  <text x="1004" y="63" fill="#1B6FEF" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">v0.1.0 early preview</text>
+  <!-- Version & Vibe-Coding Tag -->
+  <rect x="968" y="36" width="176" height="28" rx="14" fill="#2B7FFF" fill-opacity="0.12"/>
+  <text x="992" y="55" fill="#1B6FEF" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">v0.1.0 early preview</text>
 </svg>

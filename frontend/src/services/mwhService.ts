@@ -98,6 +98,78 @@ export interface BuiltinLoopSubagentConfig {
   lastThinkingReport: string;
 }
 
+export type ResourceKind = 'mcp' | 'skill';
+export type McpTransport = 'stdio' | 'http';
+export type ResourceRuntimeStatus = 'stopped' | 'starting' | 'running' | 'fault';
+
+export interface ExposedToolName {
+  original: string;
+  exposed: string;
+}
+
+export interface PublicResourceEntry {
+  id: string;
+  kind: ResourceKind;
+  displayName: string;
+  enabled: boolean;
+  source: 'scan' | 'manual';
+  sourceLabel: string;
+  readonly: boolean;
+  transport?: McpTransport;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  envSecretKeys?: string[];
+  httpUrl?: string;
+  httpHeaderSecretKey?: string;
+  skillDirDisplay?: string;
+  skillDescription?: string;
+  runtimeStatus?: ResourceRuntimeStatus;
+  faultReason?: string;
+  exposedToolNames?: ExposedToolName[];
+  toolCount?: number;
+}
+
+export interface ResourceStatusSummary {
+  enabledCount: number;
+  mcp: Array<{
+    id: string;
+    displayName: string;
+    status: ResourceRuntimeStatus;
+    faultReason?: string;
+    toolCount: number;
+    readonly: boolean;
+  }>;
+  skills: Array<{
+    id: string;
+    name: string;
+    description: string;
+    available: boolean;
+  }>;
+}
+
+export interface ResourceLibraryState {
+  enabledCount: number;
+  entries: PublicResourceEntry[];
+  summary: ResourceStatusSummary;
+}
+
+export interface ResourceProbeResult {
+  ok: boolean;
+  tools?: Array<{ name: string; description?: string }>;
+  error?: string;
+  faultReason?: string;
+}
+
+export interface ResourceScanOutcome {
+  ok: boolean;
+  discovered: number;
+  added: string[];
+  skipped: Array<{ path: string; reason: string }>;
+  entries: PublicResourceEntry[];
+  summary: ResourceStatusSummary;
+}
+
 export interface WorktreeInstance {
   id: string;
   branchName: string;
@@ -150,10 +222,11 @@ export interface MwhState {
   settingsModalOpen: boolean;
   activeSettingsTab:
     | 'connectors'
-    | 'permissions'
     | 'daemon'
-    | 'subagents'
-    | 'snapshots-audit';
+    | 'resources'
+    | 'snapshots-audit'
+    | 'permissions'
+    | 'subagents';
   confinementMode: ConfinementMode;
   approvalPolicy: ApprovalPolicy;
   autoDowngradeTwoHours: boolean;
@@ -173,6 +246,7 @@ export interface MwhState {
   lastCopiedToast: string | null;
   lastInjectedChatText: string | null;
   chromeDark: boolean;
+  resources: ResourceLibraryState;
 }
 
 export interface MwhWindowBridge {
@@ -263,6 +337,11 @@ function createInitialState(): MwhState {
     worktrees: [],
     snapshots: [],
     auditLogs: [],
+    resources: {
+      enabledCount: 0,
+      entries: [],
+      summary: { enabledCount: 0, mcp: [], skills: [] },
+    },
     liveTask: emptyTask(),
     lastCopiedToast: null,
     lastInjectedChatText: null,
@@ -391,7 +470,10 @@ export class MwhDaemonService {
   }
 
   public setActiveSettingsTab(tab: MwhState['activeSettingsTab']) {
-    this.state = { ...this.state, activeSettingsTab: tab };
+    let resolved = tab;
+    if (tab === 'permissions') resolved = 'connectors';
+    if (tab === 'subagents') resolved = 'daemon';
+    this.state = { ...this.state, activeSettingsTab: resolved };
     this.emit();
   }
 
@@ -630,6 +712,131 @@ export class MwhDaemonService {
       return { available: res.available, path: res.path, error: res.error };
     }
     return { available: false, error: res?.error || '探测请求失败' };
+  }
+
+  public async fetchResources(): Promise<{ entries: PublicResourceEntry[]; summary: ResourceStatusSummary } | null> {
+    const res = await this.request('GET', '/api/v1/resources');
+    if (res && res.ok) {
+      if (res.entries) {
+        this.applyServerPatch({
+          resources: {
+            enabledCount: res.summary?.enabledCount ?? res.entries.filter((e: any) => e.enabled).length,
+            entries: res.entries,
+            summary: res.summary || { enabledCount: 0, mcp: [], skills: [] },
+          },
+        });
+      }
+      return { entries: res.entries, summary: res.summary };
+    }
+    return null;
+  }
+
+  public async addResource(entry: Partial<PublicResourceEntry> & { id?: string; displayName: string; kind: ResourceKind }): Promise<boolean> {
+    const res = await this.request('POST', '/api/v1/resources', entry);
+    if (res && res.ok) {
+      if (res.entries) {
+        this.applyServerPatch({
+          resources: {
+            enabledCount: res.summary?.enabledCount ?? res.entries.filter((e: any) => e.enabled).length,
+            entries: res.entries,
+            summary: res.summary,
+          },
+        });
+      }
+      this.showToast(`资源「${entry.displayName || res.id}」已添加`);
+      return true;
+    }
+    this.showToast(res?.error || '添加资源失败');
+    return false;
+  }
+
+  public async scanResources(): Promise<ResourceScanOutcome | null> {
+    const res = await this.request('POST', '/api/v1/resources/scan');
+    if (res && res.ok) {
+      if (res.entries) {
+        this.applyServerPatch({
+          resources: {
+            enabledCount: res.summary?.enabledCount ?? res.entries.filter((e: any) => e.enabled).length,
+            entries: res.entries,
+            summary: res.summary,
+          },
+        });
+      }
+      const addedCount = Array.isArray(res.added) ? res.added.length : 0;
+      this.showToast(`扫描完成：发现 ${res.discovered || 0} 项，新添加 ${addedCount} 项`);
+      return res;
+    }
+    this.showToast(res?.error || '扫描资源失败');
+    return null;
+  }
+
+  public async toggleResource(id: string, enabled: boolean): Promise<boolean> {
+    const res = await this.request('POST', '/api/v1/resources/toggle', { id, enabled });
+    if (res && res.ok) {
+      if (res.entries) {
+        this.applyServerPatch({
+          resources: {
+            enabledCount: res.summary?.enabledCount ?? res.entries.filter((e: any) => e.enabled).length,
+            entries: res.entries,
+            summary: res.summary,
+          },
+        });
+      }
+      return true;
+    }
+    this.showToast(res?.error || '切换资源状态失败');
+    return false;
+  }
+
+  public async probeResource(params: Record<string, unknown>): Promise<ResourceProbeResult> {
+    const res = await this.request('POST', '/api/v1/resources/probe', params);
+    if (res && res.ok) {
+      return { ok: true, tools: res.tools, error: res.error, faultReason: res.faultReason };
+    }
+    return {
+      ok: false,
+      tools: res?.tools,
+      error: res?.error || res?.faultReason || '探测请求失败',
+      faultReason: res?.faultReason,
+    };
+  }
+
+  public async updateResource(id: string, patch: Partial<PublicResourceEntry>): Promise<boolean> {
+    const res = await this.request('POST', '/api/v1/resources/update', { id, ...patch });
+    if (res && res.ok) {
+      if (res.entries) {
+        this.applyServerPatch({
+          resources: {
+            enabledCount: res.summary?.enabledCount ?? res.entries.filter((e: any) => e.enabled).length,
+            entries: res.entries,
+            summary: res.summary,
+          },
+        });
+      }
+      this.showToast('资源设置已更新');
+      return true;
+    }
+    this.showToast(res?.error || '更新资源失败');
+    return false;
+  }
+
+  public async deleteResource(id: string): Promise<boolean> {
+    const res = await this.request('DELETE', '/api/v1/resources', { id });
+    if (res && res.ok) {
+      if (res.entries) {
+        this.applyServerPatch({
+          resources: {
+            enabledCount: res.summary?.enabledCount ?? res.entries.filter((e: any) => e.enabled).length,
+            entries: res.entries,
+            summary: res.summary,
+          },
+        });
+      }
+      this.showToast(`已删除资源 ${id}`);
+      return true;
+    }
+    this.showToast(res?.error || '删除失败');
+    return false;
   }
 
   public emergencyKillAllJobObjects() {

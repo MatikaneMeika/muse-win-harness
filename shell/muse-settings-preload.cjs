@@ -919,7 +919,7 @@ const INJECT_STYLE = `
 }
 .mwh-subpanel-tabs-bar {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding-bottom: 2px;
 }
@@ -1615,9 +1615,49 @@ const state = {
       probe: null,
       saving: false,
     },
+    resourceForm: {
+      open: false,
+      editingId: null,
+      kind: 'mcp',
+      transport: 'stdio',
+      id: '',
+      displayName: '',
+      command: '',
+      args: '',
+      cwd: '',
+      httpUrl: '',
+      skillDir: '',
+      readonly: false,
+      enabled: false,
+      probeResult: null,
+      probing: false,
+      saving: false,
+    },
+    resourceExpanded: {},
   },
   toastTimer: null,
 };
+
+function defaultResourceForm() {
+  return {
+    open: false,
+    editingId: null,
+    kind: 'mcp',
+    transport: 'stdio',
+    id: '',
+    displayName: '',
+    command: '',
+    args: '',
+    cwd: '',
+    httpUrl: '',
+    skillDir: '',
+    readonly: false,
+    enabled: false,
+    probeResult: null,
+    probing: false,
+    saving: false,
+  };
+}
 
 function defaultTunnelDraft(settings) {
   const t = settings.tunnel || {};
@@ -1660,6 +1700,14 @@ function normalizeSettings(raw) {
     },
     s.daemon || {}
   );
+  const resources = Object.assign(
+    {
+      enabledCount: 0,
+      entries: [],
+      summary: { enabledCount: 0, mcp: [], skills: [] },
+    },
+    s.resources || {}
+  );
   return {
     confinementMode: s.confinementMode || 'workspace-write',
     approvalPolicy: s.approvalPolicy || 'smart-risk',
@@ -1671,6 +1719,7 @@ function normalizeSettings(raw) {
       : [],
     tunnel,
     daemon,
+    resources,
     cliSubagents: Array.isArray(s.cliSubagents) ? s.cliSubagents : [],
     acpProfiles: Array.isArray(s.acpProfiles) ? s.acpProfiles : [],
     worktrees: Array.isArray(s.worktrees) ? s.worktrees : [],
@@ -1900,31 +1949,25 @@ function applyThemeClass() {
 const ADVANCED_SECTIONS = [
   {
     id: 'connectors',
-    title: '连接',
-    subtitle: 'MCP 端点与公网隧道',
+    title: '连接与权限',
+    subtitle: '网络隧道与四档权限',
     icon: 'grid',
   },
   {
-    id: 'permissions',
-    title: '权限',
-    subtitle: '四档模式与自动降级',
-    icon: 'hand',
-  },
-  {
     id: 'daemon',
-    title: '工作区',
-    subtitle: '守护进程与目录白名单',
+    title: '工作区与代理',
+    subtitle: '目录白名单与 ACP 引擎',
     icon: 'monitor',
   },
   {
-    id: 'subagents',
-    title: '代理',
-    subtitle: 'ACP 引擎与隔离分支',
-    icon: 'bot',
+    id: 'resources',
+    title: '资源库',
+    subtitle: '本机 MCP 与 Skill',
+    icon: 'folder',
   },
   {
     id: 'snapshots-audit',
-    title: '审计',
+    title: '审计日志',
     subtitle: '影子快照与审计日志',
     icon: 'audit',
   },
@@ -1939,9 +1982,13 @@ const DRIVER_LABELS = {
 
 function sectionBadge(id, settings) {
   if (id === 'connectors') return DRIVER_LABELS[settings.tunnel.activeDriver] || settings.tunnel.activeDriver;
-  if (id === 'permissions') return getPermissionProfileMeta(settings.confinementMode, settings.approvalPolicy).shortLabel;
-  if (id === 'daemon') return settings.workspaceRoots.length + ' 个工作区';
-  if (id === 'subagents') return settings.acpProfiles.length + ' ACP · ' + settings.worktrees.length + ' WT';
+  if (id === 'daemon') return settings.workspaceRoots.length + ' 工作区 · ' + settings.acpProfiles.length + ' 代理';
+  if (id === 'resources') {
+    const count = (settings.resources && settings.resources.summary && typeof settings.resources.summary.enabledCount === 'number')
+      ? settings.resources.summary.enabledCount
+      : 0;
+    return count + ' 个已启用';
+  }
   if (id === 'snapshots-audit') return settings.snapshots.length + ' 快照';
   return '';
 }
@@ -2038,6 +2085,17 @@ function renderDrawer() {
     settings.approvalPolicy,
     cachedRealToken
   );
+
+  const enabledResCount =
+    settings.resources &&
+    settings.resources.summary &&
+    typeof settings.resources.summary.enabledCount === 'number'
+      ? settings.resources.summary.enabledCount
+      : settings.resources && Array.isArray(settings.resources.entries)
+      ? settings.resources.entries.filter(function (e) {
+          return e.enabled;
+        }).length
+      : 0;
 
   const modeCards = PERMISSION_PROFILE_LIST.map(function (prof) {
     const active = activeProfile.id === prof.id;
@@ -2163,7 +2221,21 @@ function renderDrawer() {
     '<span>复制 MCP JSON</span></button>' +
     '</div>' +
     '</div>' +
-    '<div class="mwh-card mwh-adv-hero-card" data-action="open-advanced-modal" style="cursor:pointer;background:var(--mwh-card-2);border:none;transition:all 0.18s ease">' +
+    '<div class="mwh-card" data-action="open-advanced-modal" data-section="resources" style="cursor:pointer;background:var(--mwh-card-2);border:none;margin-top:8px;padding:9px 12px;transition:all 0.18s ease">' +
+    '<div class="mwh-row">' +
+    '<div style="display:flex;align-items:center;gap:8px">' +
+    '<span style="color:#2B7FFF">' +
+    ICON.folder +
+    '</span>' +
+    '<span style="font-size:12px;font-weight:600;color:var(--mwh-text)">资源库 · ' +
+    esc(enabledResCount) +
+    ' 个已启用</span>' +
+    '</div>' +
+    '<span style="color:var(--mwh-muted)">' +
+    ICON.chevronRight +
+    '</span>' +
+    '</div></div>' +
+    '<div class="mwh-card mwh-adv-hero-card" data-action="open-advanced-modal" style="cursor:pointer;background:var(--mwh-card-2);border:none;margin-top:8px;transition:all 0.18s ease">' +
     '<div class="mwh-row">' +
     '<div style="display:flex;align-items:center;gap:10px">' +
     '<div class="mwh-adv-hero-icon" style="width:34px;height:34px;border-radius:10px;background:rgba(43,127,255,0.16);color:#2B7FFF;display:flex;align-items:center;justify-content:center">' +
@@ -2171,10 +2243,10 @@ function renderDrawer() {
     '</div>' +
     '<div>' +
     '<div style="font-size:13px;font-weight:600;color:var(--mwh-text)">打开高级配置中心</div>' +
-    '<div class="mwh-hint" style="font-size:11px;margin-top:2px">网络隧道 · 权限边界 · 工作区 · ACP · 快照</div>' +
+    '<div class="mwh-hint" style="font-size:11px;margin-top:2px">连接与权限 · 工作区与代理 · 资源库 · 审计日志</div>' +
     '</div></div>' +
     '<div style="display:flex;align-items:center;gap:6px">' +
-    '<span class="mwh-pill" style="font-size:10px">5 个配置域</span>' +
+    '<span class="mwh-pill" style="font-size:10px">4 个配置域</span>' +
     '<span style="color:var(--mwh-muted)">' +
     ICON.chevronRight +
     '</span>' +
@@ -2218,6 +2290,17 @@ function renderConnectors(settings) {
     settings.approvalPolicy,
     cachedRealToken
   );
+
+  const enabledResCount =
+    settings.resources &&
+    settings.resources.summary &&
+    typeof settings.resources.summary.enabledCount === 'number'
+      ? settings.resources.summary.enabledCount
+      : settings.resources && Array.isArray(settings.resources.entries)
+      ? settings.resources.entries.filter(function (e) {
+          return e.enabled;
+        }).length
+      : 0;
   const t = settings.tunnel;
   const draft = state.ui.tunnelDraft || defaultTunnelDraft(settings);
 
@@ -3134,12 +3217,393 @@ function renderSnapshotsAudit(settings) {
 }
 
 const SECTION_HEADERS = {
-  connectors: '连接器与隧道',
-  permissions: '权限与安全模式',
-  daemon: '本地电脑引擎',
-  subagents: '本地代理与 Worktree',
-  'snapshots-audit': '快照回滚与审计日志',
+  connectors: '连接器与权限模式',
+  permissions: '连接器与权限模式',
+  daemon: '工作区与代理引擎',
+  subagents: '工作区与代理引擎',
+  resources: '本机 MCP 与 Skill',
+  'snapshots-audit': '影子快照与审计日志',
 };
+
+async function daemonHttp(method, path, body) {
+  const token = await fetchRealTokenIfNeeded();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const init = { method: method, headers: headers };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch('http://127.0.0.1:19820' + path, init);
+  const data = await res.json().catch(function () {
+    return {};
+  });
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || data.reason || data.message || ('HTTP ' + res.status));
+  }
+  return data;
+}
+
+function renderResources(settings) {
+  const form = state.ui.resourceForm || defaultResourceForm();
+  const resources = settings.resources || {
+    enabledCount: 0,
+    entries: [],
+    summary: { enabledCount: 0, mcp: [], skills: [] },
+  };
+  const entries = Array.isArray(resources.entries) ? resources.entries : [];
+  const mcpEntries = entries.filter(function (e) {
+    return e.kind === 'mcp';
+  });
+  const skillEntries = entries.filter(function (e) {
+    return e.kind === 'skill';
+  });
+
+  // 1. Header Banner
+  let html =
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">' +
+    '<div>' +
+    '<div style="font-size:16px;font-weight:700;color:var(--mwh-text)">本机 MCP 与 Skill</div>' +
+    '<div class="mwh-hint" style="margin-top:4px;line-height:1.6">' +
+    '<div style="color:var(--mwh-text)">打开即对 Muse 生效，默认全部关闭。</div>' +
+    '<div>MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。</div>' +
+    '</div></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
+    '<button type="button" class="mwh-btn" data-action="resource-scan">' +
+    ICON.refresh +
+    '<span>' +
+    (state.ui.loadingAction === 'resource_scan' ? '扫描中...' : '扫描本机') +
+    '</span></button>' +
+    '<button type="button" class="mwh-btn mwh-btn-primary" data-action="resource-open-add">' +
+    ICON.plus +
+    '<span>添加</span></button>' +
+    '</div></div>';
+
+  // 2. In-page Add / Edit Form
+  if (form.open) {
+    let probeBlock = '';
+    if (form.probeResult) {
+      if (form.probeResult.ok) {
+        const toolCount = form.probeResult.tools ? form.probeResult.tools.length : 0;
+        probeBlock =
+          '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#4ade80">探测成功' +
+          (toolCount > 0 ? ' (发现 ' + toolCount + ' 个工具)' : '') +
+          '</div>';
+      } else {
+        probeBlock =
+          '<div class="mwh-card-flat mwh-mono" style="margin-top:5px;color:#fbbf24">探测失败: ' +
+          esc(form.probeResult.error || form.probeResult.faultReason || '连接失败') +
+          '</div>';
+      }
+    }
+
+    let kindSelector = '';
+    if (!form.editingId) {
+      kindSelector =
+        '<div class="mwh-field" style="margin-bottom:8px"><span>资源类型</span>' +
+        '<div style="display:flex;gap:6px">' +
+        '<button type="button" class="mwh-btn' +
+        (form.kind === 'mcp' ? ' mwh-btn-primary' : '') +
+        '" data-action="resource-set-kind" data-kind="mcp">本机 MCP</button>' +
+        '<button type="button" class="mwh-btn' +
+        (form.kind === 'skill' ? ' mwh-btn-primary' : '') +
+        '" data-action="resource-set-kind" data-kind="skill">Skill</button>' +
+        '</div></div>';
+    }
+
+    let fields = '';
+    if (form.kind === 'mcp') {
+      const isStdio = form.transport !== 'http';
+      fields =
+        '<div class="mwh-field" style="margin-bottom:8px"><span>传输协议</span>' +
+        '<div style="display:flex;gap:6px">' +
+        '<button type="button" class="mwh-btn' +
+        (isStdio ? ' mwh-btn-primary' : '') +
+        '" data-action="resource-set-transport" data-transport="stdio">stdio</button>' +
+        '<button type="button" class="mwh-btn' +
+        (!isStdio ? ' mwh-btn-primary' : '') +
+        '" data-action="resource-set-transport" data-transport="http">Streamable HTTP</button>' +
+        '</div></div>' +
+        (isStdio
+          ? '<div class="mwh-field" style="margin-bottom:8px"><span>执行命令 (Command)</span>' +
+            '<input class="mwh-input mwh-mono" data-bind="resource.command" value="' +
+            esc(form.command) +
+            '" placeholder="例如: node 或 C:\\tools\\server.exe" /></div>' +
+            '<div class="mwh-field" style="margin-bottom:8px"><span>启动参数 (Args)</span>' +
+            '<input class="mwh-input mwh-mono" data-bind="resource.args" value="' +
+            esc(form.args) +
+            '" placeholder="以空格分隔，例如: dist/index.js --port 8080" /></div>' +
+            '<div class="mwh-field" style="margin-bottom:8px"><span>工作目录 (CWD, 可选)</span>' +
+            '<input class="mwh-input mwh-mono" data-bind="resource.cwd" value="' +
+            esc(form.cwd) +
+            '" placeholder="默认用户主目录" /></div>'
+          : '<div class="mwh-field" style="margin-bottom:8px"><span>HTTP URL</span>' +
+            '<input class="mwh-input mwh-mono" data-bind="resource.httpUrl" value="' +
+            esc(form.httpUrl) +
+            '" placeholder="例如: http://127.0.0.1:8000/mcp" /></div>');
+    } else {
+      fields =
+        '<div class="mwh-field" style="margin-bottom:8px"><span>Skill 目录路径</span>' +
+        '<input class="mwh-input mwh-mono" data-bind="resource.skillDir" value="' +
+        esc(form.skillDir) +
+        '" placeholder="需包含 SKILL.md 的本地目录" /></div>';
+    }
+
+    const editReadonly = form.editingId
+      ? '<label class="mwh-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer">' +
+        '<input type="checkbox" class="mwh-check" data-bind="resource.readonly" ' +
+        (form.readonly ? 'checked' : '') +
+        ' />' +
+        '<span>标记为只读（在计划模式下放行探查）</span></label>'
+      : '';
+
+    const addImmediateEnable = !form.editingId
+      ? '<label class="mwh-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer">' +
+        '<input type="checkbox" class="mwh-check" data-bind="resource.enabled" ' +
+        (form.enabled ? 'checked' : '') +
+        ' />' +
+        '<span>立即启用（默认关闭）</span></label>'
+      : '';
+
+    html +=
+      '<div class="mwh-card" style="margin-bottom:12px;border:1px solid rgba(43,127,255,0.25)">' +
+      '<div class="mwh-row" style="margin-bottom:10px">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--mwh-text)">' +
+      (form.editingId ? '编辑资源' : '添加本机资源') +
+      '</div>' +
+      '<button type="button" class="mwh-icon-btn" data-action="resource-cancel">' +
+      ICON.close +
+      '</button>' +
+      '</div>' +
+      kindSelector +
+      '<div class="mwh-field" style="margin-bottom:8px"><span>显示名称 (Display Name)</span>' +
+      '<input class="mwh-input" data-bind="resource.displayName" value="' +
+      esc(form.displayName) +
+      '" placeholder="例如: MyTools" /></div>' +
+      fields +
+      editReadonly +
+      addImmediateEnable +
+      '<div class="mwh-row" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">' +
+      '<button type="button" class="mwh-btn" data-action="resource-probe">' +
+      (form.probing ? ICON.spinner : ICON.refresh) +
+      '<span>' +
+      (form.probing ? '探测中...' : '探测连接') +
+      '</span></button>' +
+      '<div style="display:flex;gap:6px">' +
+      '<button type="button" class="mwh-btn" data-action="resource-cancel">取消</button>' +
+      '<button type="button" class="mwh-btn mwh-btn-primary" data-action="resource-save">' +
+      (form.saving ? '保存中...' : '保存') +
+      '</button>' +
+      '</div></div>' +
+      probeBlock +
+      '</div>';
+  }
+
+  // 3. Card 1: 本机 MCP
+  let mcpListHtml = '';
+  if (mcpEntries.length === 0) {
+    mcpListHtml =
+      '<div class="mwh-empty">暂无已登记的本机 MCP 服务器，可通过上方「扫描本机」自动发现或「添加」手动配置。</div>';
+  } else {
+    mcpListHtml = mcpEntries
+      .map(function (entry) {
+        const isExpanded = Boolean(
+          state.ui.resourceExpanded && state.ui.resourceExpanded[entry.id]
+        );
+        const isFault = Boolean(entry.faultReason || entry.runtimeStatus === 'fault');
+        const isRunning = entry.runtimeStatus === 'running';
+
+        let statusBadge = '<span class="mwh-pill">已关闭</span>';
+        if (isFault) {
+          statusBadge =
+            '<span class="mwh-pill" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-weight:600">' +
+            esc(entry.faultReason || '启动故障') +
+            '</span>';
+        } else if (isRunning) {
+          statusBadge =
+            '<span class="mwh-pill" style="background:rgba(34,197,94,0.15);color:#4ade80">运行正常</span>';
+        }
+
+        const readonlyBadge = entry.readonly
+          ? '<span class="mwh-pill" style="font-size:10px;background:rgba(255,255,255,0.06);color:var(--mwh-muted)">只读</span>'
+          : '';
+
+        const toolCountText =
+          (typeof entry.toolCount === 'number'
+            ? entry.toolCount
+            : entry.exposedToolNames
+            ? entry.exposedToolNames.length
+            : 0) + ' 个工具';
+
+        let expandedBlock = '';
+        if (isExpanded) {
+          let toolsHtml = '<div class="mwh-hint">暂无工具（启用且运行正常后自动列出）</div>';
+          if (entry.exposedToolNames && entry.exposedToolNames.length > 0) {
+            toolsHtml =
+              '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+              entry.exposedToolNames
+                .map(function (t) {
+                  return (
+                    '<span class="mwh-pill mwh-mono" style="font-size:10.5px;padding:2px 7px;background:rgba(255,255,255,0.06)" title="原名: ' +
+                    esc(t.original) +
+                    '">' +
+                    esc(t.exposed) +
+                    ' <span style="opacity:0.6;font-size:9.5px">(' +
+                    esc(t.original) +
+                    ')</span>' +
+                    '</span>'
+                  );
+                })
+                .join('') +
+              '</div>';
+          }
+          expandedBlock =
+            '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05)">' +
+            '<div style="font-size:11.5px;font-weight:600;color:var(--mwh-muted);margin-bottom:6px">将出现在 Muse 的 tools/list</div>' +
+            (isFault
+              ? '<div style="color:#f59e0b;font-size:11px;margin-bottom:6px">已暂时从 /mcp 撤下，修复后会自动恢复</div>'
+              : '') +
+            toolsHtml +
+            '</div>';
+        }
+
+        return (
+          '<div class="mwh-list-row" style="margin-bottom:6px;flex-direction:column;align-items:stretch">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' +
+          '<div class="mwh-list-col" style="cursor:pointer" data-action="resource-toggle-expand" data-id="' +
+          esc(entry.id) +
+          '">' +
+          '<div class="mwh-list-title">' +
+          '<span style="color:var(--mwh-muted)">' +
+          (isExpanded ? ICON.chevronDown : ICON.chevronRight) +
+          '</span>' +
+          '<span>' +
+          esc(entry.displayName || entry.id) +
+          '</span>' +
+          '<span class="mwh-pill">' +
+          esc(entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')) +
+          '</span>' +
+          statusBadge +
+          readonlyBadge +
+          '<span class="mwh-hint" style="margin-left:auto;font-size:11px">' +
+          esc(toolCountText) +
+          '</span>' +
+          '</div></div>' +
+          '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
+          '<button type="button" class="mwh-btn mwh-btn-switch" data-action="resource-toggle" data-id="' +
+          esc(entry.id) +
+          '">' +
+          (entry.enabled || isFault ? '已启用' : '已停用') +
+          '</button>' +
+          '<button type="button" class="mwh-icon-btn" data-action="resource-open-edit" data-id="' +
+          esc(entry.id) +
+          '" title="编辑">' +
+          ICON.edit +
+          '</button>' +
+          '<button type="button" class="mwh-icon-btn" style="color:#f87171" data-action="resource-delete" data-id="' +
+          esc(entry.id) +
+          '" title="删除">' +
+          ICON.trash +
+          '</button>' +
+          '</div></div>' +
+          expandedBlock +
+          '</div>'
+        );
+      })
+      .join('');
+  }
+
+  html +=
+    '<div class="mwh-card" style="margin-bottom:12px">' +
+    '<div class="mwh-section-title" style="margin-bottom:4px">' +
+    ICON.folder +
+    '<span>本机 MCP</span>' +
+    '</div>' +
+    '<div class="mwh-hint" style="margin-bottom:10px">启用后，工具会出现在 Muse 现有的 /mcp 里，直接调用即可。</div>' +
+    mcpListHtml +
+    '</div>';
+
+  // 4. Card 2: Skill
+  let skillListHtml = '';
+  if (skillEntries.length === 0) {
+    skillListHtml =
+      '<div class="mwh-empty">暂无已登记的 Skill，可通过上方「扫描本机」自动发现或「添加」手动配置。</div>';
+  } else {
+    skillListHtml = skillEntries
+      .map(function (entry) {
+        const isExpanded = Boolean(
+          state.ui.resourceExpanded && state.ui.resourceExpanded[entry.id]
+        );
+        const statusBadge = entry.enabled
+          ? '<span class="mwh-pill" style="background:rgba(34,197,94,0.15);color:#4ade80">已就绪</span>'
+          : '<span class="mwh-pill">已关闭</span>';
+
+        let expandedBlock = '';
+        if (isExpanded) {
+          expandedBlock =
+            '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);font-size:11.5px">' +
+            '<div style="color:var(--mwh-text);margin-bottom:4px;line-height:1.5">' +
+            esc(entry.skillDescription || '暂无说明') +
+            '</div>' +
+            '<div class="mwh-mono mwh-muted" style="font-size:10.5px">来源目录: ' +
+            esc(entry.skillDirDisplay || '~') +
+            '</div>' +
+            '</div>';
+        }
+
+        return (
+          '<div class="mwh-list-row" style="margin-bottom:6px;flex-direction:column;align-items:stretch">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">' +
+          '<div class="mwh-list-col" style="cursor:pointer" data-action="resource-toggle-expand" data-id="' +
+          esc(entry.id) +
+          '">' +
+          '<div class="mwh-list-title">' +
+          '<span style="color:var(--mwh-muted)">' +
+          (isExpanded ? ICON.chevronDown : ICON.chevronRight) +
+          '</span>' +
+          '<span>' +
+          esc(entry.displayName || entry.id) +
+          '</span>' +
+          '<span class="mwh-pill">' +
+          esc(entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')) +
+          '</span>' +
+          statusBadge +
+          '</div></div>' +
+          '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">' +
+          '<button type="button" class="mwh-btn mwh-btn-switch" data-action="resource-toggle" data-id="' +
+          esc(entry.id) +
+          '">' +
+          (entry.enabled ? '已启用' : '已停用') +
+          '</button>' +
+          '<button type="button" class="mwh-icon-btn" data-action="resource-open-edit" data-id="' +
+          esc(entry.id) +
+          '" title="编辑">' +
+          ICON.edit +
+          '</button>' +
+          '<button type="button" class="mwh-icon-btn" style="color:#f87171" data-action="resource-delete" data-id="' +
+          esc(entry.id) +
+          '" title="删除">' +
+          ICON.trash +
+          '</button>' +
+          '</div></div>' +
+          expandedBlock +
+          '</div>'
+        );
+      })
+      .join('');
+  }
+
+  html +=
+    '<div class="mwh-card">' +
+    '<div class="mwh-section-title" style="margin-bottom:4px">' +
+    ICON.folder +
+    '<span>Skill</span>' +
+    '</div>' +
+    '<div class="mwh-hint" style="margin-bottom:10px">名称和简短说明会自动备好，需要全文时再读一次。</div>' +
+    skillListHtml +
+    '</div>';
+
+  return html;
+}
 
 function renderSubpanel(force) {
   const root = document.getElementById('mwh-subpanel');
@@ -3159,11 +3623,31 @@ function renderSubpanel(force) {
   const settings = getSettings();
   const scrollTop = body ? body.scrollTop : 0;
   let content = '';
-  if (state.activeSection === 'connectors') content = renderConnectors(settings);
-  else if (state.activeSection === 'permissions') content = renderPermissions(settings);
-  else if (state.activeSection === 'daemon') content = renderDaemon(settings);
-  else if (state.activeSection === 'subagents') content = renderSubagents(settings);
-  else content = renderSnapshotsAudit(settings);
+  if (state.activeSection === 'connectors' || state.activeSection === 'permissions') {
+    content =
+      '<div style="font-size:13.5px;font-weight:600;color:var(--mwh-text);margin:4px 0 10px;display:flex;align-items:center;gap:6px">' +
+      ICON.link +
+      '<span>连接器</span></div>' +
+      renderConnectors(settings) +
+      '<div style="font-size:13.5px;font-weight:600;color:var(--mwh-text);margin:20px 0 10px;display:flex;align-items:center;gap:6px">' +
+      ICON.shield +
+      '<span>权限</span></div>' +
+      renderPermissions(settings);
+  } else if (state.activeSection === 'daemon' || state.activeSection === 'subagents') {
+    content =
+      '<div style="font-size:13.5px;font-weight:600;color:var(--mwh-text);margin:4px 0 10px;display:flex;align-items:center;gap:6px">' +
+      ICON.folder +
+      '<span>工作区</span></div>' +
+      renderDaemon(settings) +
+      '<div style="font-size:13.5px;font-weight:600;color:var(--mwh-text);margin:20px 0 10px;display:flex;align-items:center;gap:6px">' +
+      ICON.bot +
+      '<span>代理</span></div>' +
+      renderSubagents(settings);
+  } else if (state.activeSection === 'resources') {
+    content = renderResources(settings);
+  } else {
+    content = renderSnapshotsAudit(settings);
+  }
 
   const tabsHtml = ADVANCED_SECTIONS.map(function (sec) {
     const isActive = state.activeSection === sec.id;
@@ -4119,7 +4603,11 @@ async function handleSubpanelAction(action, target) {
     return;
   }
   if (action === 'open-advanced-modal' || action === 'open-advanced') {
-    state.activeSection = state.activeSection || 'connectors';
+    const sec =
+      target.getAttribute('data-section') ||
+      (target.closest('[data-section]') &&
+        target.closest('[data-section]').getAttribute('data-section'));
+    state.activeSection = sec || state.activeSection || 'connectors';
     renderSubpanel(true);
     return;
   }
@@ -4358,6 +4846,203 @@ async function handleSubpanelAction(action, target) {
     } finally {
       clearLoading();
     }
+    return;
+  }
+  if (action === 'resource-scan') {
+    setLoading('resource_scan');
+    try {
+      const outcome = await daemonHttp('POST', '/api/v1/resources/scan');
+      const addedCount = Array.isArray(outcome.added) ? outcome.added.length : 0;
+      showToast('扫描完成：发现 ' + (outcome.discovered || 0) + ' 项，新添加 ' + addedCount + ' 项');
+      await refreshSettings();
+    } catch (err) {
+      showToast('扫描失败: ' + String((err && err.message) || err));
+    } finally {
+      clearLoading();
+    }
+    return;
+  }
+  if (action === 'resource-open-add') {
+    state.ui.resourceForm = defaultResourceForm();
+    state.ui.resourceForm.open = true;
+    scheduleRender(true);
+    return;
+  }
+  if (action === 'resource-open-edit') {
+    const id = target.getAttribute('data-id');
+    const entries =
+      settings.resources && Array.isArray(settings.resources.entries)
+        ? settings.resources.entries
+        : [];
+    const entry = entries.find(function (e) {
+      return e.id === id;
+    });
+    if (!entry) return;
+    state.ui.resourceForm = {
+      open: true,
+      editingId: entry.id,
+      kind: entry.kind || 'mcp',
+      transport: entry.transport || 'stdio',
+      id: entry.id,
+      displayName: entry.displayName || '',
+      command: entry.command || '',
+      args: (entry.args || []).join(' '),
+      cwd: entry.cwd || '',
+      httpUrl: entry.httpUrl || '',
+      skillDir: entry.skillDirDisplay || '',
+      readonly: entry.readonly === true,
+      enabled: entry.enabled === true,
+      probeResult: null,
+      probing: false,
+      saving: false,
+    };
+    scheduleRender(true);
+    return;
+  }
+  if (action === 'resource-cancel') {
+    if (state.ui.resourceForm) state.ui.resourceForm.open = false;
+    scheduleRender(true);
+    return;
+  }
+  if (action === 'resource-set-kind') {
+    if (!state.ui.resourceForm) state.ui.resourceForm = defaultResourceForm();
+    state.ui.resourceForm.kind = target.getAttribute('data-kind');
+    scheduleRender(true);
+    return;
+  }
+  if (action === 'resource-set-transport') {
+    if (!state.ui.resourceForm) state.ui.resourceForm = defaultResourceForm();
+    state.ui.resourceForm.transport = target.getAttribute('data-transport');
+    scheduleRender(true);
+    return;
+  }
+  if (action === 'resource-probe') {
+    const form = state.ui.resourceForm;
+    if (!form) return;
+    form.probing = true;
+    scheduleRender(true);
+    try {
+      let params = {};
+      if (form.kind === 'mcp') {
+        if (form.transport === 'http') {
+          params = { transport: 'http', httpUrl: String(form.httpUrl || '').trim() };
+        } else {
+          const args = String(form.args || '').split(/\s+/).filter(Boolean);
+          params = {
+            transport: 'stdio',
+            command: String(form.command || '').trim(),
+            args: args,
+            cwd: String(form.cwd || '').trim() || undefined,
+          };
+        }
+      } else {
+        params = { kind: 'skill', skillDir: String(form.skillDir || '').trim() };
+      }
+      const res = await daemonHttp('POST', '/api/v1/resources/probe', params);
+      form.probeResult = res;
+    } catch (err) {
+      form.probeResult = { ok: false, error: String((err && err.message) || err) };
+    } finally {
+      form.probing = false;
+      scheduleRender(true);
+    }
+    return;
+  }
+  if (action === 'resource-save') {
+    const form = state.ui.resourceForm;
+    if (!form) return;
+    const disp = String(form.displayName || '').trim();
+    if (!disp && !form.editingId) {
+      showToast('显示名称不能为空');
+      return;
+    }
+    form.saving = true;
+    scheduleRender(true);
+    try {
+      if (form.editingId) {
+        const patch = {
+          displayName: disp || form.editingId,
+          command: String(form.command || '').trim(),
+          args: String(form.args || '').split(/\s+/).filter(Boolean),
+          cwd: String(form.cwd || '').trim() || undefined,
+          httpUrl: String(form.httpUrl || '').trim() || undefined,
+          skillDirDisplay: String(form.skillDir || '').trim() || undefined,
+          readonly: Boolean(form.readonly),
+        };
+        await daemonHttp('POST', '/api/v1/resources/update', { id: form.editingId, ...patch });
+      } else {
+        const body = {
+          id: form.id || disp,
+          displayName: disp,
+          kind: form.kind,
+          transport: form.kind === 'mcp' ? form.transport : undefined,
+          command: String(form.command || '').trim(),
+          args: String(form.args || '').split(/\s+/).filter(Boolean),
+          cwd: String(form.cwd || '').trim() || undefined,
+          httpUrl: String(form.httpUrl || '').trim() || undefined,
+          skillDirDisplay: String(form.skillDir || '').trim() || undefined,
+          enabled: Boolean(form.enabled),
+          readonly: false,
+        };
+        await daemonHttp('POST', '/api/v1/resources', body);
+      }
+      form.open = false;
+      showToast('资源已保存并生效');
+      await refreshSettings();
+    } catch (err) {
+      showToast('保存失败: ' + String((err && err.message) || err));
+    } finally {
+      form.saving = false;
+      scheduleRender(true);
+    }
+    return;
+  }
+  if (action === 'resource-toggle') {
+    const id = target.getAttribute('data-id');
+    const entries =
+      settings.resources && Array.isArray(settings.resources.entries)
+        ? settings.resources.entries
+        : [];
+    const entry = entries.find(function (e) {
+      return e.id === id;
+    });
+    if (!entry) return;
+    try {
+      await daemonHttp('POST', '/api/v1/resources/toggle', { id: id, enabled: !entry.enabled });
+      await refreshSettings();
+    } catch (err) {
+      showToast('切换失败: ' + String((err && err.message) || err));
+    }
+    return;
+  }
+  if (action === 'resource-delete') {
+    const id = target.getAttribute('data-id');
+    if (!id) return;
+    const ok = await showConfirmDialog({
+      title: '删除资源',
+      message: '确定要从资源库中移除 "' + id + '" 吗？此操作将立即生效。',
+      danger: true,
+      confirmText: '确认删除',
+    });
+    if (!ok) return;
+    setLoading('resource_delete_' + id);
+    try {
+      await daemonHttp('DELETE', '/api/v1/resources', { id: id });
+      showToast('已删除资源 ' + id);
+      await refreshSettings();
+    } catch (err) {
+      showToast('删除失败: ' + String((err && err.message) || err));
+    } finally {
+      clearLoading();
+    }
+    return;
+  }
+  if (action === 'resource-toggle-expand') {
+    const id = target.getAttribute('data-id');
+    if (!id) return;
+    if (!state.ui.resourceExpanded) state.ui.resourceExpanded = {};
+    state.ui.resourceExpanded[id] = !state.ui.resourceExpanded[id];
+    scheduleRender(true);
     return;
   }
   if (action === 'worktree-spawn') {
@@ -4686,11 +5371,26 @@ function bindBindings() {
       if (key === 'enabled') state.ui.acp.enabled = Boolean(value);
       else if (key === 'name') state.ui.acp.displayName = value;
       else state.ui.acp[key] = value;
+      return;
+    }
+    if (bind.indexOf('resource.') === 0) {
+      if (!state.ui.resourceForm) state.ui.resourceForm = defaultResourceForm();
+      const key = bind.slice(9);
+      if (key === 'enabled' || key === 'readonly') state.ui.resourceForm[key] = Boolean(value);
+      else state.ui.resourceForm[key] = value;
+      return;
     }
   });
 
   subpanel.addEventListener('change', function (event) {
     const node = event.target;
+    const bind = node.getAttribute('data-bind');
+    if (bind && bind.indexOf('resource.') === 0 && node.type === 'checkbox') {
+      if (!state.ui.resourceForm) state.ui.resourceForm = defaultResourceForm();
+      const key = bind.slice(9);
+      state.ui.resourceForm[key] = Boolean(node.checked);
+      return;
+    }
     const changeAction = node.getAttribute('data-action-change');
     if (!changeAction) return;
     if (changeAction === 'snapshot-select') {

@@ -34,7 +34,15 @@ import {
   PERMISSION_PROFILE_LIST,
   TunnelDriverType,
 } from '../services/mwhRules';
-import { mwhService, MwhState, ShadowSnapshot, AcpProfile } from '../services/mwhService';
+import {
+  mwhService,
+  MwhState,
+  ShadowSnapshot,
+  AcpProfile,
+  PublicResourceEntry,
+  ResourceKind,
+  McpTransport,
+} from '../services/mwhService';
 import { useMwhState } from '../services/useMwhState';
 
 const NAV_ITEMS: Array<{
@@ -43,11 +51,10 @@ const NAV_ITEMS: Array<{
   sectionHeader: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'connectors', label: '连接器', sectionHeader: '连接器与隧道', icon: Grid },
-  { id: 'permissions', label: '权限', sectionHeader: '权限与安全模式', icon: Hand },
-  { id: 'daemon', label: '设备', sectionHeader: '本地电脑引擎', icon: Monitor },
-  { id: 'subagents', label: '代理', sectionHeader: '本地代理与 Worktree', icon: Bot },
-  { id: 'snapshots-audit', label: '数据控制', sectionHeader: '快照回滚与审计日志', icon: FileText },
+  { id: 'connectors', label: '连接与权限', sectionHeader: '连接器与权限模式', icon: Grid },
+  { id: 'daemon', label: '工作区与代理', sectionHeader: '工作区与代理引擎', icon: Monitor },
+  { id: 'resources', label: '资源库', sectionHeader: '本机 MCP 与 Skill', icon: Folder },
+  { id: 'snapshots-audit', label: '审计日志', sectionHeader: '影子快照与审计日志', icon: FileText },
 ];
 
 type SnapshotSortOrder = 'newest' | 'oldest' | 'files-desc';
@@ -231,6 +238,148 @@ export const MwhSettingsModal: React.FC = () => {
         await mwhService.deleteAcpProfile(id);
       },
     });
+  };
+
+  // Resource Library controls
+  const [resAddOpen, setResAddOpen] = useState(false);
+  const [resEditingId, setResEditingId] = useState<string | null>(null);
+  const [resKind, setResKind] = useState<ResourceKind>('mcp');
+  const [resTransport, setResTransport] = useState<McpTransport>('stdio');
+  const [resId, setResId] = useState('');
+  const [resDisplayName, setResDisplayName] = useState('');
+  const [resCommand, setResCommand] = useState('');
+  const [resArgs, setResArgs] = useState('');
+  const [resCwd, setResCwd] = useState('');
+  const [resHttpUrl, setResHttpUrl] = useState('');
+  const [resSkillDir, setResSkillDir] = useState('');
+  const [resReadonly, setResReadonly] = useState(false);
+  const [resEnabled, setResEnabled] = useState(false);
+  const [resProbing, setResProbing] = useState(false);
+  const [resProbeResult, setResProbeResult] = useState<{
+    ok: boolean;
+    tools?: Array<{ name: string; description?: string }>;
+    error?: string;
+    faultReason?: string;
+  } | null>(null);
+  const [resExpandedIds, setResExpandedIds] = useState<Record<string, boolean>>({});
+  const [resScanning, setResScanning] = useState(false);
+
+  const handleOpenAddResource = () => {
+    setResEditingId(null);
+    setResKind('mcp');
+    setResTransport('stdio');
+    setResId('');
+    setResDisplayName('');
+    setResCommand('');
+    setResArgs('');
+    setResCwd('');
+    setResHttpUrl('');
+    setResSkillDir('');
+    setResReadonly(false);
+    setResEnabled(false);
+    setResProbeResult(null);
+    setResAddOpen(true);
+  };
+
+  const handleOpenEditResource = (entry: PublicResourceEntry) => {
+    setResEditingId(entry.id);
+    setResKind(entry.kind);
+    setResTransport(entry.transport || 'stdio');
+    setResId(entry.id);
+    setResDisplayName(entry.displayName || '');
+    setResCommand(entry.command || '');
+    setResArgs((entry.args || []).join(' '));
+    setResCwd(entry.cwd || '');
+    setResHttpUrl(entry.httpUrl || '');
+    setResSkillDir(entry.skillDirDisplay || '');
+    setResReadonly(entry.readonly === true);
+    setResEnabled(entry.enabled === true);
+    setResProbeResult(null);
+    setResAddOpen(true);
+  };
+
+  const handleProbeResource = async () => {
+    setResProbing(true);
+    try {
+      let params: Record<string, unknown> = {};
+      if (resKind === 'mcp') {
+        if (resTransport === 'stdio') {
+          params = {
+            transport: 'stdio',
+            command: resCommand.trim(),
+            args: resArgs.split(/\s+/).filter(Boolean),
+            cwd: resCwd.trim() || undefined,
+          };
+        } else {
+          params = {
+            transport: 'http',
+            httpUrl: resHttpUrl.trim(),
+          };
+        }
+      } else {
+        params = {
+          kind: 'skill',
+          skillDir: resSkillDir.trim(),
+        };
+      }
+      const res = await mwhService.probeResource(params);
+      setResProbeResult(res);
+    } finally {
+      setResProbing(false);
+    }
+  };
+
+  const handleSaveResource = async () => {
+    const disp = resDisplayName.trim() || resId.trim();
+    if (!disp) return;
+    if (resEditingId) {
+      await mwhService.updateResource(resEditingId, {
+        displayName: disp,
+        command: resCommand.trim(),
+        args: resArgs.split(/\s+/).filter(Boolean),
+        cwd: resCwd.trim() || undefined,
+        httpUrl: resHttpUrl.trim() || undefined,
+        skillDirDisplay: resSkillDir.trim() || undefined,
+        readonly: resReadonly,
+      });
+    } else {
+      await mwhService.addResource({
+        id: resId.trim() || disp,
+        displayName: disp,
+        kind: resKind,
+        transport: resKind === 'mcp' ? resTransport : undefined,
+        command: resCommand.trim(),
+        args: resArgs.split(/\s+/).filter(Boolean),
+        cwd: resCwd.trim() || undefined,
+        httpUrl: resHttpUrl.trim() || undefined,
+        skillDirDisplay: resSkillDir.trim() || undefined,
+        enabled: resEnabled,
+        readonly: false,
+      });
+    }
+    setResAddOpen(false);
+  };
+
+  const handleDeleteResource = (entry: PublicResourceEntry) => {
+    setConfirmModal({
+      open: true,
+      title: '删除资源',
+      message: `确定要删除资源 "${entry.displayName || entry.id}" 吗？此操作将立即从资源库中移除。`,
+      danger: true,
+      confirmText: '确认删除',
+      onConfirm: async () => {
+        await mwhService.deleteResource(entry.id);
+      },
+    });
+  };
+
+  const handleScanResources = async () => {
+    setResScanning(true);
+    try {
+      await mwhService.scanResources();
+    } finally {
+      setResScanning(false);
+    }
   };
 
   // Snapshot & Audit controls
@@ -482,11 +631,11 @@ export const MwhSettingsModal: React.FC = () => {
                     transition={tabTransition}
                     className="space-y-3.5"
                   >
-                    {/* TAB 1: 通用 (本地电脑连接与配对) */}
-                    {state.activeSettingsTab === 'connectors' && (
-                      <div className="pt-1">
-                        <div className={`text-[13px] font-medium mb-2 ${mutedText}`}>
-                          本地电脑连接与无密钥配对说明
+                    {/* TAB 1: 连接与权限 */}
+                    {(state.activeSettingsTab === 'connectors' || state.activeSettingsTab === 'permissions') && (
+                      <div className="space-y-4 pt-1">
+                        <div className={`text-[13px] font-semibold tracking-wide ${mutedText}`}>
+                          连接器
                         </div>
                         <div className={`rounded-2xl p-4 space-y-3 ${cardBg}`}>
                           <div className="flex items-center justify-between gap-2 min-w-0">
@@ -548,11 +697,7 @@ export const MwhSettingsModal: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
 
-                    {state.activeSettingsTab === 'connectors' && (
-                      <>
                         <div className="grid grid-cols-2 gap-2.5">
                           {(
                             [
@@ -817,12 +962,12 @@ export const MwhSettingsModal: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      </>
-                    )}
 
-                    {/* TAB 3: 权限 (统一四档模式：计划模式 / 变更前确认 / 自主模式 / 完全访问) */}
-                    {state.activeSettingsTab === 'permissions' && (
-                      <>
+                        {/* 小节：权限 */}
+                        <div className={`text-[13px] font-semibold tracking-wide mt-6 mb-2 ${mutedText}`}>
+                          权限
+                        </div>
+
                         <div className="space-y-2" role="radiogroup" aria-label="四档权限模式">
                           {PERMISSION_PROFILE_LIST.map((prof) => {
                             const selected = currentProfile.id === prof.id;
@@ -950,12 +1095,15 @@ export const MwhSettingsModal: React.FC = () => {
                             ))}
                           </div>
                         </div>
-                      </>
+                      </div>
                     )}
 
-                    {/* TAB 4: 设备 (Windows Daemon 本地电脑引擎) */}
-                    {state.activeSettingsTab === 'daemon' && (
-                      <>
+                    {/* TAB 2: 工作区与代理 */}
+                    {(state.activeSettingsTab === 'daemon' || state.activeSettingsTab === 'subagents') && (
+                      <div className="space-y-4 pt-1">
+                        <div className={`text-[13px] font-semibold tracking-wide ${mutedText}`}>
+                          工作区
+                        </div>
                         <div className={`rounded-2xl p-4 space-y-3 ${cardBg}`}>
                           <div className="flex items-center justify-between">
                             <span className="text-[14px] font-medium">
@@ -1080,12 +1228,12 @@ export const MwhSettingsModal: React.FC = () => {
                             ))}
                           </div>
                         </div>
-                      </>
-                    )}
 
-                    {/* TAB 5: 子代理 (自定义 ACP 子代理与 Git Worktree 池) */}
-                    {state.activeSettingsTab === 'subagents' && (
-                      <>
+                        {/* 小节：代理 */}
+                        <div className={`text-[13px] font-semibold tracking-wide mt-6 mb-2 ${mutedText}`}>
+                          代理
+                        </div>
+
                         {/* 自定义 ACP 代理档案 */}
                         <div className={`rounded-2xl p-4 space-y-3 ${cardBg}`}>
                           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1330,10 +1478,556 @@ export const MwhSettingsModal: React.FC = () => {
                             })}
                           </div>
                         </div>
-                      </>
+                      </div>
                     )}
 
-                    {/* TAB 6: 数据控制 (快照回滚与审计日志) */}
+                    {/* TAB 3: 资源库 (本机 MCP 与 Skill) */}
+                    {state.activeSettingsTab === 'resources' && (
+                      <div className="space-y-4 pt-1">
+                        {/* Header Banner */}
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-[16px] font-bold tracking-tight">本机 MCP 与 Skill</h4>
+                            <div className="text-xs space-y-0.5 mt-1 leading-relaxed">
+                              <p className={chromeDark ? 'text-[#ececee]' : 'text-[#1d1d1f]'}>
+                                打开即对 Muse 生效，默认全部关闭。
+                              </p>
+                              <p className={mutedText}>
+                                MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleScanResources}
+                              disabled={resScanning}
+                              className={`px-3 py-1.5 rounded-[10px] text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer ${
+                                chromeDark
+                                  ? 'bg-[#27282c] hover:bg-[#313238] text-[#ececee]'
+                                  : 'bg-[#f7f6f2] hover:bg-[#e6e4de] text-[#1d1d1f]'
+                              } border border-white/5`}
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${resScanning ? 'animate-spin' : ''}`} />
+                              <span>{resScanning ? '扫描中...' : '扫描本机'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleOpenAddResource}
+                              className="px-3 py-1.5 rounded-[10px] text-xs font-medium bg-[#2B7FFF] text-white hover:bg-[#1A6FEF] flex items-center gap-1.5 transition-colors duration-120 cursor-pointer shadow-sm"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>添加</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* In-page Add / Edit Form */}
+                        {resAddOpen && (
+                          <div className={`rounded-[14px] p-4 space-y-3.5 ${cardBg} border border-[#2B7FFF]/25`}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13.5px] font-semibold text-[#2B7FFF]">
+                                {resEditingId ? '编辑资源' : '添加本机资源'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setResAddOpen(false)}
+                                className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-white/[0.08] text-neutral-400 hover:text-white"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Kind Selector (only if not editing) */}
+                            {!resEditingId && (
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>资源类型</span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setResKind('mcp')}
+                                    className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
+                                      resKind === 'mcp'
+                                        ? 'bg-[#2B7FFF] text-white'
+                                        : 'bg-white/5 text-neutral-400 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    本机 MCP
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setResKind('skill')}
+                                    className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
+                                      resKind === 'skill'
+                                        ? 'bg-[#2B7FFF] text-white'
+                                        : 'bg-white/5 text-neutral-400 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    Skill
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Display Name */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                              <span className={`text-xs ${mutedText} w-20 shrink-0`}>显示名称</span>
+                              <input
+                                type="text"
+                                value={resDisplayName}
+                                onChange={(e) => setResDisplayName(e.target.value)}
+                                placeholder="例如: MyTools 或 CodeAssist"
+                                className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                              />
+                            </div>
+
+                            {/* MCP-specific fields */}
+                            {resKind === 'mcp' && (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs ${mutedText} w-20 shrink-0`}>传输协议</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setResTransport('stdio')}
+                                      className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
+                                        resTransport === 'stdio'
+                                          ? 'bg-[#2B7FFF] text-white'
+                                          : 'bg-white/5 text-neutral-400 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      stdio
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setResTransport('http')}
+                                      className={`px-2.5 py-1 rounded-[8px] text-xs font-medium cursor-pointer transition-colors ${
+                                        resTransport === 'http'
+                                          ? 'bg-[#2B7FFF] text-white'
+                                          : 'bg-white/5 text-neutral-400 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      Streamable HTTP
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {resTransport === 'stdio' ? (
+                                  <>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>执行命令</span>
+                                      <input
+                                        type="text"
+                                        value={resCommand}
+                                        onChange={(e) => setResCommand(e.target.value)}
+                                        placeholder="例如: node 或 C:\path\to\server.exe"
+                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                      />
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>启动参数</span>
+                                      <input
+                                        type="text"
+                                        value={resArgs}
+                                        onChange={(e) => setResArgs(e.target.value)}
+                                        placeholder="例如: dist/index.js --port 8080 (空格分隔)"
+                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                      />
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>工作目录</span>
+                                      <input
+                                        type="text"
+                                        value={resCwd}
+                                        onChange={(e) => setResCwd(e.target.value)}
+                                        placeholder="可选，默认用户主目录"
+                                        className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                      />
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                    <span className={`text-xs ${mutedText} w-20 shrink-0`}>HTTP URL</span>
+                                    <input
+                                      type="text"
+                                      value={resHttpUrl}
+                                      onChange={(e) => setResHttpUrl(e.target.value)}
+                                      placeholder="例如: http://127.0.0.1:8000/mcp"
+                                      className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                    />
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {/* Skill-specific fields */}
+                            {resKind === 'skill' && (
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>Skill 目录</span>
+                                <input
+                                  type="text"
+                                  value={resSkillDir}
+                                  onChange={(e) => setResSkillDir(e.target.value)}
+                                  placeholder="需包含 SKILL.md 的本地目录绝对路径或 ~ 路径"
+                                  className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#2B7FFF] ${subtleBg}`}
+                                />
+                              </div>
+                            )}
+
+                            {/* Edit-only: 只读 option */}
+                            {resEditingId && (
+                              <div className="flex items-center gap-2 pt-1">
+                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>只读控制</span>
+                                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={resReadonly}
+                                    onChange={(e) => setResReadonly(e.target.checked)}
+                                    className="rounded text-[#2B7FFF] focus:ring-0"
+                                  />
+                                  <span>标记为只读（在计划模式下放行探查）</span>
+                                </label>
+                              </div>
+                            )}
+
+                            {/* Add-only: 立即启用 option (default false) */}
+                            {!resEditingId && (
+                              <div className="flex items-center gap-2 pt-1">
+                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>启用选项</span>
+                                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={resEnabled}
+                                    onChange={(e) => setResEnabled(e.target.checked)}
+                                    className="rounded text-[#2B7FFF] focus:ring-0"
+                                  />
+                                  <span>立即启用（默认关闭）</span>
+                                </label>
+                              </div>
+                            )}
+
+                            {/* Probe Action & Result */}
+                            <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-white/5">
+                              <button
+                                type="button"
+                                onClick={handleProbeResource}
+                                disabled={resProbing}
+                                className="px-2.5 py-1 rounded-[8px] text-xs bg-white/5 hover:bg-white/10 text-neutral-300 flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${resProbing ? 'animate-spin' : ''}`} />
+                                <span>{resProbing ? '探测中...' : '探测连接'}</span>
+                              </button>
+
+                              {resProbeResult && (
+                                <div className="text-xs">
+                                  {resProbeResult.ok ? (
+                                    <span className="text-emerald-400">
+                                      探测成功{resProbeResult.tools ? `（发现 ${resProbeResult.tools.length} 个工具）` : ''}
+                                    </span>
+                                  ) : (
+                                    <span className="text-amber-400">
+                                      探测失败: {resProbeResult.error || resProbeResult.faultReason || '无法建立连接'}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 ml-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => setResAddOpen(false)}
+                                  className="px-3 py-1 rounded-[8px] text-xs bg-white/5 hover:bg-white/10 text-neutral-300 cursor-pointer"
+                                >
+                                  取消
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleSaveResource}
+                                  className="px-3 py-1 rounded-[8px] text-xs bg-[#2B7FFF] text-white hover:bg-[#1A6FEF] font-medium cursor-pointer"
+                                >
+                                  保存
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Card 1: 本机 MCP */}
+                        <div className={`rounded-[14px] p-4 space-y-3 ${cardBg}`}>
+                          <div>
+                            <div className="text-[14px] font-semibold text-[#1d1d1f] dark:text-[#ececee]">
+                              本机 MCP
+                            </div>
+                            <div className={`text-xs ${mutedText} mt-0.5`}>
+                              启用后，工具会出现在 Muse 现有的 /mcp 里，直接调用即可。
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {state.resources.entries.filter((e) => e.kind === 'mcp').length === 0 ? (
+                              <div className={`text-xs ${mutedText} py-3 text-center`}>
+                                暂无已登记的本机 MCP 服务器，可通过上方「扫描本机」自动发现或「添加」手动配置。
+                              </div>
+                            ) : (
+                              state.resources.entries
+                                .filter((e) => e.kind === 'mcp')
+                                .map((entry) => {
+                                  const isExpanded = Boolean(resExpandedIds[entry.id]);
+                                  const isFault = Boolean(entry.faultReason || entry.runtimeStatus === 'fault');
+                                  const isRunning = entry.runtimeStatus === 'running';
+
+                                  return (
+                                    <div
+                                      key={entry.id}
+                                      className={`rounded-xl p-3 border transition-colors ${
+                                        chromeDark
+                                          ? 'bg-[#1e1f23] border-white/5'
+                                          : 'bg-[#e6e4de] border-black/5'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div
+                                          className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
+                                          onClick={() =>
+                                            setResExpandedIds((prev) => ({
+                                              ...prev,
+                                              [entry.id]: !prev[entry.id],
+                                            }))
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            className="text-neutral-400 hover:text-white p-0.5"
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronDown className="w-3.5 h-3.5" />
+                                            ) : (
+                                              <ChevronRight className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+                                          <span className="text-[13px] font-medium truncate">
+                                            {entry.displayName || entry.id}
+                                          </span>
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
+                                            {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
+                                          </span>
+                                          {isFault ? (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 shrink-0 font-medium">
+                                              {entry.faultReason || '启动故障'}
+                                            </span>
+                                          ) : isRunning ? (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 shrink-0">
+                                              运行正常
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-500/10 text-neutral-400 shrink-0">
+                                              已关闭
+                                            </span>
+                                          )}
+                                          {entry.readonly && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
+                                              只读
+                                            </span>
+                                          )}
+                                          <span className={`text-[11px] ${mutedText} shrink-0 ml-auto hidden sm:inline`}>
+                                            {entry.toolCount ?? entry.exposedToolNames?.length ?? 0} 个工具
+                                          </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => mwhService.toggleResource(entry.id, !entry.enabled)}
+                                            className={`px-2.5 py-1 rounded-[10px] text-xs font-medium transition-colors cursor-pointer ${
+                                              entry.enabled || isFault
+                                                ? 'bg-[#2B7FFF] text-white'
+                                                : chromeDark
+                                                ? 'bg-white/10 text-neutral-400 hover:text-white'
+                                                : 'bg-black/10 text-neutral-600 hover:text-black'
+                                            }`}
+                                          >
+                                            {entry.enabled || isFault ? '已启用' : '已停用'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenEditResource(entry)}
+                                            className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                                            title="编辑"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteResource(entry)}
+                                            className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-white/5 cursor-pointer"
+                                            title="删除"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Expandable in-place tools list */}
+                                      {isExpanded && (
+                                        <div className={`mt-2.5 pt-2.5 border-t border-white/5 space-y-2`}>
+                                          <div className="text-[11.5px] font-medium text-neutral-400">
+                                            将出现在 Muse 的 tools/list
+                                          </div>
+                                          {isFault && (
+                                            <div className="text-xs text-amber-400">
+                                              已暂时从 /mcp 撤下，修复后会自动恢复
+                                            </div>
+                                          )}
+                                          {entry.exposedToolNames && entry.exposedToolNames.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {entry.exposedToolNames.map((t, idx) => (
+                                                <div
+                                                  key={idx}
+                                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[11px] font-mono text-neutral-300"
+                                                  title={`原名: ${t.original}`}
+                                                >
+                                                  <span>{t.exposed}</span>
+                                                  <span className="text-[10px] text-neutral-500">({t.original})</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <div className={`text-xs ${mutedText}`}>
+                                              暂无工具（启用且运行正常后自动列出）
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card 2: Skill */}
+                        <div className={`rounded-[14px] p-4 space-y-3 ${cardBg}`}>
+                          <div>
+                            <div className="text-[14px] font-semibold text-[#1d1d1f] dark:text-[#ececee]">
+                              Skill
+                            </div>
+                            <div className={`text-xs ${mutedText} mt-0.5`}>
+                              名称和简短说明会自动备好，需要全文时再读一次。
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {state.resources.entries.filter((e) => e.kind === 'skill').length === 0 ? (
+                              <div className={`text-xs ${mutedText} py-3 text-center`}>
+                                暂无已登记的 Skill，可通过上方「扫描本机」自动发现或「添加」手动配置。
+                              </div>
+                            ) : (
+                              state.resources.entries
+                                .filter((e) => e.kind === 'skill')
+                                .map((entry) => {
+                                  const isExpanded = Boolean(resExpandedIds[entry.id]);
+                                  const isReady = entry.enabled;
+
+                                  return (
+                                    <div
+                                      key={entry.id}
+                                      className={`rounded-xl p-3 border transition-colors ${
+                                        chromeDark
+                                          ? 'bg-[#1e1f23] border-white/5'
+                                          : 'bg-[#e6e4de] border-black/5'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div
+                                          className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
+                                          onClick={() =>
+                                            setResExpandedIds((prev) => ({
+                                              ...prev,
+                                              [entry.id]: !prev[entry.id],
+                                            }))
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            className="text-neutral-400 hover:text-white p-0.5"
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronDown className="w-3.5 h-3.5" />
+                                            ) : (
+                                              <ChevronRight className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+                                          <span className="text-[13px] font-medium truncate">
+                                            {entry.displayName || entry.id}
+                                          </span>
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
+                                            {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
+                                          </span>
+                                          {isReady ? (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 shrink-0">
+                                              已就绪
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-500/10 text-neutral-400 shrink-0">
+                                              已关闭
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => mwhService.toggleResource(entry.id, !entry.enabled)}
+                                            className={`px-2.5 py-1 rounded-[10px] text-xs font-medium transition-colors cursor-pointer ${
+                                              entry.enabled
+                                                ? 'bg-[#2B7FFF] text-white'
+                                                : chromeDark
+                                                ? 'bg-white/10 text-neutral-400 hover:text-white'
+                                                : 'bg-black/10 text-neutral-600 hover:text-black'
+                                            }`}
+                                          >
+                                            {entry.enabled ? '已启用' : '已停用'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenEditResource(entry)}
+                                            className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                                            title="编辑"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteResource(entry)}
+                                            className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-white/5 cursor-pointer"
+                                            title="删除"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Expandable in-place description & path */}
+                                      {isExpanded && (
+                                        <div className="mt-2.5 pt-2.5 border-t border-white/5 space-y-1.5 text-xs">
+                                          <div className="text-neutral-300 leading-relaxed">
+                                            {entry.skillDescription || '暂无说明'}
+                                          </div>
+                                          <div className="font-mono text-[11px] text-neutral-500">
+                                            来源目录: {entry.skillDirDisplay || '~'}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 4: 审计日志 (快照回滚与审计日志) */}
                     {state.activeSettingsTab === 'snapshots-audit' && (
                       <>
                         <div className={`rounded-2xl p-4 space-y-3 min-w-0 overflow-hidden ${cardBg}`}>

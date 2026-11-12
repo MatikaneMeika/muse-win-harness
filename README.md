@@ -74,11 +74,11 @@
 ## UI Preview (Synthetic Vector Mockup)
 
 <p align="center">
-  <img src="./assets/brand/mwh-ui-mockup.svg" alt="Synthetic vector mockup of the MWH frameless desktop shell, 20px settings drawer, 24px 5-tab advanced configuration center, and bottom approval floating island" width="96%">
+  <img src="./assets/brand/mwh-ui-mockup.svg" alt="Light-theme synthetic mockup of the Muse-Win-Harness 32px titlebar, injected activity slot, settings drawer, and approval island">
 </p>
 
 <p align="center">
-  <sub><i>Synthetic vector diagram (zero real screenshots, zero private endpoints/paths). Left: 320px/20px settings drawer. Right: 5-column equal-width advanced configuration center (Connect / Permissions / Workspaces / Agents / Audit). Bottom: real-time approval floating island.</i></sub>
+  <sub><i>Light-theme synthetic vector (zero screenshots, zero private paths). 32px titlebar, injected 44px activity slot on a 56px rail, 20px-radius settings drawer, expanded 624×384 approval island, and 108×42 capsule.</i></sub>
 </p>
 
 ## Exposed Tools Matrix (7 Default + 1 Conditional)

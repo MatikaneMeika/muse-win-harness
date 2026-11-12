@@ -10,9 +10,9 @@
 shell/main.cjs
   ├─ 主窗口 BrowserWindow (frame: false, DWM 边框/标题栏色同步)
   │    └─ 加载 shell/chrome.html + shell/chrome-preload.cjs
-  │         └─ 顶部 38px 自绘标题栏 (#version-badge 显示 v0.1.0、最小化/最大化/隐藏到托盘/关闭)
+  │         └─ 顶部 32px 自绘标题栏 (#version-badge 显示 v0.1.0、最小化/最大化/隐藏到托盘/关闭)
   │
-  ├─ 客户区 BrowserView (museView, 位于顶栏下方 y=38..height)
+  ├─ 客户区 BrowserView (museView, 位于顶栏下方 y=32..height)
   │    ├─ 加载 https://muse.ai (剥离 Electron/mwh-desktop-shell UA 标记，保留纯净 Chromium UA)
   │    ├─ setWindowOpenHandler: OAuth 弹窗白名单 (muse/meta/facebook/instagram/stripe)
   │    └─ 挂载 shell/muse-settings-preload.cjs (contextIsolation: true, sandbox: false)
@@ -28,7 +28,7 @@ shell/main.cjs
        └─ GET /ui , /ui/* -> 托管 frontend/dist 浏览器调试预览面（若未构建则返回内置引导页）
 ```
 
-- **为什么采用 `BrowserWindow (chrome.html) + BrowserView + preload 注入`**：早期独立透明浮层子窗（ADR-010/011）在多显示器 DPI 切换与窗口焦点切换时存在跨窗口合成开销；现行架构将 38px 窗口控制顶栏放在宿主 `chrome.html`，将 `https://muse.ai` 承载于下部 `BrowserView`，并通过开启 `contextIsolation: true` 的 `muse-settings-preload.cjs` 在页面内挂载独立的 `#mwh-*` 伴随浮层 DOM（仅通过 IPC 与主进程通信，绝不读取或外传 `muse.ai` 的登录凭据）。
+- **为什么采用 `BrowserWindow (chrome.html) + BrowserView + preload 注入`**：早期独立透明浮层子窗（ADR-010/011）在多显示器 DPI 切换与窗口焦点切换时存在跨窗口合成开销；现行架构将 32px 窗口控制顶栏放在宿主 `chrome.html`，将 `https://muse.ai` 承载于下部 `BrowserView`，并通过开启 `contextIsolation: true` 的 `muse-settings-preload.cjs` 在页面内挂载独立的 `#mwh-*` 伴随浮层 DOM（仅通过 IPC 与主进程通信，绝不读取或外传 `muse.ai` 的登录凭据）。
 - **`frontend/` 的定位**：`frontend/`（编译至 `frontend/dist`，已从 Git 退库）提供浏览器直连 `http://127.0.0.1:19820/ui` 时的独立 React 调试预览面与组件契约验证。
 
 ## 构建
@@ -66,7 +66,7 @@ npm --prefix shell start
 桌面壳启动行为：
 
 - **自动拉起守护进程**：若 `127.0.0.1:19820` 尚未监听，桌面壳会优先定位系统 Node（`MWH_NODE_EXE`、`PATH` 或 `%ProgramFiles%\nodejs\node.exe`，回退为 `ELECTRON_RUN_AS_NODE=1`）自动后台启动 `dist/cli.js`；退出壳时自动优雅停止其拉起的守护进程，并将退出原因写入 `.mwh/logs/exit-reason.log`。
-- **顶栏与版本标识**：主窗口顶部 38px 渲染 `shell/chrome.html`，显示 `Muse-Win-Harness` 与版本徽章 `v0.1.0`（非 `main` 分支时显示 `v0.1.0 · <branch>`）。
+- **顶栏与版本标识**：主窗口顶部 32px 渲染 `shell/chrome.html`，显示 `Muse-Win-Harness` 与版本徽章 `v0.1.0`（非 `main` 分支时显示 `v0.1.0 · <branch>`）。
 - **纯净 UA 与 OAuth 白名单**：启动时自动剥离默认 User-Agent 中的 `Electron/...` 与 `mwh-desktop-shell/...` 标识；`muse.ai`、`meta.com`、`facebook.com`、`instagram.com`、`stripe.com` 域内 OAuth 登录弹窗正常放行，其余外部 `http(s)` 链接转交系统默认浏览器打开。
 - **自适应明暗主题同步**：`muse-settings-preload.cjs` 内置透明感知色彩探针（`parseOpaqueRgb` + `MutationObserver`），实时跟随 `muse.ai` 页面深浅色切换，并通过 `mwh:theme-sync` 同步更新主窗顶栏与 Windows 11 DWM 标题栏颜色。
 
@@ -95,7 +95,7 @@ npx electron . --smoke-test
 
 注入进 `BrowserView` 的浮岛（`shell/muse-settings-preload.cjs`）与 React 调试浮岛（`frontend/src/overlay/LiveTaskFloatingIsland.tsx`）遵循统一交互契约：
 
-- **三态切换**：收起胶囊（高 38px）→ 展开详情面板（默认 520×320，范围 360×200 ~ 720×520）→ 空闲隐藏（`IDLE` 时不遮挡页面）。
+- **三态切换**：收起胶囊（108×42，「待授权」）→ 展开详情面板（默认 624×384，范围 432×240 ~ 864×624）→ 空闲隐藏（`IDLE` 时不遮挡页面）。
 - **拖拽与边缘吸附**：单击标题栏切换展开/收起；按住 90ms 进入拖拽，松手吸附并写入 `localStorage['mwh_island_layout_v2']`，同时经 `mwh:island-layout-save` 镜像落盘至 `userData/island-layout.json`。
 - **待审批自动展开一次**：收到新的 `WAITING_APPROVAL` 任务时自动展开一次，展示风险等级、目标路径/命令与「允许一次 / 本工作区始终允许 / 拒绝」按钮。
 
@@ -140,7 +140,7 @@ Muse 云端自定义连接器要求 **HTTPS（443 端口）、禁止 URL 携带 
 日常点检桌面壳与控制面功能可按以下四节独立执行：
 
 ### 第一节：顶栏版本徽章与侧栏抽屉交互巡检
-- 查看桌面壳顶部 38px 标题栏，确认 `#version-badge` 显示 `v0.1.0`（或 `v0.1.0 · <分支名>`），最小化、最大化、隐藏到托盘按钮响应正常。
+- 查看桌面壳顶部 32px 标题栏，确认 `#version-badge` 显示 `v0.1.0`（或 `v0.1.0 · <分支名>`），最小化、最大化、隐藏到托盘按钮响应正常。
 - 点击 Muse 左侧活动栏中的 **MWH** 图标，确认设置抽屉（`#mwh-drawer`）平滑滑出，点击全屏遮罩（`.mwh-drawer-backdrop`）可正常收起。
 
 ### 第二节：统一四档权限模式即时切换巡检

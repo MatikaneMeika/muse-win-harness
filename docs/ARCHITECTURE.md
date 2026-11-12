@@ -21,9 +21,9 @@ Muse-Win-Harness（简称 **MWH**，当前版本 `v0.1.0`）是专为 Windows 10
 │               preExecute -> execute -> postExecute               │
 │                                                                  │
 │  [Unified 4-Tier Permission Profile] -> (Confinement × Approval) │
-│   1. plan        -> read-only          × always-ask              │
-│   2. confirm     -> workspace-write    × always-ask (Default)    │
-│   3. autonomous  -> workspace-write    × smart-risk              │
+│   1. plan        -> read-only          × smart-risk              │
+│   2. confirm     -> workspace-write    × smart-risk (Default)    │
+│   3. autonomous  -> workspace-write    × auto-workspace          │
 │   4. full-access -> danger-full-access × unattended-yolo         │
 │   (Note: workspace-acl-experimental is reserved Fail-Closed)     │
 └──────────────────┬───────────────────────────────┬───────────────┘

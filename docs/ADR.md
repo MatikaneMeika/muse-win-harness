@@ -234,7 +234,7 @@ Token 读取顺序固定为：`window.mwhWindow.getRuntimeToken()`（preload 桥
 
 ### 决策
 1. **单主窗 + 内嵌 `BrowserView` 架构（取代 ADR-009/010）**：
-   - 主窗口 `BrowserWindow`（`frame: false`）加载本地 `shell/chrome.html`（配 `shell/chrome-preload.cjs`），在顶部渲染 38px 自绘标题栏（含应用名、分支/版本徽章 `#version-badge` 与最小化/最大化/隐藏托盘/关闭按钮）。
+   - 主窗口 `BrowserWindow`（`frame: false`）加载本地 `shell/chrome.html`（配 `shell/chrome-preload.cjs`），在顶部渲染 32px 自绘标题栏（含应用名、分支/版本徽章 `#version-badge` 与最小化/最大化/隐藏托盘/关闭按钮）。
    - 主窗口下部客户区（`y = 38 .. height`）挂载 `BrowserView`（`museView`），直接加载 `https://muse.ai`，并通过 `museView.setBounds` 随主窗客户区同步缩放。
 2. **受控 Preload UI 注入与主题同步（`shell/muse-settings-preload.cjs`）**：
    - `museView` 挂载 `shell/muse-settings-preload.cjs`（启用 `contextIsolation: true`，不暴露 Node 原语、不读取或外传 `muse.ai` 登录 Cookie/Token）。

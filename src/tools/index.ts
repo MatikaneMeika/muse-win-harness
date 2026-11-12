@@ -11,6 +11,7 @@ import type { ApprovalEngine } from '../pipeline/approvalEngine.js';
 import type { ExecutionContext } from '../types.js';
 import { DesktopHands } from './desktopHands.js';
 import { FsTools } from './fsTools.js';
+import { getResourcesManager } from '../resources/manager.js';
 import {
   VALID_CONFINEMENT_MODES,
   resolvePermissionProfile,
@@ -78,6 +79,15 @@ export async function executeMuseTool(
           url: context.tunnelUrl || null
         },
         lastApprovalReceipt: approvalEngine.getLatestSanitizedReceipt(),
+        // Enabled local MCP servers (id / tool count / running-or-fault) and the
+        // name+summary of enabled local Skills. No Skill full text here.
+        resources: (() => {
+          try {
+            return getResourcesManager().getStatusSummary();
+          } catch {
+            return { enabledCount: 0, mcp: [], skills: [] };
+          }
+        })(),
         tags: isFullAccess ? ['[FULL-ACCESS-ACTIVE]'] : []
       };
     }
@@ -325,7 +335,19 @@ export async function executeMuseTool(
       return DesktopHands.execute(params as any, !!context.desktopHandsEnabled);
     }
 
-    default:
+    case 'skill_read': {
+      // Only enabled Skills registered in the local resource library are readable.
+      return getResourcesManager().readSkill(params.name);
+    }
+
+    default: {
+      // Third-party MCP tools keep their `{serverId}_{tool}` exposed name and are
+      // forwarded to the owning session. Anything else stays UNKNOWN_TOOL.
+      const resources = getResourcesManager();
+      if (resources.hasExposedTool(toolName)) {
+        return await resources.callTool(toolName, params);
+      }
       throw new Error(`UNKNOWN_TOOL: ${toolName}`);
+    }
   }
 }

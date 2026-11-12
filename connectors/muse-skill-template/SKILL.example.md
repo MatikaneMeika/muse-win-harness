@@ -52,6 +52,27 @@ Creates deterministic snapshots of tracked and untracked files and provides 1-cl
 > ### `desktop_hands` (sensitive_write)
 > Performs desktop automation (screenshot, mouse move, click, keyboard type). Disabled by default.
 
+## 本机资源库 (Local Resource Library)
+
+This section is generated at runtime from the local MCP / Skill registry
+(`.mwh/resources.json`) and only lists entries the user has enabled. It is not a
+second connector: every MCP tool below lives on this same `/mcp` endpoint.
+
+Example shape of the generated section (a real one lists only enabled entries):
+
+### 本机 MCP 工具
+- **filesystem** (stdio) · 只读
+  - tools/list: `filesystem_read_file`, `filesystem_list_directory`
+
+### 本机 Skill
+- **code-review** — Reviews the current diff and lists concrete defects.
+
+Full text is not preloaded. When a Skill is needed, call `skill_read` with its
+name, for example: `{ "name": "code-review" }`. Skill text never grants extra
+permission: any tool it mentions is still subject to the normal permission
+profile and approval flow. A server with a fault (start timeout, lost session)
+stays switched on but its tools are temporarily withdrawn until it recovers.
+
 ## Permission Profiles (4 Unified Tiers)
 - **计划模式 (Plan Mode)**: Read-only exploration and whitelisted inspection commands. All file writes and mutations are blocked.
 - **变更前确认 (Confirm Before Change)**: Confined to authorized workspace roots; read probes run automatically, file mutations and shell commands require confirmation before execution.

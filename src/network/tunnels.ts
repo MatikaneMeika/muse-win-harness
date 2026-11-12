@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { joinInsideRoot } from '../pipeline/pathGuard.js';
+import { getResourcesManager } from '../resources/manager.js';
 import { getExposedMuseTools } from '../tools/definitions.js';
 
 /**
@@ -149,15 +150,32 @@ export function sanitizeSkillEndpointUrl(rawUrl: string): string {
  * Skill Template Generator
  * Synchronizes connectors/muse-skill-template/SKILL.md with active endpoint and tools.
  */
+function safeRenderResourcesSection(): string {
+  try {
+    return getResourcesManager().renderSkillMdSection();
+  } catch {
+    // A broken registry must never prevent the pairing SKILL.md from refreshing.
+    return '';
+  }
+}
+
 export class SkillTemplateGenerator {
   public static refreshSkillMd(
     endpointUrl: string,
     outputPath = path.resolve(process.cwd(), 'connectors', 'muse-skill-template', 'SKILL.md'),
-    desktopHandsEnabled = false
+    desktopHandsEnabled = false,
+    /**
+     * 「本机资源库」section. Left undefined, it is generated from the local
+     * registry's enabled entries; pass '' to omit it explicitly.
+     */
+    resourcesSection?: string
   ): string {
     const cleanUrl = sanitizeSkillEndpointUrl(endpointUrl);
     const mcpUrl = `${cleanUrl}/mcp`;
     const restUrl = `${cleanUrl}/api/v1`;
+
+    const section =
+      resourcesSection === undefined ? safeRenderResourcesSection() : resourcesSection;
 
     const exposedTools = getExposedMuseTools(desktopHandsEnabled);
     const toolsDocs = exposedTools.map((t) => {
@@ -185,7 +203,7 @@ MWH is an independent open-source local agent runtime and forward bridge for Win
 
 ## Exposed Tools (${exposedTools.length} Muse Tools)
 ${toolsDocs}
-
+${section ? `${section}\n` : ''}
 ## Permission Profiles (4 Unified Tiers)
 - **计划模式 (Plan Mode)**: Read-only exploration and whitelisted inspection commands. All file writes and mutations are blocked.
 - **变更前确认 (Confirm Before Change)**: Confined to authorized workspace roots; read probes run automatically, file mutations and shell commands require confirmation before execution.

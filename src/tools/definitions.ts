@@ -335,13 +335,46 @@ export const MUSE_TOOLS: ToolDefinition[] = [
 ];
 
 /**
+ * Conditionally exposed built-in: only listed when at least one local Skill in
+ * the resource library is enabled (same pattern as `desktop_hands`). Kept out of
+ * `MUSE_TOOLS` so the 7/8 core tool contract in the gates stays unchanged.
+ */
+export const SKILL_READ_TOOL: ToolDefinition = {
+  name: 'skill_read',
+  category: 'read',
+  description:
+    'Reads the full SKILL.md text of an enabled local Skill registered in the MWH resource library. Disabled or unknown Skills are rejected.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Registered Skill name (as listed in SKILL.md / pc_status)'
+      }
+    },
+    required: ['name']
+  }
+};
+
+/**
  * Returns the active Muse tools exposed over MCP (/mcp), REST (/api/v1/tools),
  * and SKILL.md. `desktop_hands` is only exposed when explicitly enabled in
- * configuration (`desktopHands.enabled === true`).
+ * configuration (`desktopHands.enabled === true`). `extras` carries the resource
+ * library's contributions: tools of enabled and healthy MCP servers, plus
+ * `skill_read` when at least one local Skill is enabled.
  */
-export function getExposedMuseTools(desktopHandsEnabled = false): ToolDefinition[] {
-  if (desktopHandsEnabled) {
-    return MUSE_TOOLS;
-  }
-  return MUSE_TOOLS.filter((t) => t.name !== 'desktop_hands');
+export function getExposedMuseTools(
+  desktopHandsEnabled = false,
+  extras: ToolDefinition[] = []
+): ToolDefinition[] {
+  const base = desktopHandsEnabled
+    ? MUSE_TOOLS
+    : MUSE_TOOLS.filter((t) => t.name !== 'desktop_hands');
+  const taken = new Set(base.map((t) => t.name));
+  const extraTools = extras.filter((t) => {
+    if (!t || !t.name || taken.has(t.name)) return false;
+    taken.add(t.name);
+    return true;
+  });
+  return [...base, ...extraTools];
 }

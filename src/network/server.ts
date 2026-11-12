@@ -10,7 +10,8 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { PipelineKernel } from '../pipeline/pipeline.js';
-import { getExposedMuseTools } from '../tools/definitions.js';
+import { getExposedMuseTools, type ToolDefinition } from '../tools/definitions.js';
+import { getResourcesManager } from '../resources/manager.js';
 import { BearerAuthGuard } from './authGuard.js';
 import { MwhControlPlane } from './stateManager.js';
 import { QuickTunnelDriver, NamedTunnelDriver, assertTokenEntropy, validateServerBindSecurity } from './tunnels.js';
@@ -40,6 +41,9 @@ export class MwhServer {
   // per approvalId (attempts older than 60s are pruned on access).
   private approvalPostAttempts: Map<string, number[]> = new Map();
   private shutdownHandler: (() => void) | null = null;
+  /** Long-lived /mcp GET streams that can receive tools/list_changed. */
+  private mcpEventStreams: Set<http.ServerResponse> = new Set();
+  private unsubResourceChanges: (() => void) | null = null;
 
   constructor(options: ServerOptions) {
     this.runtimeToken = options.runtimeToken;
@@ -59,6 +63,43 @@ export class MwhServer {
       host: this.host,
       cloudflaredPath: options.cloudflaredPath
     });
+    // Switching a resource on/off must reach already-connected Muse sessions when
+    // the transport allows a notification; the tools/list content is authoritative.
+    try {
+      this.unsubResourceChanges = getResourcesManager().onChange(() => this.notifyMcpToolsChanged());
+    } catch {
+      this.unsubResourceChanges = null;
+    }
+  }
+
+  /**
+   * Tools exposed on /mcp and /api/v1/tools: the built-in set plus every tool of
+   * an enabled, healthy local MCP server and `skill_read` when a Skill is enabled.
+   */
+  private exposedTools(): ToolDefinition[] {
+    let extras: ToolDefinition[] = [];
+    try {
+      extras = getResourcesManager().getExposedToolDefinitions();
+    } catch {
+      extras = [];
+    }
+    return getExposedMuseTools(!!this.kernel.getContext().desktopHandsEnabled, extras);
+  }
+
+  /** Best-effort `notifications/tools/list_changed` over open MCP SSE streams. */
+  private notifyMcpToolsChanged(): void {
+    if (this.mcpEventStreams.size === 0) return;
+    const frame = `event: message\ndata: ${JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'notifications/tools/list_changed'
+    })}\n\n`;
+    for (const stream of [...this.mcpEventStreams]) {
+      try {
+        stream.write(frame);
+      } catch {
+        this.mcpEventStreams.delete(stream);
+      }
+    }
   }
 
   /** Registers tunnel drivers this process spawned. stop() only kills those children. */
@@ -121,6 +162,16 @@ export class MwhServer {
   }
 
   public async stop(): Promise<void> {
+    this.unsubResourceChanges?.();
+    this.unsubResourceChanges = null;
+    for (const stream of this.mcpEventStreams) {
+      try {
+        stream.end();
+      } catch {
+        // Already closed.
+      }
+    }
+    this.mcpEventStreams.clear();
     try {
       this.controlPlane.dispose();
     } catch {
@@ -283,6 +334,10 @@ export class MwhServer {
         res.write('event: endpoint\ndata: ');
         res.write(endpointEvent);
         res.write('\n\n');
+        this.mcpEventStreams.add(res);
+        req.on('close', () => {
+          this.mcpEventStreams.delete(res);
+        });
         return;
       }
 
@@ -321,7 +376,7 @@ export class MwhServer {
 
     if (pathname === '/api/v1/tools' && method === 'GET') {
       this.controlPlane.recordMcpActivity();
-      const exposedTools = getExposedMuseTools(!!this.kernel.getContext().desktopHandsEnabled);
+      const exposedTools = this.exposedTools();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ tools: exposedTools }));
       return;
@@ -379,7 +434,7 @@ export class MwhServer {
       return { jsonrpc: '2.0', id, result: {} };
     }
 
-    const exposedTools = getExposedMuseTools(!!this.kernel.getContext().desktopHandsEnabled);
+    const exposedTools = this.exposedTools();
 
     if (method === 'tools/list') {
       return {

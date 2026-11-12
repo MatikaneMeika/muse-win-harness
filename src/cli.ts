@@ -30,6 +30,7 @@ import {
 } from './network/tunnels.js';
 import { setUiSessionSecret } from './network/uiStatic.js';
 import { PipelineKernel } from './pipeline/pipeline.js';
+import { getResourcesManager } from './resources/manager.js';
 import {
   loadPersistedSecrets,
   resolveConfiguredTokenTtlMs,
@@ -500,6 +501,16 @@ async function main() {
   }
 
   server.attachOwnedTunnels({ quick: quickDriver, named: namedDriver });
+
+  // Start already-enabled local MCP servers from the resource library. A broken
+  // server stays enabled with an amber fault reason and never blocks boot.
+  try {
+    await getResourcesManager(workspaceRoot).initialize();
+  } catch (err: any) {
+    console.warn(
+      `[WARN] RESOURCE_LIBRARY_INIT_FAILED: ${err?.message || String(err)} — continuing without local MCP resources.`
+    );
+  }
 
   // Refresh skill template with the honest, actually-serving endpoint
   const skillPath = SkillTemplateGenerator.refreshSkillMd(

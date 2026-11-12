@@ -19,9 +19,24 @@ import { ApprovalEngine, hashClientParams } from './approvalEngine.js';
 import { checkPathAccess, checkSensitiveBlacklist, type PathAccessResult } from './pathGuard.js';
 import { AclSandboxManager } from './aclSandbox.js';
 import { executeMuseTool, MUSE_TOOLS } from '../tools/index.js';
+import { getResourcesManager } from '../resources/manager.js';
 
 export const SECURITY_BOUNDARY_STATEMENT =
   '无 OS 级真沙箱，依赖路径围栏+进程树管控+审批流';
+
+/**
+ * Looks up a third-party tool definition declared by the local resource library.
+ * Never throws: a broken registry must not turn an unknown tool into a 500.
+ */
+function findResourceToolDefinition(name: string) {
+  try {
+    return getResourcesManager()
+      .getExposedToolDefinitions()
+      .find((tool) => tool.name === name);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Context keys that must never be overridable by external request callers:
@@ -145,7 +160,12 @@ export class PipelineKernel {
     // Only subagent_dispatch with an explicit read-only childMode or read-only
     // control action may run under 'read'.
     const CATEGORY_RANK = { read: 0, write: 1, sensitive_write: 2 } as const;
-    const toolDef = MUSE_TOOLS.find((t) => t.name === request.toolName);
+    // Built-ins first; an unknown name may still be a third-party MCP tool from
+    // the resource library, whose category is server-side (readonly ? read :
+    // sensitive_write) and must never be taken from the caller.
+    const toolDef =
+      MUSE_TOOLS.find((t) => t.name === request.toolName) ||
+      findResourceToolDefinition(request.toolName);
     let authoritativeCategory = request.category;
     if (request.toolName === 'switch_mode') {
       authoritativeCategory = 'sensitive_write';
@@ -279,17 +299,30 @@ export class PipelineKernel {
     // A. Read-only mode write interception for file mutation tools
     // R2-M7 & R3-M2: Exempt switch_mode so mode transitions reach ApprovalEngine,
     // and check category !== 'read' so no non-read category can slip through.
-    if (
-      context.confinementMode === 'read-only' &&
-      toolName !== 'exec_command' &&
-      toolName !== 'switch_mode' &&
-      category !== 'read'
-    ) {
-      return {
-        status: 'DENIED',
-        reason: 'READ_ONLY_MODE_WRITE_DENIED: Modifications are forbidden in read-only mode',
-        riskLevel: 'high'
-      };
+    // Third-party MCP tools are unknown in nature: only entries explicitly marked
+    // read-only run in plan mode, everything else is denied with a clear reason.
+    if (context.confinementMode === 'read-only' && toolName !== 'exec_command' && toolName !== 'switch_mode') {
+      let resources: ReturnType<typeof getResourcesManager> | null = null;
+      try {
+        resources = getResourcesManager();
+      } catch {
+        resources = null;
+      }
+      if (resources && resources.isThirdPartyTool(toolName) && !resources.isReadonlyTool(toolName)) {
+        return {
+          status: 'DENIED',
+          reason:
+            'READ_ONLY_MODE_THIRD_PARTY_DENIED: third-party MCP tools are blocked in plan mode unless the entry is marked read-only',
+          riskLevel: 'high'
+        };
+      }
+      if (category !== 'read') {
+        return {
+          status: 'DENIED',
+          reason: 'READ_ONLY_MODE_WRITE_DENIED: Modifications are forbidden in read-only mode',
+          riskLevel: 'high'
+        };
+      }
     }
 
     // B. Read-only mode shell command confinement

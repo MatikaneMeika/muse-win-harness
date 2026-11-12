@@ -19,7 +19,9 @@ import { checkSensitiveBlacklist, resolveNativePath } from '../pipeline/pathGuar
 import { PipelineKernel } from '../pipeline/pipeline.js';
 import { validateOutboundHostSync } from '../security/outboundGuard.js';
 import { SubagentDispatcher } from '../subagents/dispatcher.js';
-import { getExposedMuseTools, MUSE_TOOLS } from '../tools/definitions.js';
+import { getExposedMuseTools, type ToolDefinition } from '../tools/definitions.js';
+import { getResourcesManager } from '../resources/manager.js';
+import type { PublicResourceEntry, ResourceStatusSummary } from '../resources/types.js';
 import { AcpConfigManager } from '../config/acpConfig.js';
 import {
   MODE_RANK,
@@ -218,6 +220,12 @@ export interface MwhState {
   liveTask: LiveTaskState;
   lastCopiedToast: string | null;
   lastInjectedChatText: string | null;
+  /** Local MCP / Skill resource library summary (enabled count + public list). */
+  resources: {
+    enabledCount: number;
+    entries: PublicResourceEntry[];
+    summary: ResourceStatusSummary;
+  };
 }
 
 interface PendingUiTask {
@@ -326,6 +334,7 @@ export class MwhControlPlane {
   };
   private builtinReport = '';
   private unsubJob: (() => void) | null = null;
+  private unsubResources: (() => void) | null = null;
   private unsubQuickExit: (() => void) | null = null;
   private preTaskDirtyFiles: Set<string> = new Set();
   private readonly bootedAt = Date.now();
@@ -400,6 +409,15 @@ export class MwhControlPlane {
     this.workspaceRoots = [root];
     this.kernel.updateContext({ workspaceRoots: [...this.workspaceRoots] });
     this.unsubJob = JobManager.getInstance().onJobEvent((event) => this.onJobLifecycle(event));
+    // Resource-library lifecycle changes (scan / toggle / fault / recovery) are
+    // audited and pushed to open UI streams.
+    try {
+      const manager = getResourcesManager(root);
+      manager.setAuditSink((event) => this.appendAudit(event));
+      this.unsubResources = manager.onChange(() => this.broadcastResourceState());
+    } catch {
+      this.unsubResources = null;
+    }
   }
 
   private bindQuickDriverExit(driver: QuickTunnelDriver): void {
@@ -446,6 +464,15 @@ export class MwhControlPlane {
   public dispose(): void {
     this.unsubJob?.();
     this.unsubJob = null;
+    this.unsubResources?.();
+    this.unsubResources = null;
+    // End every MCP child spawned by the resource library (Job Object kill).
+    try {
+      getResourcesManager().disposeAll();
+    } catch {
+      // Shutdown must continue even if a child refuses to die; the Job handle's
+      // KILL_ON_JOB_CLOSE backstop still fires when the daemon exits.
+    }
     this.unsubQuickExit?.();
     this.unsubQuickExit = null;
     this.clearDowngradeTimer();
@@ -583,9 +610,44 @@ export class MwhControlPlane {
       auditLogs: this.readAuditTail(ctx.workspaceRoot, 50),
       liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
       lastCopiedToast: null,
-      lastInjectedChatText: null
+      lastInjectedChatText: null,
+      resources: this.resourceState()
     };
     return state;
+  }
+
+  /** Public (sanitized) resource-library snapshot used by state + SSE patches. */
+  private resourceState(): MwhState['resources'] {
+    try {
+      const manager = getResourcesManager();
+      const summary = manager.getStatusSummary();
+      return {
+        enabledCount: summary.enabledCount,
+        entries: manager.getPublicEntries(),
+        summary
+      };
+    } catch {
+      return {
+        enabledCount: 0,
+        entries: [],
+        summary: { enabledCount: 0, mcp: [], skills: [] }
+      };
+    }
+  }
+
+  private broadcastResourceState(): void {
+    this.broadcastSse({ resources: this.resourceState() });
+  }
+
+  /** Built-in tools plus enabled resource-library tools (used by REST tool routes). */
+  private exposedTools(): ToolDefinition[] {
+    let extras: ToolDefinition[] = [];
+    try {
+      extras = getResourcesManager().getExposedToolDefinitions();
+    } catch {
+      extras = [];
+    }
+    return getExposedMuseTools(!!this.kernel.getContext().desktopHandsEnabled, extras);
   }
 
   public broadcastSse(patch: Record<string, unknown>): void {
@@ -932,6 +994,108 @@ export class MwhControlPlane {
         return true;
       }
 
+      // Local resource library (MCP servers + Skills). Same Bearer trust level as
+      // the ACP routes above; every mutation is audited.
+      if (pathname === '/api/v1/resources' && method === 'GET') {
+        const manager = getResourcesManager();
+        this.send(res, 200, {
+          ok: true,
+          entries: manager.getPublicEntries(),
+          summary: manager.getStatusSummary()
+        });
+        return true;
+      }
+      if (pathname === '/api/v1/resources' && method === 'POST') {
+        const body = await this.readJson(req);
+        const entry = await getResourcesManager().add(body || {});
+        this.broadcastResourceState();
+        this.send(res, 200, {
+          ok: true,
+          id: entry.id,
+          entries: getResourcesManager().getPublicEntries(),
+          summary: getResourcesManager().getStatusSummary()
+        });
+        return true;
+      }
+      if (pathname === '/api/v1/resources/scan' && method === 'POST') {
+        const outcome = getResourcesManager().scan();
+        this.broadcastResourceState();
+        this.send(res, 200, {
+          ok: true,
+          discovered: outcome.discovered.length,
+          added: outcome.added,
+          skipped: outcome.skipped,
+          entries: getResourcesManager().getPublicEntries(),
+          summary: getResourcesManager().getStatusSummary()
+        });
+        return true;
+      }
+      if (pathname === '/api/v1/resources/toggle' && method === 'POST') {
+        const body = await this.readJson(req);
+        const id = typeof body?.id === 'string' ? body.id : '';
+        if (!id) {
+          this.send(res, 400, { ok: false, error: 'RESOURCE_ID_REQUIRED' });
+          return true;
+        }
+        const entry = await getResourcesManager().toggle(id, body?.enabled === true);
+        this.broadcastResourceState();
+        this.send(res, 200, {
+          ok: true,
+          id: entry.id,
+          enabled: entry.enabled,
+          entries: getResourcesManager().getPublicEntries(),
+          summary: getResourcesManager().getStatusSummary()
+        });
+        return true;
+      }
+      if (pathname === '/api/v1/resources/probe' && method === 'POST') {
+        const body = await this.readJson(req);
+        const result = await getResourcesManager().probe(body || {});
+        this.send(res, result.ok ? 200 : 400, { ...result, ok: result.ok });
+        return true;
+      }
+      if (pathname === '/api/v1/resources/update' && method === 'POST') {
+        const body = await this.readJson(req);
+        const id = typeof body?.id === 'string' ? body.id : '';
+        if (!id) {
+          this.send(res, 400, { ok: false, error: 'RESOURCE_ID_REQUIRED' });
+          return true;
+        }
+        const entry = await getResourcesManager().update(id, body || {});
+        this.broadcastResourceState();
+        this.send(res, 200, {
+          ok: true,
+          id: entry.id,
+          entries: getResourcesManager().getPublicEntries(),
+          summary: getResourcesManager().getStatusSummary()
+        });
+        return true;
+      }
+      if (pathname === '/api/v1/resources' && method === 'DELETE') {
+        let body: any = {};
+        try {
+          body = await this.readJson(req);
+        } catch {
+          body = {};
+        }
+        const urlObj = new URL(req.url || '', 'http://127.0.0.1');
+        const id =
+          (typeof body?.id === 'string' && body.id) || urlObj.searchParams.get('id') || '';
+        if (!id) {
+          this.send(res, 400, { ok: false, error: 'RESOURCE_ID_REQUIRED' });
+          return true;
+        }
+        await getResourcesManager().remove(id);
+        this.broadcastResourceState();
+        this.send(res, 200, {
+          ok: true,
+          id,
+          entries: getResourcesManager().getPublicEntries(),
+          summary: getResourcesManager().getStatusSummary()
+        });
+        return true;
+      }
+
       if (method === 'POST' && pathname.startsWith('/api/v1/tools/')) {
         this.recordMcpActivity();
         const toolName = decodeURIComponent(pathname.slice('/api/v1/tools/'.length));
@@ -940,7 +1104,7 @@ export class MwhControlPlane {
           return true;
         }
         const params = await this.readJson(req);
-        const exposedTools = getExposedMuseTools(!!this.kernel.getContext().desktopHandsEnabled);
+        const exposedTools = this.exposedTools();
         const toolDef = exposedTools.find((t) => t.name === toolName);
         if (!toolDef) {
           this.send(res, 404, { error: 'TOOL_NOT_FOUND', message: `Tool not found: ${toolName}` });
@@ -1553,10 +1717,11 @@ export class MwhControlPlane {
       this.send(res, 400, { error: 'TOOL_NAME_REQUIRED' });
       return;
     }
-    const toolDef = MUSE_TOOLS.find((t) => t.name === toolName);
-    // category 是服务端信任锚：一律采信工具表定义，客户端自报的 category 不采信，
-    // 否则 exec_command 等高危工具可被自报为 read 绕过审批。工具不存在时仅接受
-    // ToolMetaCategory 白名单内的客户端声明，其余一律落最严的 sensitive_write。
+    // category 是服务端信任锚：一律采信暴露工具表定义（含资源库第三方工具），
+    // 客户端自报的 category 不采信，否则 exec_command 等高危工具可被自报为 read
+    // 绕过审批。工具不存在时仅接受 ToolMetaCategory 白名单内的客户端声明，
+    // 其余一律落最严的 sensitive_write。
+    const toolDef = this.exposedTools().find((t) => t.name === toolName);
     const TRUSTED_FALLBACK_CATEGORIES: readonly ToolMetaCategory[] = ['read', 'write', 'sensitive_write'];
     const category: ToolMetaCategory = toolDef
       ? toolDef.category
@@ -1860,6 +2025,13 @@ export class MwhControlPlane {
   ): Promise<void> {
     const abortRes = JobManager.getInstance().abortAll();
     const emergencyEpoch = SubagentDispatcher.triggerEmergencyStop();
+    // Emergency kill also ends every MCP child the resource library spawned; the
+    // switch state itself is preserved so nothing silently re-enables later.
+    try {
+      getResourcesManager().disposeAll();
+    } catch {
+      // Best-effort: Job Object kill-on-close still applies at process exit.
+    }
     const rejectedApprovalIds = this.kernel
       .getApprovalEngine()
       .rejectAllPending('EMERGENCY_KILL');

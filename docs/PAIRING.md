@@ -1,0 +1,122 @@
+# 配对与恢复指南（Muse ↔ MWH）
+
+> 一句话前提：**MWH 只负责提供 MCP 端点和 Bearer Token；把连接器登记到 Muse 是 App 侧的动作，云端会话里的模型无法代做。** 本文只写用户真实可执行的路径，以及失败后怎么回到可用状态。
+
+---
+
+## 0. 责任边界
+
+| 动作 | 谁来做 | 说明 |
+| :--- | :--- | :--- |
+| 启动宿主、开隧道、生成 MCP URL | MWH（本机） | 双击 `MWH启动.cmd`，宿主未就绪时脚本会停住且**不会开窗** |
+| 复制 Bearer Token | 你（本机设置抽屉） | 「连接器与隧道 → 复制完整 Token」；Token 不随隧道变化 |
+| 新建 / 删除 / 重连连接器 | 你（Muse App） | 云端对话里的模型没有删除凭据的工具，重登记会被安全策略拒绝 |
+| 填写 Token、粘贴配对指令 | 你（Muse App / 会话） | 配对指令是模板文本，**不含真实密钥** |
+| 验证是否真的接通 | 模型调用 `pc_status` | 这是唯一的客观判据 |
+
+---
+
+## 1. 首次配对（实测可用路径）
+
+1. **启动 MWH**：双击仓库根目录 `MWH启动.cmd`。它先拉起宿主并等待 `127.0.0.1:19820` 可达且鉴权通过，失败会在控制台停住、**不会打开空壳窗口**。
+2. **开隧道**：点击 Muse 左侧导航栏 **MWH** 图标 → 打开高级配置中心 → **连接器与隧道** → 选择 `Cloudflare Quick Tunnel` → 启动，得到形如 `https://<random>.trycloudflare.com` 的公网地址。
+3. **取两个值**：同一页复制 **MCP 端点**（`https://<random>.trycloudflare.com/mcp`）与 **Bearer Token**（点「复制完整 Token」）。
+4. **在 Muse App 里建连接器**：新建 `custom.mwh`，填入上面的 MCP URL 与 Token。**Token 不要贴在聊天里**。
+5. **粘贴配对指令**：回到设置抽屉点 **复制配对口令**，粘到 Muse 里一个**新开的**会话。
+6. **验证**：让 Muse 调用 `pc_status`。只有成功返回权限档位 / 工作区 / 隧道状态，才算真正接通。
+
+> 常见误解：粘完第 5 步就以为"已接通"。配对指令里第一行写的是"配对指令"，不是"已连接"——**它只是接入信息模板**。
+
+---
+
+## 2. 临时隧道换了域名怎么办
+
+`Cloudflare Quick Tunnel` 每次重启宿主都会拿到新的随机子域名。此时：
+
+- **要改的只有 MCP URL**：把 Muse 连接器里的地址换成新域名 + `/mcp`。
+- **Bearer Token 不变**：Token 持久化在 `.mwh/secrets.json`，只有你在设置抽屉点过「轮换密钥」才会变。
+  - 反过来说：如果你没轮换过 Token，就不需要重新填 Token；填旧的跟填新的一样都错不了。
+- 如果 Muse App 不允许编辑已有连接器的 URL，走第 3 节。
+
+判断旧隧道是否还活着：
+
+- 单次探测失败**不足以定论**，可能是瞬时抖动。
+- 想彻底确认就看进程：Quick Tunnel 就是本机一个 `cloudflared` 进程，重启会同时存在新旧两个**同名**进程，**按启动时间认，不要按进程名杀**，否则会把新的也杀掉。
+
+---
+
+## 3. 连接器失效后的恢复（App 侧 5 步）
+
+当连接器指向已死的隧道、或 Token 已轮换，Muse 侧会表现为 `401` / `403` / 工具不可见。恢复动作全部在 **Muse App** 里：
+
+1. **删除（或先断开再删除）旧的 `mwh` 连接器**，并清掉与之关联的旧端点内容。
+2. **新开一个旁聊**（干净的会话上下文，避免旧会话里的登记记录继续干扰）。
+3. **重新粘贴配对指令**（第 1 节第 5 步）。
+4. 若 Muse 提示 **「是否重建」→ 点重建**。
+5. **填入当前的 Bearer Token**，然后让 Muse 调 `pc_status` 验证。
+
+---
+
+## 4. `401` / `403` 到底是什么意思
+
+| 返回 | 真实含义 | 不要误解为 |
+| :--- | :--- | :--- |
+| `401` | 隧道是通的、宿主管道也在响应，但**凭据不被认可**（没填 Token、填的是旧 Token、或刚轮换过） | 隧道坏了 / MWH 没启动 |
+| `403` | 连接器处于**断开或凭据不可取**的状态（沙箱里拿不到凭据） | 账号被封 / 官方封禁 |
+
+两者都**不是**"官方拦截"，也不能用来判断隧道存活。
+
+---
+
+## 5. 为什么这不是死循环
+
+这段流程容易让人以为"删了重建 → 又被拒 → 再删再建"是死循环。实际不是：
+
+1. **被拒的是"重复登记"这个调用**：同一 provider（`mwh`）、同一 host、同一 Token，只差一个 `reconnect` 标志。安全策略把它识别为对已拒绝请求的重试，换说法、换标志、直接改客户端配置硬连过去，都属于绕过，因此一律被拒。
+2. **但登记/删除凭据的动作本来就不该由模型做**：模型侧只有查看和发安全页的能力，没有删除连接器的工具。删除连接器、点「重建」这些都在 App 里，是你手动完成的。
+3. **分工模型**：模型侧的动作（`pc_status` 等只读探测）不会被拒；被拒的只是它想替你"重新登记"的那一步。你完成 App 侧动作后，模型侧就只剩可放行的调用。
+4. **唯一判据**：`pc_status` 成功返回内容。除此之外的任何"已接通"字样都是模板文本。
+
+所以正确的心智模型是：**连接器生命周期归 Muse App，MWH 只提供端点与 Token，模型只负责验证与调用。**
+
+---
+
+## 6. 故障速查表
+
+| 现象 | 最可能的原因 | 处置 |
+| :--- | :--- | :--- |
+| `401` | Token 未填、填错、或已轮换 | 设置抽屉「连接器与隧道 → 复制完整 Token」重新填入 |
+| `403` | 连接器被断开、凭据不可取 | 走第 3 节：删除旧连接器 → 新旁聊 → 重发指令 → 重建 → 填 Token |
+| 工具列表里没有 `pc_status` 等 | 连接器没建立或端点不是 `/mcp` | 核对 URL 是否以 `/mcp` 结尾 |
+| Muse 里重复发送配对指令没反应 | 同一会话对同一 provider 的重复登记被拒 | 新开旁聊再发；不要反复重试同一句 |
+| 窗口只有顶栏、下方显示「宿主未连接（…）」 | 宿主没起来或 19820 被别的进程占用 | 重新运行 `MWH启动.cmd`；按提示 `netstat -ano \| findstr :19820` 查占用者 |
+| 双击 `MWH启动.cmd` 后控制台停住且没开窗 | 预检失败（宿主起不来 / 端口被占用且鉴权不通过） | 这是**预期行为**：按控制台输出定位，不要绕过脚本手动开壳 |
+| 点「启动临时隧道」返回 `QUICK_TUNNEL_START_FAILED` / `CLOUDFLARED_MISSING` | 本机找不到 `cloudflared.exe`（MWH 不内置它） | 跑 `npm run doctor` 看探测链；一次性修好：`node scripts/doctor.mjs --fix --cloudflared "<你的 versions 目录>"`（会把二进制固化到 `<仓库>/.mwh/bin/`，之后与 PATH 无关） |
+| 点「停止临时隧道」返回 `TUNNEL_STOP_FAILED` | 子进程没被真正杀掉 | 同上跑 `npm run doctor`，看「Leftover processes」一节按 PID 处置；**不要按进程名杀**，同名进程可能属于其他工具 |
+
+### 退出与隧道关闭（现行为）
+
+- **托盘 Quit**：彻底退出。owned daemon 走 stdin、领养态 daemon 走 `POST /api/v1/daemon/shutdown`，二者都会优雅停机（停 quick / named 隧道 + 停 HTTP 服务 + 审计落盘），随后壳退出。
+- **Close Window / 点窗口 X**：只隐藏窗口，daemon 与隧道保活（托盘常驻）。
+- **全局急停 `/api/v1/daemon/emergency-kill`**：杀进程树、拒绝挂起审批、熔断 ReAct 循环，**不停隧道**（有意保留控制通道以便重连 / 重配对）。
+- 换域名后旧隧道随 Quit 关闭，无需手工 `taskkill`；如遇残留，用 `npm run doctor` 查看 Leftover processes。
+
+---
+
+## 7. 安全提醒
+
+- **Token 不贴聊天、不截图、不提交**。它等价于本机执行权限。
+- 点过「轮换密钥」后，所有已连接的客户端都必须更新，旧 Token 立即失效。
+- `.mwh/secrets.json` 是运行时凭据文件，已被 `.gitignore` 排除，不要提交。
+- `connectors/muse-skill-template/SKILL.md` 是运行时生成物（含本机端点），参考模板是同目录的 `SKILL.example.md`。
+
+---
+
+## English Quick Summary
+
+1. Run `MWH启动.cmd` — it starts the daemon first and refuses to open a window when the daemon is not ready.
+2. Start `Cloudflare Quick Tunnel` in **MWH → Connectors**, copy the `…/mcp` URL and the Bearer token.
+3. In the Muse app, create a `custom.mwh` connector with that URL + token (never paste the token into chat).
+4. Paste the pairing prompt (a **template**, never "already connected") into a **new** chat, then make Muse call `pc_status`.
+5. When the quick-tunnel hostname changes, **only the MCP URL changes** — the token lives in `.mwh/secrets.json` and only rotates on demand.
+6. If the connector goes stale: delete it in the Muse app → open a new side chat → re-paste the prompt → accept **Rebuild** → fill the current token → verify with `pc_status`.

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Muse-Win-Harness</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #121315;
+      color: #ececee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    body.light {
+      background: #f4f4f5;
+      color: #1a1a1a;
+    }
+    header {
+      height: 32px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0 0 10px;
+      -webkit-app-region: drag;
+    }
+    .left-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-logo {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+    strong {
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      opacity: 0.92;
+    }
+    .version-pill {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 1.5px 7px;
+      border-radius: 9999px;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+    }
+    .version-pill.branch {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.28);
+    }
+    .version-pill.main {
+      background: rgba(255, 255, 255, 0.05);
+      color: #a1a1aa;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    body.light .version-pill.main {
+      background: rgba(0, 0, 0, 0.05);
+      color: #52525b;
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+    .drag-spacer {
+      flex: 1;
+      height: 100%;
+      -webkit-app-region: drag;
+    }
+    .window-controls {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      -webkit-app-region: no-drag;
+    }
+    .win-btn {
+      width: 44px;
+      height: 32px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0.85;
+      transition: background-color 0.12s, opacity 0.12s, color 0.12s;
+    }
+    .win-btn svg {
+      width: 10px;
+      height: 10px;
+    }
+    .win-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      opacity: 1;
+    }
+    body.light .win-btn:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+    .win-btn.close:hover {
+      background: #e81123 !important;
+      color: #ffffff !important;
+      opacity: 1;
+    }
+    #daemon-banner {
+      height: 28px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      font-size: 11.5px;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #ff9a9a;
+      background: rgba(232, 17, 35, 0.14);
+      border-bottom: 1px solid rgba(232, 17, 35, 0.28);
+      -webkit-app-region: no-drag;
+    }
+    #daemon-banner[hidden] {
+      display: none;
+    }
+    body.light #daemon-banner {
+      color: #b3261e;
+      background: rgba(232, 17, 35, 0.08);
+      border-bottom-color: rgba(232, 17, 35, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left-brand">
+      <div class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 120 120" width="15" height="15">
+          <defs>
+            <linearGradient id="logoGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#2B7FFF" />
+              <stop offset="100%" stop-color="#1B6FEF" />
+            </linearGradient>
+          </defs>
+          <g transform="rotate(12 60 60)">
+            <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+                  fill="none" stroke="url(#logoGrad)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="88" cy="82" r="11" fill="url(#logoGrad)" />
+          </g>
+        </svg>
+      </div>
+      <strong>Muse-Win-Harness</strong>
+      <span id="version-badge" class="version-pill main">v0.1.0</span>
+    </div>
+    <div class="drag-spacer" id="drag-spacer"></div>
+    <div class="window-controls">
+      <button id="win-min" class="win-btn" type="button" title="最小化" aria-label="最小化">
+        <svg viewBox="0 0 10 10">
+          <path d="M 0 5 L 10 5" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+      <button id="win-max" class="win-btn" type="button" title="最大化" aria-label="最大化">
+        <svg id="svg-max" viewBox="0 0 10 10">
+          <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1" />
+        </svg>
+        <svg id="svg-restore" viewBox="0 0 10 10" style="display: none;">
+          <path d="M 2 0.5 L 9.5 0.5 L 9.5 8 L 8 8 L 8 2 L 2 2 Z" fill="none" stroke="currentColor" stroke-width="1" />
+          <rect x="0.5" y="2.5" width="7.5" height="7" fill="none" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+      <button id="win-close" class="win-btn close" type="button" title="关闭" aria-label="关闭">
+        <svg viewBox="0 0 10 10">
+          <path d="M 0 0 L 10 10 M 10 0 L 0 10" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+    </div>
+  </header>
+  <div id="daemon-banner" hidden>宿主未连接，请重新运行 MWH启动.cmd</div>
+  <script>
+    const minBtn = document.getElementById('win-min');
+    const maxBtn = document.getElementById('win-max');
+    const closeBtn = document.getElementById('win-close');
+    const svgMax = document.getElementById('svg-max');
+    const svgRestore = document.getElementById('svg-restore');
+    const dragSpacer = document.getElementById('drag-spacer');
+
+    minBtn.addEventListener('click', () => {
+      if (window.mwhChrome) window.mwhChrome.minimize();
+    });
+    maxBtn.addEventListener('click', () => {
+      if (window.mwhChrome) window.mwhChrome.maximize();
+    });
+    closeBtn.addEventListener('click', () => {
+      if (window.mwhChrome) window.mwhChrome.close();
+    });
+    dragSpacer.addEventListener('dblclick', () => {
+      if (window.mwhChrome) window.mwhChrome.maximize();
+    });
+
+    function updateMaxIcon(isMax) {
+      if (isMax) {
+        svgMax.style.display = 'none';
+        svgRestore.style.display = 'block';
+        maxBtn.title = '向下还原';
+      } else {
+        svgMax.style.display = 'block';
+        svgRestore.style.display = 'none';
+        maxBtn.title = '最大化';
+      }
+    }
+
+    if (window.mwhChrome) {
+      window.mwhChrome.isMaximized().then(updateMaxIcon).catch(() => {});
+      window.mwhChrome.onMaximizedChange(updateMaxIcon);
+      if (window.mwhChrome.getVersionInfo) {
+        window.mwhChrome.getVersionInfo().then((info) => {
+          const badge = document.getElementById('version-badge');
+          if (info && info.displayLabel) {
+            badge.textContent = info.displayLabel;
+            badge.className = 'version-pill ' + (info.isMain ? 'main' : 'branch');
+          }
+        }).catch(() => {});
+      }
+      // Honest daemon health: only hide the banner when the host really answered.
+      if (window.mwhChrome.getDaemonStatus) {
+        window.mwhChrome.getDaemonStatus().then((status) => {
+          const banner = document.getElementById('daemon-banner');
+          if (!banner) return;
+          if (status && status.ok === true) {
+            banner.hidden = true;
+            return;
+          }
+          const reason = (status && status.reason) || 'UNKNOWN';
+          banner.textContent = '宿主未连接（' + reason + '），请重新运行 MWH启动.cmd';
+          banner.hidden = false;
+        }).catch(() => {});
+      }
+    }
+  </script>
+</body>
+</html>

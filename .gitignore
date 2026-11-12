@@ -1,0 +1,17 @@
+node_modules/
+/dist/
+frontend/node_modules/
+shell/node_modules/
+frontend/dist/
+.mwh/
+# daemon 运行时生成（内容含本机 endpoint），仓库不再保存过期副本
+connectors/muse-skill-template/SKILL.md
+.env*
+*.log
+AGENTASK_PROMPT*.md
+.mimosa/
+muse_log/
+*.tsbuildinfo
+# ZCode session plan artifacts (approved plans, per-session)
+.zcode/
+.zcode_subtask.md

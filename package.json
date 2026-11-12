@@ -1,0 +1,30 @@
+{
+  "name": "muse-win-harness",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "build:ui": "npm --prefix frontend run build",
+    "start": "node dist/cli.js",
+    "gate1": "node dist/gates/gate1.js",
+    "gate2": "node dist/gates/gate2.js",
+    "gate3": "node dist/gates/gate3.js",
+    "gate4": "node dist/gates/gate4.js",
+    "gate:acp": "node dist/gates/gateAcp.js",
+    "gate5": "node scripts/gate5_ui_e2e.mjs",
+    "test:kernel-safety": "node dist/gates/gate1.js && node dist/gates/gate2.js && node dist/gates/gate3.js && node dist/gates/gate4.js && node dist/gates/gateAcp.js",
+    "test:ui-contract": "node scripts/test_ui_contract.mjs",
+    "verify": "node scripts/verify.mjs",
+    "doctor": "node scripts/doctor.mjs"
+  },
+  "dependencies": {
+    "koffi": "^3.3.7",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

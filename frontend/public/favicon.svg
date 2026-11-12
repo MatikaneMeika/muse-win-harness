@@ -1,0 +1,18 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="museGradC" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2B7FFF" />
+      <stop offset="100%" stop-color="#1B6FEF" />
+    </linearGradient>
+  </defs>
+  <g transform="rotate(12 60 60)">
+    <!-- Official Muse Blue Ribbon & Dot -->
+    <path d="M 30 80
+             C 40 20, 55 30, 55 60
+             C 55 90, 70 40, 75 30
+             C 80 20, 90 50, 95 45"
+          fill="none" stroke="url(#museGradC)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="88" cy="82" r="11" fill="url(#museGradC)" />
+  </g>
+</svg>
+

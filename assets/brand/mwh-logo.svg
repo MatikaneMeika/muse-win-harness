@@ -1,0 +1,24 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mwhBg" x1="0" y1="0" x2="240" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D1526"/>
+      <stop offset="100%" stop-color="#070B14"/>
+    </linearGradient>
+    <linearGradient id="mwhBlue" x1="200" y1="30" x2="40" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2B7FFF"/>
+      <stop offset="55%" stop-color="#1B6FEF"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="mwhBorder" x1="0" y1="0" x2="240" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2B7FFF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#1B6FEF" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="224" height="224" rx="52" fill="url(#mwhBg)" stroke="url(#mwhBorder)" stroke-width="3"/>
+  <circle cx="184" cy="56" r="64" fill="#2B7FFF" fill-opacity="0.08"/>
+  <g transform="rotate(12 120 120)">
+    <path d="M 60 160 C 80 40, 110 60, 110 120 C 110 180, 140 80, 150 60 C 160 40, 180 100, 190 90"
+          fill="none" stroke="url(#mwhBlue)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="176" cy="164" r="20" fill="url(#mwhBlue)"/>
+  </g>
+</svg>

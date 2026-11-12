@@ -1,0 +1,22 @@
+#!/bin/sh
+# Generated connector text must not enter a commit. The daemon rewrites it.
+# Deletions (D) are allowed so the file can be untracked in a single commit.
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^connectors/muse-skill-template/SKILL.md$'; then
+  echo "SKILL.md is generated at runtime. Unstage it: git restore --staged connectors/muse-skill-template/SKILL.md" >&2
+  exit 1
+fi
+
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^docs/archive/'; then
+  echo "docs/archive/ is development process residue and must not be committed." >&2
+  exit 1
+fi
+
+if git diff --cached --name-only --diff-filter=ACMR | grep -E -q '(^|/)\.env($|\.)'; then
+  echo "Refusing to commit .env files. Keep secrets in untracked local config." >&2
+  exit 1
+fi
+
+if git diff --cached -a -- . ':!.githooks/pre-commit' | grep -E -q 'BEGIN OPENSSH PRIVATE|BEGIN RSA PRIVATE|ghp_[A-Za-z0-9]|github_pat_[A-Za-z0-9]'; then
+  echo "Refusing to commit content that looks like a private key or GitHub token." >&2
+  exit 1
+fi

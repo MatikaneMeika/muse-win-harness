@@ -1,0 +1,29 @@
+# Muse-Win-Harness Example Configuration
+# Copy to config.yaml for local development
+
+server:
+  host: "127.0.0.1"
+  port: 19820
+
+confinement:
+  # Unified 4-tier permission profile:
+  # - 'plan'        (计划模式：只读，先计划再改)
+  # - 'confirm'     (变更前确认：改文件前问 · 默认)
+  # - 'autonomous'  (自主模式：有风险才问)
+  # - 'full-access' (完全访问：减少确认，仅破坏性操作需批)
+  profile: "confirm"
+  workspaceRoot: "."
+
+tunnel:
+  mode: "off" # 'off' (默认仅本地监听，按需在界面手动拉起公网隧道) | 'quick' | 'named' | 'tailscale' | 'custom'
+  cloudflaredPath: "" # optional explicit cloudflared binary path (probed via env/PATH/well-known locations when empty)
+  namedTunnelTokenEnv: "MWH_CF_TUNNEL_TOKEN"
+  runtimeTokenEnv: "TUNNEL_RUNTIME_TOKEN"
+  hmacSecretEnv: "MWH_HMAC_SECRET"
+
+subagents:
+  maxSteps: 15
+  timeoutMs: 600000
+
+desktopHands:
+  enabled: false

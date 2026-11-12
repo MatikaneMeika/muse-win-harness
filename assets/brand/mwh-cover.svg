@@ -1,0 +1,126 @@
+<svg width="1200" height="440" viewBox="0 0 1200 440" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1200" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#090D16"/>
+      <stop offset="50%" stop-color="#0D1527"/>
+      <stop offset="100%" stop-color="#080C14"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2B7FFF"/>
+      <stop offset="100%" stop-color="#1B6FEF"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#141E33" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#0E1525" stop-opacity="0.92"/>
+    </linearGradient>
+    <radialGradient id="glowBlue" cx="0.72" cy="0.45" r="0.45">
+      <stop offset="0%" stop-color="#2B7FFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#2B7FFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background & Subtle Grid -->
+  <rect width="1200" height="440" rx="24" fill="url(#bgGrad)"/>
+  <rect width="1200" height="440" rx="24" fill="url(#glowBlue)"/>
+  <rect x="1.5" y="1.5" width="1197" height="437" rx="22.5" stroke="#2B7FFF" stroke-opacity="0.25" stroke-width="1.5"/>
+
+  <g stroke="#8AB8FF" stroke-opacity="0.05" stroke-width="1">
+    <line x1="0" y1="88" x2="1200" y2="88"/>
+    <line x1="0" y1="176" x2="1200" y2="176"/>
+    <line x1="0" y1="264" x2="1200" y2="264"/>
+    <line x1="0" y1="352" x2="1200" y2="352"/>
+    <line x1="240" y1="0" x2="240" y2="440"/>
+    <line x1="480" y1="0" x2="480" y2="440"/>
+    <line x1="720" y1="0" x2="720" y2="440"/>
+    <line x1="960" y1="0" x2="960" y2="440"/>
+  </g>
+
+  <!-- Left Column: Brand Identity -->
+  <g transform="translate(64, 58)">
+    <!-- Logo Badge -->
+    <rect x="0" y="0" width="76" height="76" rx="20" fill="#10192B" stroke="#2B7FFF" stroke-opacity="0.45" stroke-width="1.5"/>
+    <g transform="translate(8, 8) scale(0.5) rotate(12 60 60)">
+      <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+            fill="none" stroke="url(#accentGrad)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="88" cy="82" r="11" fill="url(#accentGrad)"/>
+    </g>
+
+    <!-- Version Pill -->
+    <rect x="94" y="12" width="248" height="28" rx="14" fill="#2B7FFF" fill-opacity="0.14" stroke="#2B7FFF" stroke-opacity="0.4"/>
+    <circle cx="110" cy="26" r="4" fill="#38BDF8"/>
+    <text x="122" y="30" fill="#8AB8FF" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="12" font-weight="600" letter-spacing="0.4">WINDOWS 10/11 NATIVE HARNESS · v0.1.0</text>
+
+    <text x="94" y="64" fill="#64748B" font-family="Consolas, monospace" font-size="12.5">Apache-2.0 · Node.js &gt;= 22 · Zero WSL2/Docker</text>
+
+    <!-- Title & Tagline -->
+    <text x="0" y="138" fill="#F8FAFC" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="44" font-weight="800" letter-spacing="-0.8">Muse-Win-Harness</text>
+    <text x="0" y="176" fill="#94A3B8" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="18" font-weight="400">Local execution engine &amp; desktop companion shell for cloud AI agents on Windows.</text>
+    <text x="0" y="204" fill="#64748B" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="15" font-weight="400">面向 Windows 原生环境的本地 Agent 执行底座：路径围栏 · 进程树强控 · 写前快照 · 浮岛审批</text>
+
+    <!-- Feature Chips -->
+    <g transform="translate(0, 236)">
+      <rect x="0" y="0" width="152" height="36" rx="10" fill="#111A2E" stroke="#1E293B"/>
+      <text x="16" y="23" fill="#E2E8F0" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600">4 Permission Modes</text>
+
+      <rect x="164" y="0" width="148" height="36" rx="10" fill="#111A2E" stroke="#1E293B"/>
+      <text x="180" y="23" fill="#E2E8F0" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600">7+1 Native Tools</text>
+
+      <rect x="324" y="0" width="166" height="36" rx="10" fill="#111A2E" stroke="#1E293B"/>
+      <text x="340" y="23" fill="#E2E8F0" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600">Win32 Job Objects</text>
+
+      <rect x="0" y="48" width="182" height="36" rx="10" fill="#111A2E" stroke="#1E293B"/>
+      <text x="16" y="71" fill="#8AB8FF" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600">Git Shadow Rollback</text>
+
+      <rect x="194" y="48" width="160" height="36" rx="10" fill="#111A2E" stroke="#1E293B"/>
+      <text x="210" y="71" fill="#8AB8FF" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600">ACP Agent Bridge</text>
+
+      <rect x="366" y="48" width="124" height="36" rx="10" fill="#111A2E" stroke="#1E293B"/>
+      <text x="382" y="71" fill="#38BDF8" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600">3-Layer Kill</text>
+    </g>
+  </g>
+
+  <!-- Right Column: Architecture Pipeline Diagram Card -->
+  <g transform="translate(650, 44)">
+    <rect x="0" y="0" width="494" height="352" rx="18" fill="url(#cardGrad)" stroke="#2B7FFF" stroke-opacity="0.3" stroke-width="1.5"/>
+
+    <!-- Top Strip: Cloud & Desktop Entry -->
+    <rect x="20" y="20" width="215" height="58" rx="12" fill="#0B111E" stroke="#1E293B"/>
+    <circle cx="42" cy="49" r="6" fill="#2B7FFF"/>
+    <text x="56" y="44" fill="#F1F5F9" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700">Muse Cloud Connector</text>
+    <text x="56" y="62" fill="#64748B" font-family="Consolas, monospace" font-size="11">HTTPS Tunnel -> /mcp</text>
+
+    <rect x="259" y="20" width="215" height="58" rx="12" fill="#0B111E" stroke="#1E293B"/>
+    <circle cx="281" cy="49" r="6" fill="#38BDF8"/>
+    <text x="295" y="44" fill="#F1F5F9" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700">Frameless Desktop Shell</text>
+    <text x="295" y="62" fill="#64748B" font-family="Consolas, monospace" font-size="11">IPC + SSE -> /api/v1</text>
+
+    <!-- Connector Arrows -->
+    <path d="M 127 78 L 127 104 M 366 78 L 366 104" stroke="#2B7FFF" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+    <!-- Middle Layer: Single-Pipeline Security Kernel -->
+    <rect x="20" y="104" width="454" height="128" rx="14" fill="#101B30" stroke="#2B7FFF" stroke-opacity="0.5"/>
+    <text x="38" y="128" fill="#8AB8FF" font-family="Consolas, monospace" font-size="11.5" font-weight="700">SINGLE-PIPELINE SECURITY KERNEL (preExecute -> execute -> postExecute)</text>
+
+    <rect x="36" y="142" width="132" height="72" rx="10" fill="#0B1220" stroke="#1E293B"/>
+    <text x="48" y="164" fill="#F8FAFC" font-family="Segoe UI, sans-serif" font-size="12.5" font-weight="700">1. Path Fence</text>
+    <text x="48" y="182" fill="#94A3B8" font-family="Consolas, monospace" font-size="10.5">realpath.native</text>
+    <text x="48" y="198" fill="#64748B" font-family="Consolas, monospace" font-size="10.5">Anti-Junction</text>
+
+    <rect x="181" y="142" width="132" height="72" rx="10" fill="#0B1220" stroke="#1E293B"/>
+    <text x="193" y="164" fill="#F8FAFC" font-family="Segoe UI, sans-serif" font-size="12.5" font-weight="700">2. Risk &amp; HMAC</text>
+    <text x="193" y="182" fill="#94A3B8" font-family="Consolas, monospace" font-size="10.5">Island Approval</text>
+    <text x="193" y="198" fill="#64748B" font-family="Consolas, monospace" font-size="10.5">paramsHash Bind</text>
+
+    <rect x="326" y="142" width="132" height="72" rx="10" fill="#0B1220" stroke="#1E293B"/>
+    <text x="338" y="164" fill="#F8FAFC" font-family="Segoe UI, sans-serif" font-size="12.5" font-weight="700">3. Shadow Snap</text>
+    <text x="338" y="182" fill="#94A3B8" font-family="Consolas, monospace" font-size="10.5">Pre-Write Copy</text>
+    <text x="338" y="198" fill="#64748B" font-family="Consolas, monospace" font-size="10.5">1-Click Rollback</text>
+
+    <!-- Bottom Layer: Execution Containment -->
+    <path d="M 247 232 L 247 254" stroke="#2B7FFF" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <rect x="20" y="254" width="454" height="78" rx="12" fill="#0B111E" stroke="#1E293B"/>
+    <text x="38" y="278" fill="#E2E8F0" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700">Win32 Job Object Containment &amp; ACP Agent Dispatcher</text>
+    <text x="38" y="298" fill="#94A3B8" font-family="Consolas, monospace" font-size="11">KILL_ON_JOB_CLOSE · ChildMode &lt;= ParentMode · Git Worktree Isolation</text>
+    <text x="38" y="316" fill="#38BDF8" font-family="Consolas, monospace" font-size="11">Audit Trail: .mwh/logs/audit.jsonl (Secret-Scrubbed)</text>
+  </g>
+</svg>

@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Custom sleek scrollbar matching Muse desktop UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 160, 0.28);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 150, 160, 0.45);
+}
+
+/* 浮岛长按触发的 Q弹提示动画。
+   必须用 scale 属性而不是 transform: scale()：两颗岛都用 translate3d 定位，
+   transform 动画会覆盖定位矩阵把岛拽回原点。 */
+@keyframes mwh-island-pop {
+  0% { scale: 1; }
+  35% { scale: 1.06; }
+  70% { scale: 0.97; }
+  100% { scale: 1; }
+}
+.mwh-island-pop {
+  animation: mwh-island-pop 350ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  will-change: scale;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mwh-island-pop {
+    animation: none;
+  }
+}

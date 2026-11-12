@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build & Verify (Windows / Node 22)
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    env:
+      CI: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+            shell/package-lock.json
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          npm ci
+          npm --prefix frontend ci
+          npm --prefix shell ci
+
+      - name: Build kernel (tsc)
+        shell: bash
+        run: npm run build
+
+      - name: Lint frontend
+        shell: bash
+        run: npm --prefix frontend run lint
+
+      - name: Build UI
+        shell: bash
+        run: npm run build:ui
+
+      - name: UI contract gate
+        shell: bash
+        run: npm run test:ui-contract
+
+      - name: Kernel gates (gate1..gate4, gate:acp)
+        shell: bash
+        run: |
+          npm run gate1
+          npm run gate2
+          npm run gate3
+          npm run gate4
+          npm run gate:acp
+
+      - name: Negative tests (p1..p3)
+        shell: bash
+        run: |
+          node scripts/negative_test_p1.mjs
+          node scripts/negative_test_p2.mjs
+          node scripts/negative_test_p3.mjs

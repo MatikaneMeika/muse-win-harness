@@ -81,7 +81,7 @@ No WSL2, no Docker, no virtual machine setup. MWH wraps `muse.ai` in a clean nat
 </p>
 
 <p align="center">
-  <sub><i>Vector overview of the light-theme desktop shell (synthetic illustration, no private paths). Click the <b>MWH</b> icon on the left sidebar to slide out the quick-control drawer, or review and approve pending file edits on the bottom-right floating island.</i></sub>
+  <sub>示意图</sub>
 </p>
 
 - **Left Sidebar Drawer (Quick Controls)**: Flush against the left navigation rail. Lets you switch between the 4 permission gears, start or stop a Cloudflare Quick Tunnel, copy your MCP endpoint / Bearer Token / pairing prompt, or open the 5-tab **Advanced Configuration Center** (`Connectors` · `Permissions` · `Workspaces` · `Subagents` · `Audit & Snapshots`).

@@ -28,6 +28,14 @@ WSL2・Hyper-V・Docker は一切不要。ネイティブ Windows コンパニ�
 > 1. **OS カーネルレベルのサンドボックスではありません**：MWH は現在の Windows ユーザー権限で動作し、アプリケーション層のパスフェンス・Win32 Job Object プロセスツリー制御・書き込み前スナップショット・人間による承認フローで安全性を担保します。詳細は [`docs/SECURITY_DISCLOSURE.md`](../SECURITY_DISCLOSURE.md) をご覧ください。
 > 2. **Vibe Coding / AI 支援開発による構築**：本プロジェクトは AI コーディングエージェントとの協業（**Vibe Coding**）と自動検証ゲートによって構築されました。AI 生成コードには予期せぬエッジケースが含まれる可能性があるため、重要なデータは事前にバックアップの上、[`DISCLAIMER.md`](../../DISCLAIMER.md) をご確認ください。
 
+<p align="center">
+  <img src="../../assets/brand/mwh-ui-mockup.svg" alt="Muse-Win-Harness のデスクトップ画面" width="96%">
+</p>
+
+<p align="center">
+  <sub>示意图</sub>
+</p>
+
 ## 主な特徴
 
 - **ワンクリックで切り替えられる 4 段階の権限モード**：左サイドバーの MWH ドロワーから `plan`（読み取り専用）、`confirm`（変更前に確認・デフォルト）、`autonomous`（ワークスペース内で自動スナップショット＆実行）、`full-access`（2 時間自動ダウングレード付き）を即座に切り替え可能。`rm -rf`・`git push --force`・`.env*` / `~/.ssh` などの危険な操作はどのモードでも必ず人間の承認を要求します。

@@ -28,6 +28,14 @@
 > 1. **無 OS 級真沙箱，依賴路徑圍欄+進程樹管控+審批流**：MWH 運行於當前 Windows 使用者權限下，透過實體路徑圍欄、Win32 Job Object 處理程序樹強控、寫前快照與桌面人工審批守住邊界。完整實測矩陣請參閱 [`docs/SECURITY_DISCLOSURE.md`](../SECURITY_DISCLOSURE.md)。
 > 2. **源於 Vibe Coding / AI 輔助開發**：本專案由開發者與編碼 Agent 透過 **Vibe Coding（AI 輔助迭代工程）** 協作完成並配合自動化門禁驗證。AI 輔助生成程式碼仍可能存在未預見的邊界問題，請務必妥善備份重要資料並參閱 [`DISCLAIMER.md`](../../DISCLAIMER.md)。
 
+<p align="center">
+  <img src="../../assets/brand/mwh-ui-mockup.svg" alt="Muse-Win-Harness 桌面視窗" width="96%">
+</p>
+
+<p align="center">
+  <sub>示意圖</sub>
+</p>
+
 ## 核心體驗亮點
 
 - **四檔權限一鍵切換**：在左側欄 MWH 抽屜自由切換 `plan`（唯讀探查）、`confirm`（變更前彈窗確認，預設）、`autonomous`（授權工作區內自動留快照放行）、`full-access`（跨目錄讀寫 + 2 小時自動降級保護；`rm -rf`、`git push --force` 與 `.env*`/`~/.ssh` 永遠強制要求單次人工審批）。

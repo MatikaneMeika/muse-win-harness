@@ -193,7 +193,7 @@ export const en: Record<string, string> = {
   'resources.activationNote': 'Active for Muse as soon as switched on; all disabled by default.',
   'resources.sandboxNote': 'MCP servers run under your Windows user privileges without an extra OS sandbox. Child processes stop on exit or emergency stop.',
   'resources.scanning': 'Scanning...',
-  'resources.scanLocal': 'Scan Local',
+  'resources.scanLocal': 'Scan PC',
   'resources.add': 'Add',
   'resources.editTitle': 'Edit Resource',
   'resources.addTitle': 'Add Local Resource',

@@ -173,11 +173,11 @@ const MWH_I18N = {
     '隐藏': 'Hide',
     '查看': 'Show',
     '复制完整真实 Token (用于请求头)': 'Copy the real token (for request headers)',
-    '复制完整真实 Token': 'Copy the real token',
+    '复制完整真实 Token': 'Copy Token',
     '复制完整 Token': 'Copy full token',
     '生成中...': 'Generating...',
-    '轮换密钥': 'Rotate key',
-    '复制配对口令': 'Copy pairing prompt',
+    '轮换密钥': 'Rotate',
+    '复制配对口令': 'Copy Prompt',
     '复制 MCP JSON': 'Copy MCP JSON',
     '复制 MCP JSON (含 Token)': 'Copy MCP JSON (with token)',
     '打开高级配置中心': 'Open advanced settings',
@@ -198,8 +198,8 @@ const MWH_I18N = {
     '临时显示完整端点域名': 'Reveal full endpoint domain',
     '隐藏端点完整域名': 'Hide the full endpoint domain',
     '查看完整端点域名 (15s 自动恢复脱敏)': 'Reveal full domain (re-masked in 15s)',
-    '显示完整域名': 'Show full domain',
-    '隐藏端点域名': 'Hide domain',
+    '显示完整域名': 'Show URL',
+    '隐藏端点域名': 'Hide URL',
     '复制': 'Copy',
     '包含宿主 MCP 端点协议规范与协同指引，可一键复制并填入 Muse 连接器':
       'Includes the host MCP protocol guide and coordination rules; copy it straight into the Muse connector.',
@@ -310,13 +310,13 @@ const MWH_I18N = {
     '步骤 {0} / {1}': 'Step {0} / {1}',
 
     // Connectors tab
-    '连接与权限': 'Connectors & permissions',
+    '连接与权限': 'Connectors',
     '网络隧道与四档权限': 'Tunnels and four permission tiers',
-    '工作区与代理': 'Workspaces & agents',
+    '工作区与代理': 'Workspaces',
     '目录白名单与 ACP 引擎': 'Directory allowlist and ACP engines',
-    '资源库': 'Resource library',
+    '资源库': 'Library',
     '本机 MCP 与 Skill': 'Local MCP & skills',
-    '审计日志': 'Audit log',
+    '审计日志': 'Audit Log',
     '影子快照与审计日志': 'Shadow snapshots & audit log',
     'Cloudflare 固定域名': 'Cloudflare named domain',
     'Named Tunnel · 推荐常驻免配对': 'Named Tunnel · persistent, no re-pairing',
@@ -399,7 +399,7 @@ const MWH_I18N = {
     '选择请求的代理模式': 'Requested agent mode',
     '只读 (计划模式)': 'Read-only (plan mode)',
     '工作区读写 (变更前确认 / 自主)': 'Workspace write (confirm / autonomous)',
-    '新建隔离 Worktree': 'New isolated worktree',
+    '新建隔离 Worktree': 'New Worktree',
     '· 代理: {0}': '· agent: {0}',
     '· 生效: {0}': '· effective: {0}',
     '合并回主分支': 'Merge into main',
@@ -413,7 +413,7 @@ const MWH_I18N = {
     'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。':
       'MCP runs with your Windows user permissions and no extra sandbox. Quitting or an emergency stop also terminates spawned child processes.',
     '扫描中...': 'Scanning...',
-    '扫描本机': 'Scan this PC',
+    '扫描本机': 'Scan PC',
     '添加': 'Add',
     '编辑资源': 'Edit resource',
     '添加本机资源': 'Add local resource',
@@ -532,7 +532,7 @@ const MWH_I18N = {
     '目标路径: {0}': 'Target path: {0}',
     '写前影子快照: {0}': 'Pre-write snapshot: {0}',
     '拒绝': 'Reject',
-    '本工作区始终允许': 'Always allow in this workspace',
+    '本工作区始终允许': 'Always in Workspace',
     '允许一次': 'Allow once',
     '一键回滚快照': 'Roll back snapshot',
     '合并 Worktree': 'Merge worktree',
@@ -620,12 +620,12 @@ const MWH_I18N = {
     '隐藏': '隠す',
     '查看': '表示',
     '复制完整真实 Token (用于请求头)': '実際のトークンをコピー（リクエストヘッダー用）',
-    '复制完整真实 Token': '実際のトークンをコピー',
+    '复制完整真实 Token': 'Token コピー',
     '复制完整 Token': 'トークン全体をコピー',
     '生成中...': '生成中...',
-    '轮换密钥': 'キーをローテート',
-    '复制配对口令': 'ペアリングプロンプトをコピー',
-    '复制 MCP JSON': 'MCP JSON をコピー',
+    '轮换密钥': '鍵を更新',
+    '复制配对口令': '連携文コピー',
+    '复制 MCP JSON': 'MCP JSON',
     '复制 MCP JSON (含 Token)': 'MCP JSON をコピー（トークン込み）',
     '打开高级配置中心': '詳細設定を開く',
     '连接与权限 · 工作区与代理 · 资源库 · 审计日志':
@@ -645,8 +645,8 @@ const MWH_I18N = {
     '临时显示完整端点域名': 'ドメイン全体を一時表示',
     '隐藏端点完整域名': 'エンドポイントのドメイン全体を隠す',
     '查看完整端点域名 (15s 自动恢复脱敏)': 'ドメイン全体を表示（15 秒後に再マスク）',
-    '显示完整域名': 'ドメイン全体を表示',
-    '隐藏端点域名': 'ドメインを隠す',
+    '显示完整域名': 'URL 表示',
+    '隐藏端点域名': 'URL 非表示',
     '复制': 'コピー',
     '包含宿主 MCP 端点协议规范与协同指引，可一键复制并填入 Muse 连接器':
       'ホスト MCP のプロトコル仕様と連携ガイドを含みます。コピーして Muse コネクタに貼り付けられます。',
@@ -750,9 +750,9 @@ const MWH_I18N = {
     '步骤 {0} / {1}': 'ステップ {0} / {1}',
     '连接与权限': '接続と権限',
     '网络隧道与四档权限': 'ネットワークトンネルと 4 段階権限',
-    '工作区与代理': 'ワークスペースとエージェント',
+    '工作区与代理': '作業域と代理',
     '目录白名单与 ACP 引擎': 'ディレクトリ許可リストと ACP エンジン',
-    '资源库': 'リソースライブラリ',
+    '资源库': 'リソース',
     '本机 MCP 与 Skill': 'ローカル MCP と Skill',
     '审计日志': '監査ログ',
     '影子快照与审计日志': 'シャドウスナップショットと監査ログ',
@@ -835,7 +835,7 @@ const MWH_I18N = {
     '选择请求的代理模式': '要求するエージェントモード',
     '只读 (计划模式)': '読み取り専用（計画モード）',
     '工作区读写 (变更前确认 / 自主)': 'ワークスペース書き込み（変更前に確認 / 自律）',
-    '新建隔离 Worktree': '分離 Worktree を新規作成',
+    '新建隔离 Worktree': 'Worktree 作成',
     '· 代理: {0}': '· エージェント: {0}',
     '· 生效: {0}': '· 実効: {0}',
     '合并回主分支': 'メインにマージ',
@@ -847,7 +847,7 @@ const MWH_I18N = {
     'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。':
       'MCP は Windows のユーザー権限で動作し、追加のサンドボックスはありません。終了時や緊急停止時には、起動した子プロセスもまとめて終了します。',
     '扫描中...': 'スキャン中...',
-    '扫描本机': 'この PC をスキャン',
+    '扫描本机': 'スキャン',
     '添加': '追加',
     '编辑资源': 'リソースを編集',
     '添加本机资源': 'ローカルリソースを追加',
@@ -962,7 +962,7 @@ const MWH_I18N = {
     '目标路径: {0}': '対象パス: {0}',
     '写前影子快照: {0}': '書き込み前スナップショット: {0}',
     '拒绝': '拒否',
-    '本工作区始终允许': 'このワークスペースでは常に許可',
+    '本工作区始终允许': '常に許可 (作業域)',
     '允许一次': '1 回だけ許可',
     '一键回滚快照': 'スナップショットを復元',
     '合并 Worktree': 'Worktree をマージ',
@@ -1620,34 +1620,10 @@ for (const key of Object.keys(MWH_I18N.en)) {
  * scope is deliberately narrow so chat transcripts are never inspected.
  */
 function detectLanguage() {
-  const html = document.documentElement;
-  const body = document.body;
-  const attributeCandidates = [
-    html && html.lang,
-    html && html.dataset ? html.dataset.lang : '',
-    html && html.dataset ? html.dataset.locale : '',
-    body && body.dataset ? body.dataset.lang : '',
-    body && body.dataset ? body.dataset.locale : '',
-  ];
-  for (const candidate of attributeCandidates) {
-    const locale = localeFromRaw(candidate);
-    if (locale) return locale;
-  }
-
-  if (html && typeof html.querySelectorAll === 'function') {
-    const metas = html.querySelectorAll('meta[http-equiv], meta[name]');
-    for (const meta of metas) {
-      const key = String(meta.getAttribute('http-equiv') || meta.getAttribute('name') || '').toLowerCase();
-      if (key !== 'content-language' && key !== 'language') continue;
-      const locale = localeFromRaw(meta.getAttribute('content') || meta.getAttribute('value'));
-      if (locale) return locale;
-    }
-  }
-
   const languageLabel = /简体中文|中文（简体）|chinese\s*\(simplified\)|^zh[-_]?(?:cn|hans)$/i;
   const traditionalLabel = /繁體中文|繁体中文|中文（繁體）|chinese\s*\(traditional\)|^zh[-_]?(?:tw|hk|mo|hant)/i;
   const japaneseLabel = /日本語|japanese|^ja(?:[-_]|$)/i;
-  const englishLabel = /^english$|^en(?:[-_]|$)/i;
+  const otherLangLabel = /^(?:english|français|french|deutsch|german|español|spanish|한국어|korean|português|portuguese|italiano|italian|русский|russian|nederlands|dutch|polski|polish|türkçe|turkish|tiếng việt|vietnamese|bahasa|العربية|arabic|हिन्दी|hindi|ไทย|thai)$/i;
   const scopes = document.querySelectorAll(
     '[role="dialog"], dialog, [class*="settings"], [class*="Settings"], [data-testid*="settings"]'
   );
@@ -1666,16 +1642,39 @@ function detectLanguage() {
       if (languageLabel.test(raw)) return 'zh-CN';
       if (traditionalLabel.test(raw)) return 'zh-TW';
       if (japaneseLabel.test(raw)) return 'ja';
-      if (englishLabel.test(raw)) return 'en';
+      if (otherLangLabel.test(raw) || /^[a-z]{2}(?:[-_][a-z]{2,4})?$/i.test(raw)) {
+        return normalizeLocale(raw);
+      }
+    }
+  }
+
+  const html = document.documentElement;
+  const body = document.body;
+  const attributeCandidates = [
+    html && html.lang,
+    html && html.dataset ? html.dataset.lang : '',
+    html && html.dataset ? html.dataset.locale : '',
+    body && body.dataset ? body.dataset.lang : '',
+    body && body.dataset ? body.dataset.locale : '',
+  ];
+  for (const candidate of attributeCandidates) {
+    const trimmed = String(candidate == null ? '' : candidate).trim();
+    if (trimmed) return normalizeLocale(trimmed);
+  }
+
+  if (html && typeof html.querySelectorAll === 'function') {
+    const metas = html.querySelectorAll('meta[http-equiv], meta[name]');
+    for (const meta of metas) {
+      const key = String(meta.getAttribute('http-equiv') || meta.getAttribute('name') || '').toLowerCase();
+      if (key !== 'content-language' && key !== 'language') continue;
+      const content = String(meta.getAttribute('content') || meta.getAttribute('value') || '').trim();
+      if (content) return normalizeLocale(content);
     }
   }
 
   if (typeof navigator !== 'undefined') {
-    const tags = [navigator.language].concat(navigator.languages || []);
-    for (const tag of tags) {
-      const locale = localeFromRaw(tag);
-      if (locale) return locale;
-    }
+    const primary = navigator.language || (Array.isArray(navigator.languages) ? navigator.languages[0] : '');
+    if (primary) return normalizeLocale(primary);
   }
   return 'en';
 }

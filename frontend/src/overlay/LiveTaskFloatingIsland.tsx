@@ -12,6 +12,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
+import { useTranslation } from '../i18n';
 import { mwhService } from '../services/mwhService';
 import { useMwhState } from '../services/useMwhState';
 import { ISLAND_REDUCED_MOTION, useIslandLayout } from './useIslandLayout';
@@ -45,19 +46,20 @@ function initialElapsedSec(clock: string): number {
 }
 
 /** 收起胶囊正文极简 2-3 个核心汉字，左右对齐居中，无多余噪点。 */
-function islandCapsuleText(status?: string, fallback?: string): string {
-  if (status === 'WAITING_APPROVAL') return '待授权';
-  if (status === 'RUNNING') return '运行中';
-  if (status === 'COMPLETED') return '已完成';
-  if (status === 'IDLE') return '待命';
+function islandCapsuleText(t: (key: string) => string, status?: string, fallback?: string): string {
+  if (status === 'WAITING_APPROVAL') return t('island.capsule.waiting');
+  if (status === 'RUNNING') return t('island.capsule.running');
+  if (status === 'COMPLETED') return t('island.capsule.completed');
+  if (status === 'IDLE') return t('island.capsule.idle');
   const str = String(fallback || status || '').trim();
-  if (str.includes('授权') || str.includes('审批')) return '待授权';
-  if (str.includes('执行') || str.includes('运行')) return '运行中';
-  if (str.includes('完成') || str.includes('修改')) return '已完成';
-  return str.length > 3 ? str.slice(0, 3) : str || '待命';
+  if (str.includes('授权') || str.includes('审批')) return t('island.capsule.waiting');
+  if (str.includes('执行') || str.includes('运行')) return t('island.capsule.running');
+  if (str.includes('完成') || str.includes('修改')) return t('island.capsule.completed');
+  return str.length > 8 ? str.slice(0, 8) : str || t('island.capsule.idle');
 }
 
 export const LiveTaskFloatingIsland: React.FC = () => {
+  const { t } = useTranslation();
   const state = useMwhState();
   const { liveTask } = state;
   const {
@@ -170,22 +172,22 @@ export const LiveTaskFloatingIsland: React.FC = () => {
   }, [liveTask, capsule, setCapsule]);
 
   const completedTitle = hasModifiedFiles
-    ? `本地任务执行完成 · 修改 ${liveTask.modifiedFilesCount} 个文件`
+    ? t('island.completedWithCount', { count: liveTask.modifiedFilesCount })
     : trackingUnavailable
-      ? '执行完成 · 改动数未统计'
-      : '执行完成 · 未检测到文件改动';
+      ? t('island.completedUnknown')
+      : t('island.completedNoChanges');
 
   const capsuleTitle = (text: string) =>
-    capsule ? islandCapsuleText(liveTask.status, text) : text;
+    capsule ? islandCapsuleText(t, liveTask.status, text) : text;
   const headerTitle = isIdle
     ? capsule
-      ? '待命'
-      : '空闲·待命'
+      ? t('island.idleShort')
+      : t('island.idleLong')
     : liveTask.status === 'WAITING_APPROVAL'
-      ? capsuleTitle(`等待本机执行授权 · ${liveTask.sourceAgent}`)
+      ? capsuleTitle(t('island.waitingHeader', { agent: liveTask.sourceAgent }))
       : liveTask.status === 'COMPLETED'
         ? capsuleTitle(completedTitle)
-        : capsuleTitle(liveTask.stepLabel || '本地任务执行中');
+        : capsuleTitle(liveTask.stepLabel || t('island.runningDefault'));
 
   /* Muse 官方浮层色阶：#1C1D20 面板 / #141518 代码区 / 7% 描边 / 20px 圆角 */
   const shellCls = isLight
@@ -216,7 +218,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
       data-testid="live-task-floating-island"
       data-tour-id="tour-approval-island"
       role="region"
-      aria-label="MWH 底部任务与审批面板"
+      aria-label={t('island.panelAria')}
       onClick={handleHeaderClick}
       className={`fixed left-0 top-0 z-40 flex flex-col overflow-hidden backdrop-blur-xl border ${shellCls} ${
         capsule
@@ -264,7 +266,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
         <div className={`${capsule ? 'hidden' : 'ml-auto'} flex items-center gap-2 min-w-0`}>
           {!capsule && liveTask.status === 'RUNNING' && (
             <span className="text-[11px] font-mono opacity-65 whitespace-nowrap min-w-0 truncate">
-              CREATE_NO_WINDOW · 耗时 {elapsedLabel} · 步骤 {liveTask.stepIndex}/
+              {t('island.runningMeta', { elapsed: elapsedLabel, step: liveTask.stepIndex })}
               {liveTask.totalSteps}
             </span>
           )}
@@ -278,16 +280,16 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               <span className="text-[11px] font-mono opacity-75 whitespace-nowrap min-w-0 truncate flex items-center gap-1.5">
                 {isCriticalHmac && (
                   <span className="px-1.5 py-0.5 rounded bg-[#E06C60]/20 text-[#E06C60] text-[10px] font-semibold">
-                    高危 · 需签名
+                    {t('island.highRiskSignature')}
                   </span>
                 )}
                 {queueCount > 1 && (
                   <span className="px-1.5 py-0.5 rounded bg-[#6366F1]/25 text-[#A5B4FC] text-[10px] font-semibold">
-                    队列 {queuePos}/{queueCount}
+                    {t('island.queueBadge', { pos: queuePos, count: queueCount })}
                   </span>
                 )}
                 <span>
-                  风险 {liveTask.riskScore}
+                  {t('island.riskBadge', { risk: liveTask.riskScore })}
                   {liveTask.worktreeId ? ` · Worktree: ${liveTask.worktreeId}` : ''}
                 </span>
               </span>
@@ -312,7 +314,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                   className={`px-3 py-1 rounded-full text-xs font-semibold bg-[#E06C60] hover:bg-[#D05A4E] text-white flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ring-2 ring-[#F28B82]/50 ${FOCUS_RING}`}
                 >
                   <ShieldAlert className="w-3 h-3" />
-                  <span>确认强杀？</span>
+                  <span>{t('island.confirmKillPrompt')}</span>
                 </button>
                 <button
                   type="button"
@@ -320,7 +322,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                   onClick={() => setConfirmingKill(false)}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium ${pillGhost} transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
                 >
-                  取消
+                  {t('common.cancel')}
                 </button>
               </div>
             ) : (
@@ -331,7 +333,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 className={`px-3 py-1 rounded-full text-xs font-semibold bg-[#E06C60]/90 hover:bg-[#D05A4E] text-white flex items-center gap-1 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
               >
                 <Square className="w-3 h-3 fill-current" />
-                <span>强杀中止</span>
+                <span>{t('island.killBtn')}</span>
               </button>
             )
           )}
@@ -340,7 +342,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
             <button
               type="button"
               onClick={() => mwhService.dismissCompletedLiveTask()}
-              aria-label="关闭任务提示"
+              aria-label={t('island.dismissAria')}
               className={`w-7 h-7 rounded-full flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity duration-120 cursor-pointer ${FOCUS_RING}`}
             >
               <X className="w-3.5 h-3.5" />
@@ -349,7 +351,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
 
           <button
             type="button"
-            aria-label={capsule ? '展开任务面板' : '收起为胶囊'}
+            aria-label={capsule ? t('island.expandAria') : t('island.collapseAria')}
             aria-expanded={!capsule}
             onClick={() => toggleCapsule()}
             className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${iconBtnCls} ${FOCUS_RING} ${
@@ -365,9 +367,9 @@ export const LiveTaskFloatingIsland: React.FC = () => {
       <div className={`flex-1 min-h-0 flex flex-col gap-2 px-3 ${capsule ? 'hidden' : 'flex'}`}>
         {isIdle && (
           <div className="flex-1 min-h-0 flex flex-col justify-center gap-1 px-1">
-            <p className="text-[13px] opacity-90">当前没有进行中的本机任务</p>
+            <p className="text-[13px] opacity-90">{t('island.idleTitle')}</p>
             <p className={`text-[11.5px] leading-relaxed ${mutedCls}`}>
-              云端下发命令后会在这里实时显示进度、耗时与输出；点右侧箭头可收成胶囊常驻。
+              {t('island.idleDesc')}
             </p>
           </div>
         )}
@@ -383,7 +385,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 {liveTask.command}
               </span>
               <span className={`${LOG_LINE} opacity-75`} title={liveTask.targetPath}>
-                目标路径: {liveTask.targetPath}
+                {t('island.targetPath', { path: liveTask.targetPath })}
               </span>
             </div>
           </>
@@ -417,7 +419,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               className={LOG_LINE}
               title={`${liveTask.snapshotId || ''} ${liveTask.worktreeId || ''}`.trim()}
             >
-              {canRollback ? `写前影子快照: ${liveTask.snapshotId}` : ''}
+              {canRollback ? t('island.snapshotTag', { id: liveTask.snapshotId }) : ''}
               {canRollback && canMergeWorktree ? ' · ' : ''}
               {canMergeWorktree ? `Worktree: ${liveTask.worktreeId}` : ''}
             </span>
@@ -436,7 +438,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
               >
                 <X className="w-3.5 h-3.5" />
-                <span>拒绝</span>
+                <span>{t('island.denyBtn')}</span>
               </button>
               <button
                 type="button"
@@ -444,7 +446,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
               >
                 <Pin className="w-3.5 h-3.5" />
-                <span>本工作区始终允许</span>
+                <span>{t('island.alwaysInWorkspaceBtn')}</span>
               </button>
               <button
                 type="button"
@@ -452,7 +454,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>允许一次</span>
+                <span>{t('island.allowOnceBtn')}</span>
               </button>
             </>
           )}
@@ -465,7 +467,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>一键回滚快照 (Rollback)</span>
+              <span>{t('island.rollbackBtn')}</span>
             </button>
           )}
 
@@ -477,7 +479,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
             >
               <GitMerge className="w-3.5 h-3.5" />
-              <span>合并 Worktree</span>
+              <span>{t('island.mergeWorktreeBtn')}</span>
             </button>
           )}
         </div>
@@ -487,7 +489,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
       {!capsule && (
         <div
           onPointerDown={onResizePointerDown}
-          aria-label="调整面板大小"
+          aria-label={t('island.resizeAria')}
           className="absolute bottom-0 right-0 w-[18px] h-[18px] cursor-nwse-resize touch-none"
         />
       )}

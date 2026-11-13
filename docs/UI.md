@@ -20,7 +20,8 @@ shell/main.cjs
   │         ├─ 侧边设置抽屉 (#mwh-drawer, 20px 圆角) + 全屏遮罩 (.mwh-drawer-backdrop)
   │         ├─ 四栏高级配置中心 (#mwh-subpanel: 连接与权限 / 工作区与代理 / 资源库 / 审计日志)
   │         ├─ 底部实时审批灵动岛 (#mwh-approval-island)
-  │         └─ MutationObserver 探测 muse.ai 明暗主题 -> ipcMain 'mwh:theme-sync' 同步顶栏与 DWM
+  │         ├─ MutationObserver 探测 muse.ai 明暗主题 -> ipcMain 'mwh:theme-sync' 同步顶栏与 DWM
+  │         └─ 合规 DOM 语言嗅探 -> ipcMain 'mwh:language-sync' 同步托盘/顶栏/前端四语 (zh-CN/zh-TW/ja/en)
   │
   └─ 本地守护进程连接 (127.0.0.1:19820, dist/cli.js)
        ├─ 主进程 SSE 桥接 (/api/v1/events) -> 实时广播 'mwh:daemon-state' 至 BrowserView
@@ -69,6 +70,7 @@ npm --prefix shell start
 - **顶栏与版本标识**：主窗口顶部 32px 渲染 `shell/chrome.html`，显示 `Muse-Win-Harness` 与版本徽章 `v0.1.0`（非 `main` 分支时显示 `v0.1.0 · <branch>`）。
 - **纯净 UA 与 OAuth 白名单**：启动时自动剥离默认 User-Agent 中的 `Electron/...` 与 `mwh-desktop-shell/...` 标识；`muse.ai`、`meta.com`、`facebook.com`、`instagram.com`、`stripe.com` 域内 OAuth 登录弹窗正常放行，其余外部 `http(s)` 链接转交系统默认浏览器打开。
 - **自适应明暗主题同步**：`muse-settings-preload.cjs` 内置透明感知色彩探针（`parseOpaqueRgb` + `MutationObserver`），实时跟随 `muse.ai` 页面深浅色切换，并通过 `mwh:theme-sync` 同步更新主窗顶栏与 Windows 11 DWM 标题栏颜色。
+- **宿主语言实时联动（四语 i18n）**：`muse-settings-preload.cjs` 仅通过无害公开 DOM 特征（`html.lang`、`data-lang`/`data-locale`、`<meta>` 及显式设置控件当前激活标签，严禁读取 Cookies/凭据/聊天内容或拦截网络）嗅探 `muse.ai` 语言并经 `mwh:language-sync` 广播至主进程托盘、`chrome.html` 顶栏与 React 前端；支持简体中文（`zh-CN`）、繁体中文（`zh-TW`）、日语（`ja`），其余语言统一回退至英语（`en`），独立预览环境下自动回退 `navigator.language`。
 
 内存与启动烟测（G9）：
 

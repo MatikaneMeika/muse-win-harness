@@ -4,12 +4,14 @@
  */
 
 import { FormEvent, useEffect, useState, type CSSProperties } from 'react';
+import { useTranslation } from './i18n';
 import { MwhOverlayRoot } from './overlay/MwhOverlayRoot';
 import { mwhService } from './services/mwhService';
 
 const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
 
 export default function App() {
+  const { t } = useTranslation();
   const [authRequired, setAuthRequired] = useState(false);
   const [tokenDraft, setTokenDraft] = useState('');
 
@@ -40,7 +42,7 @@ export default function App() {
         type="submit"
         className="h-7 rounded-full bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] px-3.5 text-[12px] font-medium text-white cursor-pointer"
       >
-        认证
+        {t('app.auth')}
       </button>
     </form>
   ) : null;
@@ -56,7 +58,7 @@ export default function App() {
           </span>
         </div>
         <p className="mt-2 text-[13px] leading-relaxed text-[#C4C5CC]">
-          完整体验请使用 Muse-Win-Harness 桌面壳；此处仅为浮层调试预览。
+          {t('app.previewHint')}
         </p>
         <div className="mt-3 flex items-center justify-center gap-2">
           <button
@@ -64,7 +66,7 @@ export default function App() {
             onClick={() => mwhService.openSettingsModal('connectors')}
             className="rounded-xl bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] px-3.5 py-1.5 text-xs font-medium text-white cursor-pointer hover:opacity-95"
           >
-            打开设置中心
+            {t('app.openSettings')}
           </button>
         </div>
       </div>

@@ -72,6 +72,52 @@ const DWMWA_TEXT_COLOR = 36;
 
 let currentThemeDark = true;
 
+const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'ja', 'en'];
+function normalizeLocale(raw) {
+  const s = String(raw || '').trim().toLowerCase().replace(/_/g, '-');
+  if (!s) return 'en';
+  if (s === 'zh-tw' || s === 'zh-hk' || s === 'zh-mo' || s.startsWith('zh-hant')) return 'zh-TW';
+  if (s.startsWith('zh')) return 'zh-CN';
+  if (s.startsWith('ja')) return 'ja';
+  return 'en';
+}
+let currentLang = 'en';
+
+const TRAY_LABELS = {
+  'zh-CN': {
+    show: '显示主窗口',
+    hide: '关闭窗口（保持宿主运行）',
+    quit: '退出（停止宿主与隧道）',
+  },
+  'zh-TW': {
+    show: '顯示主視窗',
+    hide: '關閉視窗（保持宿主執行）',
+    quit: '結束（停止宿主與隧道）',
+  },
+  ja: {
+    show: 'ウィンドウを表示',
+    hide: 'ウィンドウを閉じる（ホストは継続）',
+    quit: '終了（ホストとトンネルを停止）',
+  },
+  en: {
+    show: 'Show Window',
+    hide: 'Close Window (keep daemon running)',
+    quit: 'Quit (stop daemon & tunnel)',
+  },
+};
+
+function updateTrayMenu(lang = currentLang) {
+  if (!tray) return;
+  const labels = TRAY_LABELS[SUPPORTED_LOCALES.includes(lang) ? lang : 'en'] || TRAY_LABELS.en;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: labels.show, click: () => showWindow() },
+      { label: labels.hide, click: () => hideMainWindowToTray('tray_menu_close_window') },
+      { label: labels.quit, click: () => quitFromTray('tray_menu_click') },
+    ])
+  );
+}
+
 function applyDwmTheme(win, dark = currentThemeDark) {
   if (!win32 || process.platform !== 'win32') return;
   if (!win || win.isDestroyed()) return;
@@ -775,15 +821,12 @@ async function quitFromTray(trigger = 'tray_menu_click') {
 }
 
 function createTray() {
+  if (app && typeof app.getLocale === 'function' && currentLang === 'en') {
+    currentLang = normalizeLocale(app.getLocale());
+  }
   tray = new Tray(trayIcon());
   tray.setToolTip('Muse-Win-Harness');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Show Window', click: () => showWindow() },
-      { label: 'Close Window (keep daemon running)', click: () => hideMainWindowToTray('tray_menu_close_window') },
-      { label: 'Quit (stop daemon & tunnel)', click: () => quitFromTray('tray_menu_click') },
-    ])
-  );
+  updateTrayMenu(currentLang);
   tray.on('click', () => showWindow());
   tray.on('double-click', () => showWindow());
 }
@@ -975,6 +1018,7 @@ function createWindow() {
     // stays on the default dark strip after the embedded view reported light.
     if (mainWindow && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.send('mwh:chrome-theme', { dark: currentThemeDark });
+      mainWindow.webContents.send('mwh:chrome-language', { lang: currentLang });
     }
     applyDwmTheme(mainWindow, currentThemeDark);
   });
@@ -1480,6 +1524,23 @@ function registerIpc() {
 
   ipcMain.on('mwh:theme-sync', (_event, payload) => handleThemeSync(payload));
   ipcMain.handle('mwh:theme-sync', async (_event, payload) => handleThemeSync(payload));
+
+  const handleLanguageSync = (payload) => {
+    const lang = normalizeLocale(payload?.lang || payload?.language);
+    if (currentLang === lang && !payload?.force) {
+      return { ok: true, lang: currentLang };
+    }
+    currentLang = lang;
+    updateTrayMenu(currentLang);
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send('mwh:chrome-language', { lang: currentLang });
+    }
+    return { ok: true, lang: currentLang };
+  };
+
+  ipcMain.on('mwh:language-sync', (_event, payload) => handleLanguageSync(payload));
+  ipcMain.handle('mwh:language-sync', async (_event, payload) => handleLanguageSync(payload));
+  ipcMain.handle('mwh:get-language', () => currentLang);
 
   ipcMain.on('mwh:window-hide-tray', () => {
     mainWindow?.hide();

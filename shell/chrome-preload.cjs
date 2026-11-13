@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('mwhChrome', {
   // Read-only daemon health probe: { ok, adopted?, reason?, detail? }.
   // The chrome shell uses this to show an honest "daemon not connected" banner.
   getDaemonStatus: () => ipcRenderer.invoke('mwh:daemon-status'),
+  getLanguage: () => ipcRenderer.invoke('mwh:get-language'),
+  onLanguageChange: (callback) => {
+    const listener = (_e, payload) => callback((payload && payload.lang) || 'en');
+    ipcRenderer.on('mwh:chrome-language', listener);
+    return () => ipcRenderer.removeListener('mwh:chrome-language', listener);
+  },
   onMaximizedChange: (callback) => {
     const listener = (_e, state) => callback(state);
     ipcRenderer.on('mwh:window-maximized-state', listener);

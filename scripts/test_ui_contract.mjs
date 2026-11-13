@@ -77,12 +77,14 @@ const chromePreloadSource = read(files.chromePreload);
 const chromeHtmlSource = read(files.chromeHtml);
 
 const reactModalPath = path.join(root, 'frontend', 'src', 'overlay', 'MwhSettingsModal.tsx');
+const reactZhCnLocalePath = path.join(root, 'frontend', 'src', 'i18n', 'locales', 'zh-CN.ts');
 const reactSwitchPath = path.join(root, 'frontend', 'src', 'overlay', 'MwhSwitch.tsx');
 const reactIslandPath = path.join(root, 'frontend', 'src', 'overlay', 'LiveTaskFloatingIsland.tsx');
 const reactAppPath = path.join(root, 'frontend', 'src', 'App.tsx');
 const reactServicePath = path.join(root, 'frontend', 'src', 'services', 'mwhService.ts');
 const designDocPath = path.join(root, 'docs', 'DESIGN.md');
 const reactModalSource = fs.existsSync(reactModalPath) ? read(reactModalPath) : '';
+const reactZhCnLocaleSource = fs.existsSync(reactZhCnLocalePath) ? read(reactZhCnLocalePath) : '';
 const reactSwitchSource = fs.existsSync(reactSwitchPath) ? read(reactSwitchPath) : '';
 const reactIslandSource = fs.existsSync(reactIslandPath) ? read(reactIslandPath) : '';
 const reactAppSource = fs.existsSync(reactAppPath) ? read(reactAppPath) : '';
@@ -239,7 +241,7 @@ assert(/grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/.test(tabsBar
 // Resource library essential human copy assertions:
 for (const [label, src] of [
   ['muse-settings-preload.cjs', preloadSource],
-  ['MwhSettingsModal.tsx', reactModalSource],
+  ['MwhSettingsModal.tsx + zh-CN.ts', `${reactModalSource}\n${reactZhCnLocaleSource}`],
 ]) {
   assert(
     src.includes('打开即对 Muse 生效，默认全部关闭。'),
@@ -249,6 +251,22 @@ for (const [label, src] of [
     src.includes('MCP 在你的 Windows 用户权限下运行，没有额外沙箱。'),
     `${label} is missing the kernel sandbox disclosure: MCP 在你的 Windows 用户权限下运行，没有额外沙箱。`
   );
+}
+assert(
+  reactModalSource.includes("t('resources.activationNote')") && reactModalSource.includes("t('resources.sandboxNote')"),
+  'MwhSettingsModal.tsx must render resource disclosures via i18n keys resources.activationNote and resources.sandboxNote'
+);
+
+// Host-language sync & 4-locale i18n contract:
+const preloadNoComments = preloadSource.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+assert(!preloadNoComments.includes('document.cookie'), 'muse-settings-preload.cjs must never access document.cookie');
+assert(
+  mainSource.includes('mwh:language-sync') && mainSource.includes('mwh:get-language') && mainSource.includes('mwh:chrome-language'),
+  'main.cjs must register mwh:language-sync, mwh:get-language, and broadcast mwh:chrome-language'
+);
+for (const locFile of ['zh-CN.ts', 'zh-TW.ts', 'ja.ts', 'en.ts']) {
+  const locPath = path.join(root, 'frontend', 'src', 'i18n', 'locales', locFile);
+  assert(fs.existsSync(locPath), `Missing frontend locale dictionary: ${locFile}`);
 }
 
 /* 8b. Switch motion contract: in-place painting + tokenised transition - */

@@ -189,12 +189,125 @@
   </header>
   <div id="daemon-banner" hidden>宿主未连接，请重新运行 MWH启动.cmd</div>
   <script>
+    const CHROME_I18N = {
+      'zh-CN': {
+        minimize: '最小化',
+        maximize: '最大化',
+        restore: '向下还原',
+        close: '关闭',
+        daemonDisconnected: '宿主未连接（{reason}）',
+        daemonPortOccupied: '：{image} 占用了本机 19820（pid {pid}），没有启动第二个宿主',
+        daemonRetryHint: '，请重新运行 MWH启动.cmd',
+        daemonDefaultBanner: '宿主未连接，请重新运行 MWH启动.cmd',
+      },
+      'zh-TW': {
+        minimize: '最小化',
+        maximize: '最大化',
+        restore: '向下還原',
+        close: '關閉',
+        daemonDisconnected: '宿主未連線（{reason}）',
+        daemonPortOccupied: '：{image} 佔用了本機 19820（pid {pid}），未啟動第二個宿主',
+        daemonRetryHint: '，請重新執行 MWH启动.cmd',
+        daemonDefaultBanner: '宿主未連線，請重新執行 MWH启动.cmd',
+      },
+      ja: {
+        minimize: '最小化',
+        maximize: '最大化',
+        restore: '元に戻す',
+        close: '閉じる',
+        daemonDisconnected: 'ホスト未接続（{reason}）',
+        daemonPortOccupied: '：{image} がローカル 19820（pid {pid}）を使用中のため、2つ目のホストを起動しませんでした',
+        daemonRetryHint: '。MWH启动.cmd を再実行してください',
+        daemonDefaultBanner: 'ホスト未接続です。MWH启动.cmd を再実行してください',
+      },
+      en: {
+        minimize: 'Minimize',
+        maximize: 'Maximize',
+        restore: 'Restore',
+        close: 'Close',
+        daemonDisconnected: 'Host disconnected ({reason})',
+        daemonPortOccupied: ': {image} is using local port 19820 (pid {pid}); did not start a second host',
+        daemonRetryHint: '. Please re-run MWH启动.cmd',
+        daemonDefaultBanner: 'Host disconnected. Please re-run MWH启动.cmd',
+      },
+    };
+
+    function normalizeChromeLocale(raw) {
+      const s = String(raw || '').trim().toLowerCase().replace(/_/g, '-');
+      if (!s) return 'en';
+      if (s === 'zh-tw' || s === 'zh-hk' || s === 'zh-mo' || s.startsWith('zh-hant')) return 'zh-TW';
+      if (s.startsWith('zh')) return 'zh-CN';
+      if (s.startsWith('ja')) return 'ja';
+      return 'en';
+    }
+
+    let currentChromeLang = normalizeChromeLocale(navigator.language);
+    let currentIsMax = false;
+    let lastDaemonStatus = null;
+
+    function ct(key, params) {
+      const dict = CHROME_I18N[currentChromeLang] || CHROME_I18N.en;
+      let text = dict[key] || CHROME_I18N.en[key] || key;
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          text = text.replace(new RegExp('\\{' + k + '\\}', 'g'), String(v));
+        }
+      }
+      return text;
+    }
+
     const minBtn = document.getElementById('win-min');
     const maxBtn = document.getElementById('win-max');
     const closeBtn = document.getElementById('win-close');
     const svgMax = document.getElementById('svg-max');
     const svgRestore = document.getElementById('svg-restore');
     const dragSpacer = document.getElementById('drag-spacer');
+
+    function renderDaemonBanner(status) {
+      lastDaemonStatus = status;
+      const banner = document.getElementById('daemon-banner');
+      if (!banner) return;
+      if (!status) {
+        banner.textContent = ct('daemonDefaultBanner');
+        return;
+      }
+      if (status.ok === true) {
+        banner.hidden = true;
+        return;
+      }
+      const reason = status.reason || 'UNKNOWN';
+      const detail = status.detail ? String(status.detail) : '';
+      const listener = detail.match(/listener pid=(\d+) image=(\S+)/);
+      let text = ct('daemonDisconnected', { reason });
+      if (listener && listener[2]) {
+        text += ct('daemonPortOccupied', { image: listener[2], pid: listener[1] });
+      } else if (detail) {
+        text += ' ' + (detail.length > 160 ? detail.slice(0, 160) + '...' : detail);
+      } else {
+        text += ct('daemonRetryHint');
+      }
+      banner.title = detail || reason;
+      banner.textContent = text;
+      banner.hidden = false;
+    }
+
+    function applyChromeLanguage(lang) {
+      currentChromeLang = normalizeChromeLocale(lang);
+      document.documentElement.lang = currentChromeLang;
+      minBtn.title = ct('minimize');
+      minBtn.setAttribute('aria-label', ct('minimize'));
+      closeBtn.title = ct('close');
+      closeBtn.setAttribute('aria-label', ct('close'));
+      const maxLabel = currentIsMax ? ct('restore') : ct('maximize');
+      maxBtn.title = maxLabel;
+      maxBtn.setAttribute('aria-label', maxLabel);
+      if (lastDaemonStatus) {
+        renderDaemonBanner(lastDaemonStatus);
+      } else {
+        const banner = document.getElementById('daemon-banner');
+        if (banner && !banner.hidden) banner.textContent = ct('daemonDefaultBanner');
+      }
+    }
 
     minBtn.addEventListener('click', () => {
       if (window.mwhChrome) window.mwhChrome.minimize();
@@ -210,18 +323,29 @@
     });
 
     function updateMaxIcon(isMax) {
+      currentIsMax = Boolean(isMax);
       if (isMax) {
         svgMax.style.display = 'none';
         svgRestore.style.display = 'block';
-        maxBtn.title = '向下还原';
+        maxBtn.title = ct('restore');
+        maxBtn.setAttribute('aria-label', ct('restore'));
       } else {
         svgMax.style.display = 'block';
         svgRestore.style.display = 'none';
-        maxBtn.title = '最大化';
+        maxBtn.title = ct('maximize');
+        maxBtn.setAttribute('aria-label', ct('maximize'));
       }
     }
 
+    applyChromeLanguage(currentChromeLang);
+
     if (window.mwhChrome) {
+      if (window.mwhChrome.getLanguage) {
+        window.mwhChrome.getLanguage().then(applyChromeLanguage).catch(() => {});
+      }
+      if (window.mwhChrome.onLanguageChange) {
+        window.mwhChrome.onLanguageChange(applyChromeLanguage);
+      }
       window.mwhChrome.isMaximized().then(updateMaxIcon).catch(() => {});
       window.mwhChrome.onMaximizedChange(updateMaxIcon);
       if (window.mwhChrome.getVersionInfo) {
@@ -235,28 +359,7 @@
       }
       // Honest daemon health: only hide the banner when the host really answered.
       if (window.mwhChrome.getDaemonStatus) {
-        window.mwhChrome.getDaemonStatus().then((status) => {
-          const banner = document.getElementById('daemon-banner');
-          if (!banner) return;
-          if (status && status.ok === true) {
-            banner.hidden = true;
-            return;
-          }
-          const reason = (status && status.reason) || 'UNKNOWN';
-          const detail = status && status.detail ? String(status.detail) : '';
-          const listener = detail.match(/listener pid=(\d+) image=(\S+)/);
-          let text = '宿主未连接（' + reason + '）';
-          if (listener && listener[2]) {
-            text += '：' + listener[2] + ' 占用了本机 19820（pid ' + listener[1] + '），没有启动第二个宿主';
-          } else if (detail) {
-            text += ' ' + (detail.length > 160 ? detail.slice(0, 160) + '...' : detail);
-          } else {
-            text += '，请重新运行 MWH启动.cmd';
-          }
-          banner.title = detail || reason;
-          banner.textContent = text;
-          banner.hidden = false;
-        }).catch(() => {});
+        window.mwhChrome.getDaemonStatus().then(renderDaemonBanner).catch(() => {});
       }
     }
   </script>

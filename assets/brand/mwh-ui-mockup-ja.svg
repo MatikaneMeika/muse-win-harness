@@ -1,0 +1,243 @@
+<svg width="1280" height="860" viewBox="0 0 1280 860" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mwhBlue" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="50%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <filter id="panelShadow" x="-8%" y="-6%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#111112" flood-opacity="0.14"/>
+    </filter>
+    <filter id="islandShadow" x="-10%" y="-10%" width="120%" height="124%">
+      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#111112" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- Desktop surround -->
+  <rect width="1280" height="860" fill="#E6E4DE"/>
+
+  <!-- Frameless window (x=16, y=16, w=1248, h=828, rx=12) -->
+  <rect x="16" y="16" width="1248" height="828" rx="12" fill="#F7F6F2"/>
+  <rect x="16.5" y="16.5" width="1247" height="827" rx="11.5" stroke="#1D1D1F" stroke-opacity="0.08"/>
+
+  <!-- 1. Custom Titlebar (shell/chrome.html: height 32px, y=16..48, #F4F4F5, 15px stroke logo) -->
+  <path d="M 16 28 C 16 21.3726 21.3726 16 28 16 H 1252 C 1258.63 16 1264 21.3726 1264 28 V 48 H 16 V 28 Z" fill="#F4F4F5"/>
+  <line x1="16" y1="48" x2="1264" y2="48" stroke="#000000" stroke-opacity="0.06"/>
+
+  <!-- Titlebar Left Brand: padding-left 10px -> x=26, y=24.5 (15x15 SVG viewBox 0 0 120 120 -> scale 0.125) -->
+  <g transform="translate(26, 24.5) scale(0.125)">
+    <g transform="rotate(12 60 60)">
+      <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+            fill="none" stroke="url(#mwhBlue)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="88" cy="82" r="11" fill="url(#mwhBlue)"/>
+    </g>
+  </g>
+  <text x="49" y="36.5" fill="#1A1A1A" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600" letter-spacing="-0.01em">Muse-Win-Harness</text>
+  <rect x="168" y="23" width="48" height="18" rx="9" fill="#000000" fill-opacity="0.05" stroke="#000000" stroke-opacity="0.1"/>
+  <text x="176" y="35.5" fill="#52525B" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="500">v0.1.0</text>
+
+  <!-- Titlebar Right Window Controls (3 x 44px buttons: 1132..1176, 1176..1220, 1220..1264) -->
+  <line x1="1149" y1="32" x2="1159" y2="32" stroke="#52525B" stroke-width="1.2"/>
+  <rect x="1193.5" y="27.5" width="9" height="9" fill="none" stroke="#52525B" stroke-width="1.2"/>
+  <path d="M 1237 27 L 1247 37 M 1247 27 L 1237 37" stroke="#52525B" stroke-width="1.2"/>
+
+  <!-- 2. Muse.ai Client Area (y=48..844, height=796px) -->
+  <!-- Left 56px Activity Rail (x=16..72, y=48..844) -->
+  <path d="M 16 48 H 72 V 844 H 28 C 21.3726 844 16 838.627 16 832 V 48 Z" fill="#EFECE6"/>
+  <line x1="72" y1="48" x2="72" y2="844" stroke="#000000" stroke-opacity="0.06"/>
+
+  <!-- Host app top navigation placeholders (neutral, understated) -->
+  <rect x="26" y="64" width="36" height="36" rx="10" fill="#000000" fill-opacity="0.05"/>
+  <rect x="35" y="75" width="18" height="14" rx="3" fill="none" stroke="#63636A" stroke-width="1.6"/>
+  <rect x="26" y="112" width="36" height="36" rx="10" fill="#000000" fill-opacity="0.03"/>
+  <circle cx="44" cy="130" r="7" fill="none" stroke="#63636A" stroke-width="1.6"/>
+
+  <!-- Injected MWH Activity Slot (.mwh-activity-slot / .mwh-activity-btn.active, 44x44 at x=22, y=732 above bottom action icon) -->
+  <g transform="translate(22, 732)">
+      <rect width="44" height="44" rx="11" fill="#6366F1" fill-opacity="0.18"/>
+    <!-- .mwh-activity-dot (left: 2px, width: 3.5px, height: 16px, rx: 2px) -->
+    <rect x="2" y="14" width="3.5" height="16" rx="1.75" fill="url(#mwhBlue)"/>
+    <!-- SVG_LOGO (36x36 centred inside 44x44 -> translate(4,4) scale(0.3)) -->
+    <g transform="translate(4, 4) scale(0.3)">
+      <g transform="rotate(12 60 60)">
+        <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+              fill="none" stroke="url(#mwhBlue)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="88" cy="82" r="11" fill="url(#mwhBlue)"/>
+      </g>
+    </g>
+  </g>
+  <!-- Host bottom settings placeholder -->
+  <rect x="26" y="788" width="36" height="36" rx="10" fill="#000000" fill-opacity="0.04"/>
+  <circle cx="44" cy="806" r="6.5" fill="none" stroke="#63636A" stroke-width="1.5"/>
+
+  <!-- Abstract Muse Chat Canvas (x=72..1264, y=48..844) -->
+  <rect x="460" y="88" width="360" height="16" rx="8" fill="#E6E4DE"/>
+  <rect x="460" y="124" width="680" height="84" rx="16" fill="#FFFFFF"/>
+  <rect x="484" y="146" width="340" height="10" rx="5" fill="#E6E4DE"/>
+  <rect x="484" y="166" width="480" height="10" rx="5" fill="#E6E4DE"/>
+  <rect x="484" y="186" width="240" height="10" rx="5" fill="#E6E4DE"/>
+
+  <rect x="680" y="228" width="460" height="64" rx="16" fill="#FFFFFF"/>
+  <rect x="704" y="250" width="300" height="10" rx="5" fill="#E6E4DE"/>
+  <rect x="704" y="270" width="190" height="10" rx="5" fill="#E6E4DE"/>
+
+  <!-- Subtle backdrop dimming over chat canvas when drawer is open -->
+  <path d="M 72 48 H 1264 V 832 C 1264 838.627 1258.63 844 1252 844 H 72 V 48 Z" fill="#000000" fill-opacity="0.12"/>
+
+  <!-- 3. Primary settings drawer: left 56px so x=72; top 12.5vh so y=148; height 75vh so h=596; w=336; rx=20 -->
+  <g transform="translate(72, 148)" filter="url(#panelShadow)">
+    <rect width="336" height="596" rx="20" fill="#EFECE6"/>
+    <rect x="0.5" y="0.5" width="335" height="595" rx="19.5" stroke="#000000" stroke-opacity="0.06"/>
+
+    <!-- Drawer Header (56px high) -->
+    <line x1="0" y1="56" x2="336" y2="56" stroke="#000000" stroke-opacity="0.06"/>
+    <!-- SVG_LOGO (36x36 at x=16, y=10) -->
+    <g transform="translate(16, 10) scale(0.3)">
+      <g transform="rotate(12 60 60)">
+        <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+              fill="none" stroke="url(#mwhBlue)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="88" cy="82" r="11" fill="url(#mwhBlue)"/>
+      </g>
+    </g>
+    <text x="61" y="33" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13.5" font-weight="600">ローカルホストエンジン (MWH)</text>
+    <!-- Close button -->
+    <path d="M 303 23 L 313 33 M 313 23 L 303 33" stroke="#63636A" stroke-width="1.8" stroke-linecap="round"/>
+
+    <!-- Card 1: 権限モード (2x2 .mwh-mode-grid) -->
+    <g transform="translate(14, 70)">
+      <rect width="308" height="172" rx="14" fill="#F7F6F2"/>
+      <!-- Shield icon + title + 2h pill -->
+      <path d="M 21 25 C 21 25 26 22.5 26 18.5 V 14 L 21 12 L 16 14 V 18.5 C 16 22.5 21 25 21 25 Z" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linejoin="round"/>
+      <text x="32" y="23" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">権限モード</text>
+      <rect x="200" y="10" width="94" height="20" rx="10" fill="#38BDF8" fill-opacity="0.12"/>
+      <text x="212" y="24" fill="#0284C7" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">2h 自動 · 120m</text>
+
+      <!-- 2x2 Mode Cards -->
+      <!-- (1,1) プラン (読取専用) -->
+      <rect x="14" y="38" width="136" height="56" rx="12" fill="#E6E4DE"/>
+      <text x="26" y="60" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">プラン (読取専用)</text>
+      <text x="26" y="79" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">参照のみ・変更不可</text>
+
+      <!-- (1,2) 変更前に確認 (Active) -->
+      <rect x="158" y="38" width="136" height="56" rx="12" fill="#DAD7CE" stroke="#1D1D1F" stroke-opacity="0.16"/>
+      <text x="170" y="60" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">変更前に確認</text>
+      <polyline points="278,51 273,57 270,54" fill="none" stroke="#6366F1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="170" y="79" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="11">変更時に毎回確認</text>
+
+      <!-- (2,1) 自律モード -->
+      <rect x="14" y="102" width="136" height="56" rx="12" fill="#E6E4DE"/>
+      <text x="26" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">自律モード</text>
+      <text x="26" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">自動スナップショット</text>
+
+      <!-- (2,2) フルアクセス -->
+      <rect x="158" y="102" width="136" height="56" rx="12" fill="#E6E4DE"/>
+      <text x="170" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">フルアクセス</text>
+      <text x="170" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">フォルダ横断許可</text>
+    </g>
+
+    <!-- Card 2: エンドポイントと認証情報 -->
+    <g transform="translate(14, 252)">
+      <rect width="308" height="202" rx="14" fill="#F7F6F2"/>
+      <text x="16" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">エンドポイントと認証情報</text>
+      <rect x="148" y="11" width="66" height="20" rx="10" fill="#38BDF8" fill-opacity="0.14"/>
+      <circle cx="159" cy="21" r="3" fill="#38BDF8"/>
+      <text x="167" y="25" fill="#0284C7" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">トンネル稼働中</text>
+      <rect x="220" y="9" width="74" height="24" rx="8" fill="#E6E4DE"/>
+      <text x="235" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="500">トンネル停止</text>
+
+      <!-- MCP Row -->
+      <rect x="14" y="40" width="280" height="32" rx="9" fill="#E6E4DE"/>
+      <text x="24" y="60" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11">MCP</text>
+      <text x="58" y="60" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">https://example.trycloudflare.com/mcp</text>
+
+      <!-- REST Row -->
+      <rect x="14" y="78" width="280" height="32" rx="9" fill="#E6E4DE"/>
+      <text x="24" y="98" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11">REST</text>
+      <text x="58" y="98" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">https://example.trycloudflare.com/api/v1</text>
+
+      <!-- Token Row -->
+      <rect x="14" y="116" width="280" height="32" rx="9" fill="#E6E4DE"/>
+      <text x="24" y="136" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11">Token</text>
+      <text x="64" y="136" fill="#4A4A4F" font-family="Consolas, ui-monospace, monospace" font-size="11">mwh_live_************************</text>
+
+      <!-- 2-Column Pairing Buttons -->
+      <rect x="14" y="156" width="136" height="32" rx="10" fill="url(#mwhBlue)"/>
+      <text x="44" y="176" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">ペアリング文をコピー</text>
+      <rect x="158" y="156" width="136" height="32" rx="10" fill="#E6E4DE"/>
+      <text x="184" y="176" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="500">MCP JSON をコピー</text>
+    </g>
+
+    <!-- Card 3: 詳細設定センターを開く (.mwh-adv-hero-card) -->
+    <g transform="translate(14, 464)">
+      <rect width="308" height="60" rx="14" fill="#E6E4DE"/>
+      <rect x="14" y="13" width="34" height="34" rx="10" fill="#6366F1" fill-opacity="0.16"/>
+      <rect x="23" y="22" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
+      <rect x="32.5" y="22" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
+      <rect x="23" y="31.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
+      <rect x="32.5" y="31.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
+      <text x="58" y="28" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">詳細設定センターを開く</text>
+      <text x="58" y="45" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">接続と権限 · 作業領域 · ライブラリ · 監査</text>
+      <rect x="236" y="20" width="56" height="20" rx="10" fill="#000000" fill-opacity="0.05"/>
+      <text x="244" y="33.5" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10" font-weight="500">4 つの設定領域</text>
+    </g>
+
+    <!-- Drawer Footer (2 status rows at bottom y=540..596) -->
+    <path d="M 0 540 H 336 V 576 C 336 587.046 327.046 596 316 596 H 20 C 8.9543 596 0 587.046 0 576 V 540 Z" fill="#E6E4DE"/>
+    <line x1="0" y1="540" x2="336" y2="540" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="20" cy="556" r="3.5" fill="#38BDF8"/>
+    <text x="30" y="560" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">ホストデーモン準備完了</text>
+    <text x="232" y="560" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="10.5">PID 14820 · 42 MB</text>
+
+    <circle cx="20" cy="576" r="3.5" fill="#38BDF8"/>
+    <text x="30" y="580" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">Muse 接続: コネクタ接続済み</text>
+    <text x="282" y="580" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="10.5">ONLINE</text>
+  </g>
+
+  <!-- 4. Bottom-Right Approval Floating Island (.mwh-approval-island: default dock bottom-right, non-overlapping with drawer) -->
+  <!-- Collapsed Capsule preview badge (108x42, shown above right to illustrate capsule state) -->
+  <g transform="translate(1132, 368)" filter="url(#panelShadow)">
+    <rect width="108" height="42" rx="21" fill="#E6E4DE" stroke="#000000" stroke-opacity="0.06"/>
+    <circle cx="24" cy="21" r="4.5" fill="#D99B43"/>
+    <text x="36" y="25.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">承認待ち</text>
+  </g>
+  <text x="1008" y="393" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11.5">折りたたみピル (クリック) →</text>
+
+  <!-- Expanded Approval Island (624x372 at x=616, y=428) -->
+  <g transform="translate(616, 428)" filter="url(#islandShadow)">
+    <rect width="624" height="372" rx="20" fill="#E6E4DE"/>
+    <rect x="0.5" y="0.5" width="623" height="371" rx="19.5" stroke="#000000" stroke-opacity="0.08"/>
+
+    <!-- Island Header (52px high) -->
+    <path d="M 24 20 L 16 34 H 32 L 24 20 Z" fill="none" stroke="#D99B43" stroke-width="2" stroke-linejoin="round"/>
+    <text x="40" y="32" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="600">ローカル実行の承認待ち · Muse Cloud MCP</text>
+    <text x="424" y="31" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">リスク MEDIUM · 自動スナップショット</text>
+    <!-- Collapse chevron button -->
+    <rect x="584" y="12" width="28" height="28" rx="8" fill="#000000" fill-opacity="0.04"/>
+    <polyline points="593,24 598,29 603,24" fill="none" stroke="#63636A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Island Body -->
+    <text x="18" y="72" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12">ワークスペースファイルの変更要求（承認時に Git Shadow スナップショットを自動保存）：</text>
+
+    <!-- Code box, paper #F2F1EC -->
+    <rect x="16" y="86" width="592" height="218" rx="12" fill="#F2F1EC"/>
+    <text x="32" y="114" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">$ fs_mutate (action="edit", mode="confirm")</text>
+    <text x="32" y="138" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">対象パス: &lt;workspace&gt;/src/app.ts</text>
+    <line x1="32" y1="152" x2="592" y2="152" stroke="#000000" stroke-opacity="0.06"/>
+    <text x="32" y="176" fill="#C2410C" font-family="Consolas, ui-monospace, monospace" font-size="12">- export function boot() { return false; }</text>
+    <text x="32" y="200" fill="#0284C7" font-family="Consolas, ui-monospace, monospace" font-size="12">+ export function boot() { return startDaemon(); }</text>
+    <text x="32" y="232" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">チェックポイント: chk_2026_demo · 承認後に CONSUMED を記録</text>
+    <text x="32" y="256" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">パスフェンス: realpath 検証済み · 非機密ファイル</text>
+
+    <!-- Island Footer (.mwh-island-foot: right-aligned 3 pill buttons) -->
+    <g transform="translate(0, 320)">
+      <rect x="284" y="0" width="76" height="34" rx="17" fill="#000000" fill-opacity="0.06"/>
+      <text x="309" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">拒否</text>
+
+      <rect x="368" y="0" width="132" height="34" rx="17" fill="#000000" fill-opacity="0.06"/>
+      <text x="386" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">この作業領域で常に許可</text>
+
+      <rect x="508" y="0" width="100" height="34" rx="17" fill="url(#mwhBlue)"/>
+      <text x="533" y="21.5" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">1 回許可</text>
+    </g>
+  </g>
+</svg>

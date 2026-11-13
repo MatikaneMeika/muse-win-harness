@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
+  <img src="../../assets/brand/mwh-cover-zh.svg" alt="Muse-Win-Harness：让 Muse 接入你的 Windows" width="100%">
 </p>
 
 <p align="center">
@@ -75,7 +75,7 @@
 ## 2. 桌面窗口与操控面板一览
 
 <p align="center">
-  <img src="../../assets/brand/mwh-ui-mockup.svg" alt="Muse-Win-Harness 桌面窗口示意：顶部状态栏、左侧栏 MWH 按钮、侧边快捷设置抽屉与右下角实时审批浮岛">
+  <img src="../../assets/brand/mwh-ui-mockup-zh.svg" alt="Muse-Win-Harness 桌面窗口示意：顶部状态栏、左侧栏 MWH 按钮、侧边快捷设置抽屉与右下角实时审批浮岛">
 </p>
 
 <p align="center">

@@ -99,51 +99,51 @@
         <circle cx="88" cy="82" r="11" fill="url(#mwhBlue)"/>
       </g>
     </g>
-    <text x="61" y="33" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13.5" font-weight="600">本地宿主引擎 (MWH)</text>
+    <text x="61" y="33" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13.5" font-weight="600">Local Host Engine (MWH)</text>
     <!-- Close button -->
     <path d="M 303 23 L 313 33 M 313 23 L 303 33" stroke="#63636A" stroke-width="1.8" stroke-linecap="round"/>
 
-    <!-- Card 1: 权限模式 (2x2 .mwh-mode-grid) -->
+    <!-- Card 1: Permission Mode (2x2 .mwh-mode-grid) -->
     <g transform="translate(14, 70)">
       <rect width="308" height="172" rx="14" fill="#F7F6F2"/>
       <!-- Shield icon + title + 2h pill -->
       <path d="M 21 25 C 21 25 26 22.5 26 18.5 V 14 L 21 12 L 16 14 V 18.5 C 16 22.5 21 25 21 25 Z" fill="none" stroke="#1D1D1F" stroke-width="1.5" stroke-linejoin="round"/>
-      <text x="32" y="23" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">权限模式</text>
+      <text x="32" y="23" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">Permission Mode</text>
       <rect x="200" y="10" width="94" height="20" rx="10" fill="#38BDF8" fill-opacity="0.12"/>
-      <text x="212" y="24" fill="#0284C7" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">2h 降级 · 120m</text>
+      <text x="212" y="24" fill="#0284C7" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">2h Auto · 120m</text>
 
       <!-- 2x2 Mode Cards -->
-      <!-- (1,1) 计划 (只读) -->
+      <!-- (1,1) Plan (Read-Only) -->
       <rect x="14" y="38" width="136" height="56" rx="12" fill="#E6E4DE"/>
-      <text x="26" y="60" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">计划 (只读)</text>
-      <text x="26" y="79" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">仅探查不修改</text>
+      <text x="26" y="60" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">Plan (Read-Only)</text>
+      <text x="26" y="79" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">Read &amp; explore only</text>
 
-      <!-- (1,2) 变更前确认 (Active) -->
+      <!-- (1,2) Confirm Edits (Active) -->
       <rect x="158" y="38" width="136" height="56" rx="12" fill="#DAD7CE" stroke="#1D1D1F" stroke-opacity="0.16"/>
-      <text x="170" y="60" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">变更前确认</text>
+      <text x="170" y="60" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">Confirm Edits</text>
       <polyline points="278,51 273,57 270,54" fill="none" stroke="#6366F1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="170" y="79" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="11">写前弹窗确认</text>
+      <text x="170" y="79" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="11">Ask before writes</text>
 
-      <!-- (2,1) 自主模式 -->
+      <!-- (2,1) Autonomous -->
       <rect x="14" y="102" width="136" height="56" rx="12" fill="#E6E4DE"/>
-      <text x="26" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">自主模式</text>
-      <text x="26" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">自动快照放行</text>
+      <text x="26" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">Autonomous</text>
+      <text x="26" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">Auto-snapshot writes</text>
 
-      <!-- (2,2) 完全访问 -->
+      <!-- (2,2) Full Access -->
       <rect x="158" y="102" width="136" height="56" rx="12" fill="#E6E4DE"/>
-      <text x="170" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">完全访问</text>
-      <text x="170" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">跨盘普通放行</text>
+      <text x="170" y="124" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">Full Access</text>
+      <text x="170" y="143" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11">Cross-folder access</text>
     </g>
 
-    <!-- Card 2: 连接端点与凭据 -->
+    <!-- Card 2: Endpoints &amp; Credentials -->
     <g transform="translate(14, 252)">
       <rect width="308" height="202" rx="14" fill="#F7F6F2"/>
-      <text x="16" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">连接端点与凭据</text>
+      <text x="16" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">Endpoints &amp; Credentials</text>
       <rect x="148" y="11" width="66" height="20" rx="10" fill="#38BDF8" fill-opacity="0.14"/>
       <circle cx="159" cy="21" r="3" fill="#38BDF8"/>
-      <text x="167" y="25" fill="#0284C7" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">公网活跃</text>
+      <text x="167" y="25" fill="#0284C7" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5" font-weight="600">Tunnel Live</text>
       <rect x="220" y="9" width="74" height="24" rx="8" fill="#E6E4DE"/>
-      <text x="235" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="500">停止隧道</text>
+      <text x="235" y="25" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="11" font-weight="500">Stop Tunnel</text>
 
       <!-- MCP Row -->
       <rect x="14" y="40" width="280" height="32" rx="9" fill="#E6E4DE"/>
@@ -162,12 +162,12 @@
 
       <!-- 2-Column Pairing Buttons -->
       <rect x="14" y="156" width="136" height="32" rx="10" fill="url(#mwhBlue)"/>
-      <text x="44" y="176" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">复制配对口令</text>
+      <text x="44" y="176" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="600">Copy Prompt</text>
       <rect x="158" y="156" width="136" height="32" rx="10" fill="#E6E4DE"/>
-      <text x="184" y="176" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="500">复制 MCP JSON</text>
+      <text x="184" y="176" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12" font-weight="500">Copy MCP JSON</text>
     </g>
 
-    <!-- Card 3: 打开高级配置中心 (.mwh-adv-hero-card) -->
+    <!-- Card 3: Advanced Config Center (.mwh-adv-hero-card) -->
     <g transform="translate(14, 464)">
       <rect width="308" height="60" rx="14" fill="#E6E4DE"/>
       <rect x="14" y="13" width="34" height="34" rx="10" fill="#6366F1" fill-opacity="0.16"/>
@@ -175,21 +175,21 @@
       <rect x="32.5" y="22" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
       <rect x="23" y="31.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
       <rect x="32.5" y="31.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="#6366F1" stroke-width="1.6"/>
-      <text x="58" y="28" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">打开高级配置中心</text>
-      <text x="58" y="45" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">连接与权限 · 工作区与代理 · 资源库 · 审计日志</text>
+      <text x="58" y="28" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">Advanced Config Center</text>
+      <text x="58" y="45" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">Connectors · Workspaces · Library · Audit</text>
       <rect x="236" y="20" width="56" height="20" rx="10" fill="#000000" fill-opacity="0.05"/>
-      <text x="244" y="33.5" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10" font-weight="500">4 个配置域</text>
+      <text x="244" y="33.5" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10" font-weight="500">4 Domains</text>
     </g>
 
     <!-- Drawer Footer (2 status rows at bottom y=540..596) -->
     <path d="M 0 540 H 336 V 576 C 336 587.046 327.046 596 316 596 H 20 C 8.9543 596 0 587.046 0 576 V 540 Z" fill="#E6E4DE"/>
     <line x1="0" y1="540" x2="336" y2="540" stroke="#000000" stroke-opacity="0.06"/>
     <circle cx="20" cy="556" r="3.5" fill="#38BDF8"/>
-    <text x="30" y="560" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">宿主守护就绪</text>
+    <text x="30" y="560" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">Host Daemon Ready</text>
     <text x="232" y="560" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="10.5">PID 14820 · 42 MB</text>
 
     <circle cx="20" cy="576" r="3.5" fill="#38BDF8"/>
-    <text x="30" y="580" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">Muse 连通: 已连通 Muse 连接器</text>
+    <text x="30" y="580" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="10.5">Muse Link: Connector Online</text>
     <text x="282" y="580" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="10.5">ONLINE</text>
   </g>
 
@@ -198,9 +198,9 @@
   <g transform="translate(1132, 368)" filter="url(#panelShadow)">
     <rect width="108" height="42" rx="21" fill="#E6E4DE" stroke="#000000" stroke-opacity="0.06"/>
     <circle cx="24" cy="21" r="4.5" fill="#D99B43"/>
-    <text x="36" y="25.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">待授权</text>
+    <text x="36" y="25.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="13" font-weight="600">Approval</text>
   </g>
-  <text x="1008" y="393" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11.5">收起态胶囊 (单击切换) →</text>
+  <text x="1008" y="393" fill="#63636A" font-family="Segoe UI, system-ui, sans-serif" font-size="11.5">Collapsed Pill (Click) →</text>
 
   <!-- Expanded Approval Island (624x372 at x=616, y=428) -->
   <g transform="translate(616, 428)" filter="url(#islandShadow)">
@@ -209,35 +209,35 @@
 
     <!-- Island Header (52px high) -->
     <path d="M 24 20 L 16 34 H 32 L 24 20 Z" fill="none" stroke="#D99B43" stroke-width="2" stroke-linejoin="round"/>
-    <text x="40" y="32" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="600">等待本机执行授权 · Muse Cloud MCP</text>
-    <text x="424" y="31" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">风险 MEDIUM · 写前自动快照</text>
+    <text x="40" y="32" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="14" font-weight="600">Host Execution Approval · Muse Cloud MCP</text>
+    <text x="424" y="31" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">Risk MEDIUM · Auto Snapshot</text>
     <!-- Collapse chevron button -->
     <rect x="584" y="12" width="28" height="28" rx="8" fill="#000000" fill-opacity="0.04"/>
     <polyline points="593,24 598,29 603,24" fill="none" stroke="#63636A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 
     <!-- Island Body -->
-    <text x="18" y="72" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12">请求修改工作区文件（批准后自动生成 Git Shadow 写前快照，随时可一键回滚）：</text>
+    <text x="18" y="72" fill="#4A4A4F" font-family="Segoe UI, system-ui, sans-serif" font-size="12">Request to modify workspace file (auto Git Shadow snapshot on approval for 1-click undo):</text>
 
     <!-- Code box, paper #F2F1EC -->
     <rect x="16" y="86" width="592" height="218" rx="12" fill="#F2F1EC"/>
     <text x="32" y="114" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">$ fs_mutate (action="edit", mode="confirm")</text>
-    <text x="32" y="138" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">目标路径: &lt;workspace&gt;/src/app.ts</text>
+    <text x="32" y="138" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="12">Target Path: &lt;workspace&gt;/src/app.ts</text>
     <line x1="32" y1="152" x2="592" y2="152" stroke="#000000" stroke-opacity="0.06"/>
     <text x="32" y="176" fill="#C2410C" font-family="Consolas, ui-monospace, monospace" font-size="12">- export function boot() { return false; }</text>
     <text x="32" y="200" fill="#0284C7" font-family="Consolas, ui-monospace, monospace" font-size="12">+ export function boot() { return startDaemon(); }</text>
-    <text x="32" y="232" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">写前检查点: chk_2026_demo · 批准后自动写入脱敏回执 CONSUMED</text>
-    <text x="32" y="256" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">安全围栏: realpath 物理路径校验通过 · 非敏感凭据文件</text>
+    <text x="32" y="232" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">Checkpoint: chk_2026_demo · Writes redacted receipt CONSUMED on approval</text>
+    <text x="32" y="256" fill="#63636A" font-family="Consolas, ui-monospace, monospace" font-size="11.5">Path Fence: realpath verified · Non-credential file</text>
 
     <!-- Island Footer (.mwh-island-foot: right-aligned 3 pill buttons) -->
     <g transform="translate(0, 320)">
       <rect x="284" y="0" width="76" height="34" rx="17" fill="#000000" fill-opacity="0.06"/>
-      <text x="309" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">拒绝</text>
+      <text x="309" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">Deny</text>
 
       <rect x="368" y="0" width="132" height="34" rx="17" fill="#000000" fill-opacity="0.06"/>
-      <text x="386" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">本工作区始终允许</text>
+      <text x="386" y="21.5" fill="#1D1D1F" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="500">Always in Workspace</text>
 
       <rect x="508" y="0" width="100" height="34" rx="17" fill="url(#mwhBlue)"/>
-      <text x="533" y="21.5" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">允许一次</text>
+      <text x="533" y="21.5" fill="#FFFFFF" font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="600">Allow Once</text>
     </g>
   </g>
 </svg>

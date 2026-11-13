@@ -1,9 +1,17 @@
 import {
+  detectInitialLocale,
+  normalizeLocale,
+  translate,
+  type SupportedLocale,
+  type TranslationParams,
+} from '../i18n';
+import {
   ApprovalPolicy,
   AuditDecision,
   clampChildMode,
   ConfinementMode,
   generatePairingArtifacts,
+  getPermissionProfileMeta,
   MODE_METADATA_MAP,
   PERMISSION_PROFILE_MAP,
   PermissionProfileId,
@@ -260,6 +268,7 @@ export interface MwhState {
   lastCopiedToast: string | null;
   lastInjectedChatText: string | null;
   chromeDark: boolean;
+  language: SupportedLocale;
   resources: ResourceLibraryState;
 }
 
@@ -269,8 +278,10 @@ export interface MwhWindowBridge {
   hideToTray: () => void;
   isDesktop?: boolean;
   getRuntimeToken?: () => string;
+  getLanguage?: () => Promise<string> | string;
   onOpenSettings?: (callback: () => void) => () => void;
   onChromeTheme?: (callback: (payload: { dark?: boolean }) => void) => () => void;
+  onChromeLanguage?: (callback: (payload: { lang?: string }) => void) => () => void;
 }
 
 declare global {
@@ -279,7 +290,7 @@ declare global {
   }
 }
 
-const LOCAL_UI_KEYS = ['settingsModalOpen', 'activeSettingsTab', 'chromeDark'] as const;
+const LOCAL_UI_KEYS = ['settingsModalOpen', 'activeSettingsTab', 'chromeDark', 'language'] as const;
 
 function emptyTask(): LiveTaskState {
   return {
@@ -307,6 +318,7 @@ function createInitialState(): MwhState {
     settingsModalOpen: false,
     activeSettingsTab: 'connectors',
     chromeDark: true,
+    language: detectInitialLocale(),
     confinementMode: 'workspace-write',
     approvalPolicy: 'smart-risk',
     autoDowngradeTwoHours: true,
@@ -400,6 +412,8 @@ export class MwhDaemonService {
   constructor() {
     this.state = createInitialState();
     this.installWindowBridge();
+    this.syncDocumentLang(this.state.language);
+    this.installLanguageSync();
     try {
       localStorage.removeItem('mwh_theme_mode');
       localStorage.removeItem('mwh_accent_color');
@@ -408,6 +422,46 @@ export class MwhDaemonService {
       // storage may be blocked; muse.ai theme keys are left untouched
     }
     void this.bootstrap();
+  }
+
+  private t(key: string, params?: TranslationParams): string {
+    return translate(this.state.language, key, params);
+  }
+
+  private syncDocumentLang(lang: SupportedLocale) {
+    if (typeof document !== 'undefined' && document.documentElement) {
+      document.documentElement.lang = lang;
+    }
+  }
+
+  private installLanguageSync() {
+    if (typeof window === 'undefined') return;
+    const bridge = window.mwhWindow;
+    if (bridge?.getLanguage) {
+      Promise.resolve(bridge.getLanguage())
+        .then((lang) => {
+          if (lang) this.setLanguage(lang);
+        })
+        .catch(() => {});
+    }
+    if (bridge?.onChromeLanguage) {
+      bridge.onChromeLanguage((payload) => {
+        if (payload?.lang) this.setLanguage(payload.lang);
+      });
+    }
+    if (!bridge?.isDesktop) {
+      window.addEventListener('languagechange', () => {
+        this.setLanguage(detectInitialLocale());
+      });
+    }
+  }
+
+  public setLanguage(lang: string | SupportedLocale) {
+    const normalized = normalizeLocale(lang);
+    if (this.state.language === normalized) return;
+    this.state = { ...this.state, language: normalized };
+    this.syncDocumentLang(normalized);
+    this.emit();
   }
 
   public getState(): MwhState {
@@ -508,7 +562,11 @@ export class MwhDaemonService {
         childMode: clampChildMode(wt.childMode, mode),
       })),
     };
-    this.showToast(`已切换至 ${PERMISSION_PROFILE_MAP[profile].shortLabel}`);
+    this.showToast(
+      this.t('service.switchedMode', {
+        label: getPermissionProfileMeta(mode, defaultPolicy, this.state.language).shortLabel,
+      })
+    );
     void this.request('POST', '/api/v1/security/mode', {
       profile,
       mode,
@@ -528,7 +586,11 @@ export class MwhDaemonService {
         childMode: clampChildMode(wt.childMode, meta.confinementMode),
       })),
     };
-    this.showToast(`已切换至 ${meta.shortLabel}`);
+    this.showToast(
+      this.t('service.switchedMode', {
+        label: getPermissionProfileMeta(meta.confinementMode, meta.approvalPolicy, this.state.language).shortLabel,
+      })
+    );
     void this.request('POST', '/api/v1/security/mode', {
       profile,
       mode: meta.confinementMode,
@@ -545,7 +607,8 @@ export class MwhDaemonService {
 
   public toggleMultiDeviceApproval() {
     const enabled = !this.state.multiDeviceApproval;
-    this.patchState({ multiDeviceApproval: enabled });
+    this.state = { ...this.state, multiDeviceApproval: enabled };
+    this.emit();
     void this.request('POST', '/api/v1/security/multi-device-approval', { enabled, source: 'ui_island' });
   }
 
@@ -598,7 +661,7 @@ export class MwhDaemonService {
         tunnel: { ...this.state.tunnel, bearerToken: next },
       };
       this.reconnectSse();
-      this.showToast('已重新生成 Tunnel Runtime Bearer Token');
+      this.showToast(this.t('service.tokenRotated'));
     });
   }
 
@@ -618,25 +681,30 @@ export class MwhDaemonService {
           cfQuickRunning: true,
         },
       };
-      this.showToast(url ? `已拉起临时隧道: ${url}` : '已请求拉起 Cloudflare Quick Tunnel');
+      this.showToast(
+        url
+          ? this.t('service.quickTunnelStarted', { url })
+          : this.t('service.quickTunnelRequested')
+      );
     });
   }
 
   public getActivePublicBaseUrl(): string {
     const { tunnel } = this.state;
+    const localOnly = this.t('connectors.localOnly');
     switch (tunnel.activeDriver) {
       case 'cloudflare-named':
-        return tunnel.cfNamedDomain || 'LOCAL-ONLY · 未拉起公网隧道';
+        return tunnel.cfNamedDomain || localOnly;
       case 'cloudflare-quick':
-        return tunnel.cfQuickUrl || 'LOCAL-ONLY · 未拉起公网隧道';
+        return tunnel.cfQuickUrl || localOnly;
       case 'tailscale-funnel':
         return tunnel.tailscaleFunnelEnabled
-          ? tunnel.tailscaleMagicDns || 'LOCAL-ONLY · 未拉起公网隧道'
+          ? tunnel.tailscaleMagicDns || localOnly
           : tunnel.tailscaleIp
             ? `http://${tunnel.tailscaleIp}:19820`
-            : 'LOCAL-ONLY · 未拉起公网隧道';
+            : localOnly;
       case 'custom-tls':
-        return tunnel.customPublicUrl || 'LOCAL-ONLY · 未拉起公网隧道';
+        return tunnel.customPublicUrl || localOnly;
     }
   }
 
@@ -651,7 +719,8 @@ export class MwhDaemonService {
       this.state.confinementMode,
       this.state.workspaceRoots,
       this.state.approvalPolicy,
-      this.currentToken()
+      this.currentToken(),
+      this.state.language
     );
   }
 
@@ -673,11 +742,11 @@ export class MwhDaemonService {
     const clean = pathStr.trim();
     if (!clean) return;
     if (this.state.workspaceRoots.includes(clean)) {
-      this.showToast('该工作区目录已在白名单中');
+      this.showToast(this.t('service.workspaceExists'));
       return;
     }
     this.state = { ...this.state, workspaceRoots: [...this.state.workspaceRoots, clean] };
-    this.showToast(`已添加工作区: ${clean}`);
+    this.showToast(this.t('service.workspaceAdded', { path: clean }));
     void this.request('POST', '/api/v1/workspaces/add', { path: clean });
   }
 
@@ -686,7 +755,7 @@ export class MwhDaemonService {
       ...this.state,
       workspaceRoots: this.state.workspaceRoots.filter((item) => item !== pathStr),
     };
-    this.showToast(`已移除工作区: ${pathStr}`);
+    this.showToast(this.t('service.workspaceRemoved', { path: pathStr }));
     void this.request('POST', '/api/v1/workspaces/remove', { path: pathStr });
   }
 
@@ -696,10 +765,10 @@ export class MwhDaemonService {
       if (res.acpProfiles) {
         this.applyServerPatch({ acpProfiles: res.acpProfiles, acpConfig: res.acpConfig });
       }
-      this.showToast(`ACP 代理 ${profile.id} 已保存并热更新`);
+      this.showToast(this.t('service.acpSaved', { id: profile.id }));
       return true;
     }
-    this.showToast(res?.error || '保存 ACP 代理失败');
+    this.showToast(res?.error || this.t('service.acpSaveFail'));
     return false;
   }
 
@@ -709,10 +778,10 @@ export class MwhDaemonService {
       if (res.acpProfiles) {
         this.applyServerPatch({ acpProfiles: res.acpProfiles, acpConfig: res.acpConfig });
       }
-      this.showToast(`已删除 ACP 代理 ${id}`);
+      this.showToast(this.t('service.acpDeleted', { id }));
       return true;
     }
-    this.showToast(res?.error || '删除失败');
+    this.showToast(res?.error || this.t('service.deleteFail'));
     return false;
   }
 
@@ -724,7 +793,7 @@ export class MwhDaemonService {
       }
       return true;
     }
-    this.showToast(res?.error || '切换状态失败');
+    this.showToast(res?.error || this.t('service.toggleFail'));
     return false;
   }
 
@@ -733,7 +802,7 @@ export class MwhDaemonService {
     if (res && res.ok) {
       return { available: res.available, path: res.path, error: res.error };
     }
-    return { available: false, error: res?.error || '探测请求失败' };
+    return { available: false, error: res?.error || this.t('service.probeFail') };
   }
 
   public async fetchResources(): Promise<{ entries: PublicResourceEntry[]; summary: ResourceStatusSummary } | null> {
@@ -774,10 +843,10 @@ export class MwhDaemonService {
           },
         });
       }
-      this.showToast(`资源「${entry.displayName || res.id}」已添加`);
+      this.showToast(this.t('service.resourceAdded', { name: entry.displayName || res.id }));
       return true;
     }
-    this.showToast(res?.error || '添加资源失败');
+    this.showToast(res?.error || this.t('service.resourceAddFail'));
     return false;
   }
 
@@ -794,10 +863,10 @@ export class MwhDaemonService {
         });
       }
       const addedCount = Array.isArray(res.added) ? res.added.length : 0;
-      this.showToast(`扫描完成：发现 ${res.discovered || 0} 项，新添加 ${addedCount} 项`);
+      this.showToast(this.t('service.resourceScanned', { discovered: res.discovered || 0, added: addedCount }));
       return res;
     }
-    this.showToast(res?.error || '扫描资源失败');
+    this.showToast(res?.error || this.t('service.resourceScanFail'));
     return null;
   }
 
@@ -815,7 +884,7 @@ export class MwhDaemonService {
       }
       return true;
     }
-    this.showToast(res?.error || '切换资源状态失败');
+    this.showToast(res?.error || this.t('service.resourceToggleFail'));
     return false;
   }
 
@@ -827,7 +896,7 @@ export class MwhDaemonService {
     return {
       ok: false,
       tools: res?.tools,
-      error: res?.error || res?.faultReason || '探测请求失败',
+      error: res?.error || res?.faultReason || this.t('service.probeFail'),
       faultReason: res?.faultReason,
     };
   }
@@ -847,10 +916,10 @@ export class MwhDaemonService {
           },
         });
       }
-      this.showToast('资源设置已更新');
+      this.showToast(this.t('service.resourceUpdated'));
       return true;
     }
-    this.showToast(res?.error || '更新资源失败');
+    this.showToast(res?.error || this.t('service.resourceUpdateFail'));
     return false;
   }
 
@@ -866,10 +935,10 @@ export class MwhDaemonService {
           },
         });
       }
-      this.showToast(`已删除资源 ${id}`);
+      this.showToast(this.t('service.resourceDeleted', { id }));
       return true;
     }
-    this.showToast(res?.error || '删除失败');
+    this.showToast(res?.error || this.t('service.deleteFail'));
     return false;
   }
 
@@ -882,7 +951,7 @@ export class MwhDaemonService {
       ),
       liveTask: { ...this.state.liveTask, status: 'IDLE' },
     };
-    this.showToast('已请求终止全部 Win32 Job Object 进程树');
+    this.showToast(this.t('service.emergencyStopToast'));
     void this.request('POST', '/api/v1/daemon/emergency-kill', {});
   }
 
@@ -892,7 +961,7 @@ export class MwhDaemonService {
         this.applyServerPatch({ worktrees: [data.worktree, ...this.state.worktrees.filter((wt) => wt.id !== data.worktree.id)] });
       }
       const mode = data?.effectiveMode || requestedMode;
-      this.showToast(`已请求隔离 Git Worktree (${agentId}) · 权限: ${mode}`);
+      this.showToast(this.t('service.worktreeCreated', { agentId, mode }));
     });
   }
 
@@ -906,7 +975,7 @@ export class MwhDaemonService {
           ),
         };
         this.emit();
-        this.showToast(`Worktree (${worktreeId}) 已清理或不存在 (${data.error})`);
+        this.showToast(this.t('service.worktreeMissing', { id: worktreeId, error: data.error }));
         return;
       }
       if (data && data.ok !== false && !data.error) {
@@ -922,11 +991,11 @@ export class MwhDaemonService {
         };
         const statusNote =
           finalStatus === 'UP_TO_DATE'
-            ? ' · 无差异，已是最新，未标记合并'
+            ? this.t('service.worktreeNoDiff')
             : finalStatus === 'MISSING'
-              ? ' · Worktree 目录已缺失，未标记合并'
+              ? this.t('service.worktreeMissingNote')
               : '';
-        this.showToast(`已请求合并 Worktree (${worktreeId})${statusNote}`);
+        this.showToast(this.t('service.worktreeMerged', { id: worktreeId, note: statusNote }));
       }
     });
   }
@@ -936,7 +1005,7 @@ export class MwhDaemonService {
       ...this.state,
       worktrees: this.state.worktrees.filter((wt) => wt.id !== worktreeId),
     };
-    this.showToast(`已请求清理 Worktree ${worktreeId}`);
+    this.showToast(this.t('service.worktreeCleaned', { id: worktreeId }));
     void this.request('DELETE', `/api/v1/worktrees/${encodeURIComponent(worktreeId)}`);
   }
 
@@ -949,7 +1018,7 @@ export class MwhDaemonService {
             snap.id === snapshotId ? { ...snap, rolledBack: true } : snap
           ),
         };
-        this.showToast(`已请求回滚快照 ${snapshotId}`);
+        this.showToast(this.t('service.rollbackRequested', { id: snapshotId }));
       }
     });
   }
@@ -966,7 +1035,7 @@ export class MwhDaemonService {
       if (Array.isArray(data?.snapshots)) {
         this.applyServerPatch({ snapshots: data.snapshots });
       }
-      this.showToast(`已删除 ${snapshotIds.length} 条快照记录`);
+      this.showToast(this.t('service.snapshotsDeleted', { count: snapshotIds.length }));
     });
   }
 
@@ -978,8 +1047,8 @@ export class MwhDaemonService {
       const count = Array.isArray(data?.deletedIds) ? data.deletedIds.length : 0;
       this.showToast(
         count > 0
-          ? `已按工作区清理 ${count} 条旧快照（仅保留最近 ${keepRecent} 次）`
-          : `各工作区快照均在最近 ${keepRecent} 次以内`
+          ? this.t('service.snapshotsPruned', { count, keep: keepRecent })
+          : this.t('service.snapshotsWithinLimit', { keep: keepRecent })
       );
     });
   }
@@ -1006,7 +1075,7 @@ export class MwhDaemonService {
     void this.request('POST', `/api/v1/tasks/${encodeURIComponent(this.state.liveTask.id)}/reject`, {
       source: 'ui_island',
     }).then(() => {
-      this.showToast('已拒绝本次本地执行请求');
+      this.showToast(this.t('service.taskRejected'));
     });
   }
 
@@ -1015,7 +1084,7 @@ export class MwhDaemonService {
     void this.request('POST', `/api/v1/tasks/${encodeURIComponent(id)}/kill`, {
       source: 'ui_island',
     }).then(() => {
-      this.showToast('已请求强杀当前后台任务进程树');
+      this.showToast(this.t('service.taskKilled'));
     });
   }
 
@@ -1289,13 +1358,13 @@ export class MwhDaemonService {
     window.mwhWindow = {
       isDesktop: false,
       minimize: () => {
-        this.recordWindowControlAction('窗口已最小化 (window.mwhWindow.minimize)');
+        this.recordWindowControlAction(this.t('service.winMinimized'));
       },
       maximize: () => {
-        this.recordWindowControlAction('窗口已切换最大化 (window.mwhWindow.maximize)');
+        this.recordWindowControlAction(this.t('service.winMaximized'));
       },
       hideToTray: () => {
-        this.recordWindowControlAction('窗口已隐藏至系统托盘 (window.mwhWindow.hideToTray)');
+        this.recordWindowControlAction(this.t('service.winHidden'));
       },
     };
   }

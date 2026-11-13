@@ -32,8 +32,8 @@ import { MwhSwitch } from './MwhSwitch';
 import {
   AuditDecision,
   ConfinementMode,
+  getPermissionProfileList,
   getPermissionProfileMeta,
-  PERMISSION_PROFILE_LIST,
   TunnelDriverType,
 } from '../services/mwhRules';
 import {
@@ -46,17 +46,18 @@ import {
   McpTransport,
 } from '../services/mwhService';
 import { useMwhState } from '../services/useMwhState';
+import { useTranslation } from '../i18n';
 
 const NAV_ITEMS: Array<{
   id: MwhState['activeSettingsTab'];
-  label: string;
-  sectionHeader: string;
+  labelKey: string;
+  sectionHeaderKey: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'connectors', label: '连接与权限', sectionHeader: '连接器与权限模式', icon: Grid },
-  { id: 'daemon', label: '工作区与代理', sectionHeader: '工作区与代理引擎', icon: Monitor },
-  { id: 'resources', label: '资源库', sectionHeader: '本机 MCP 与 Skill', icon: Folder },
-  { id: 'snapshots-audit', label: '审计日志', sectionHeader: '影子快照与审计日志', icon: FileText },
+  { id: 'connectors', labelKey: 'tab.connectors.label', sectionHeaderKey: 'tab.connectors.header', icon: Grid },
+  { id: 'daemon', labelKey: 'tab.daemon.label', sectionHeaderKey: 'tab.daemon.header', icon: Monitor },
+  { id: 'resources', labelKey: 'tab.resources.label', sectionHeaderKey: 'tab.resources.header', icon: Folder },
+  { id: 'snapshots-audit', labelKey: 'tab.audit.label', sectionHeaderKey: 'tab.audit.header', icon: FileText },
 ];
 
 const PEEK_AUTO_HIDE_MS = 15000;
@@ -83,32 +84,32 @@ export const TOUR_STEPS = [
   {
     id: 'activity-entry',
     target: 'tour-activity-entry',
-    title: '左栏入口与健康状态',
-    body: '点击 Muse 左侧导航栏 MWH 紫蓝徽标随时呼出或收起控制抽屉；徽标右下角圆点实时反映宿主守护与公网隧道连通状态（冰川青蓝为就绪，赤陶珊瑚红为离线）。',
+    titleKey: 'tour.step1.title',
+    bodyKey: 'tour.step1.body',
   },
   {
     id: 'permission-modes',
     target: 'tour-permission-modes',
-    title: '四档权限与 2 小时自动降级',
-    body: '按任务风险一键切换「计划模式（只读） / 变更前确认（默认） / 自主模式（自动快照） / 完全访问（跨盘放行）」。开启完全访问时支持 2 小时自动降级保护。',
+    titleKey: 'tour.step2.title',
+    bodyKey: 'tour.step2.body',
   },
   {
     id: 'endpoints-credentials',
     target: 'tour-endpoints-credentials',
-    title: '端点防窥脱敏与一键配对',
-    body: '公网 MCP/REST 端点与 Bearer Token 默认自动脱敏防截屏泄露（点击眼睛图标可临时查看 15 秒）；点击「复制配对口令」或「复制 MCP JSON」即可一键填入 Muse 连接器。',
+    titleKey: 'tour.step3.title',
+    bodyKey: 'tour.step3.body',
   },
   {
     id: 'advanced-center',
     target: 'tour-advanced-center',
-    title: '四栏高级配置中心',
-    body: '展开右侧伴随子面板，集中管理「连接与权限」、「工作区与代理（目录白名单与 ACP 引擎）」、「资源库（本机 MCP 与 Skill 原地开关）」及「审计日志（Git Shadow 写前快照单条回滚）」。',
+    titleKey: 'tour.step4.title',
+    bodyKey: 'tour.step4.body',
   },
   {
     id: 'approval-island',
     target: 'tour-approval-island',
-    title: '底部实时审批灵动岛',
-    body: '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。',
+    titleKey: 'tour.step5.title',
+    bodyKey: 'tour.step5.body',
   },
 ] as const;
 
@@ -122,14 +123,14 @@ interface WorkspaceSnapshotGroup {
   items: ShadowSnapshot[];
 }
 
-function normalizeWinPath(rawPath: string): {
+function normalizeWinPath(rawPath: string, unassignedLabel: string): {
   normKey: string;
   displayPath: string;
   parentPrefix: string;
   folderName: string;
 } {
-  const trimmed = (rawPath || '未归类工作区').trim().replace(/\//g, '\\').replace(/\\+$/, '');
-  const displayPath = trimmed || '未归类工作区';
+  const trimmed = (rawPath || unassignedLabel).trim().replace(/\//g, '\\').replace(/\\+$/, '');
+  const displayPath = trimmed || unassignedLabel;
   const normKey = displayPath.toLowerCase();
   const segments = displayPath.split('\\').filter(Boolean);
   if (segments.length <= 1) {
@@ -172,6 +173,7 @@ function formatCompactTime(ts: string): string {
 
 export const MwhSettingsModal: React.FC = () => {
   const state = useMwhState();
+  const { t, language: lang } = useTranslation();
   const prefersReducedMotion = useReducedMotion();
   const [newWorkspaceInput, setNewWorkspaceInput] = useState('');
   const [confirmingEmergencyKill, setConfirmingEmergencyKill] = useState(false);
@@ -327,10 +329,10 @@ export const MwhSettingsModal: React.FC = () => {
   const handleDeleteAcp = (id: string) => {
     setConfirmModal({
       open: true,
-      title: '删除自定义 ACP 代理',
-      message: `确定要删除 "${id}" 吗？此操作将立即热更新移除。`,
+      title: t('agents.deleteAcpConfirmTitle'),
+      message: t('agents.deleteAcpConfirmMsg', { id }),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('agents.confirmDeleteBtn'),
       onConfirm: async () => {
         await mwhService.deleteAcpProfile(id);
       },
@@ -460,10 +462,10 @@ export const MwhSettingsModal: React.FC = () => {
   const handleDeleteResource = (entry: PublicResourceEntry) => {
     setConfirmModal({
       open: true,
-      title: '删除资源',
-      message: `确定要删除资源 "${entry.displayName || entry.id}" 吗？此操作将立即从资源库中移除。`,
+      title: t('resources.deleteConfirmTitle'),
+      message: t('resources.deleteConfirmMsg', { name: entry.displayName || entry.id }),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('agents.confirmDeleteBtn'),
       onConfirm: async () => {
         await mwhService.deleteResource(entry.id);
       },
@@ -514,7 +516,7 @@ export const MwhSettingsModal: React.FC = () => {
     });
 
     for (const { snap } of indexed) {
-      const info = normalizeWinPath(snap.workspacePath);
+      const info = normalizeWinPath(snap.workspacePath, t('common.unclassifiedWorkspace'));
       const existing = map.get(info.normKey);
       if (existing) {
         existing.items.push(snap);
@@ -529,7 +531,7 @@ export const MwhSettingsModal: React.FC = () => {
       }
     }
     return Array.from(map.values());
-  }, [state.snapshots, snapshotSort]);
+  }, [state.snapshots, snapshotSort, lang]);
 
   /* 首次拿到分组后只展开最近活跃（排序后第一个）目录，其余折叠；之后尊重用户手动状态 */
   useEffect(() => {
@@ -586,10 +588,10 @@ export const MwhSettingsModal: React.FC = () => {
     if (activeSelectedIds.length === 0) return;
     setConfirmModal({
       open: true,
-      title: '批量删除快照记录',
-      message: `确定要删除已选的 ${activeSelectedIds.length} 条影子快照记录吗？此操作仅删除历史元数据与影子存档。`,
+      title: t('audit.batchDeleteTitle'),
+      message: t('audit.batchDeleteMsg', { count: activeSelectedIds.length }),
       danger: true,
-      confirmText: '确认删除',
+      confirmText: t('agents.confirmDeleteBtn'),
       onConfirm: () => {
         mwhService.deleteSnapshots(activeSelectedIds);
         setSelectedSnapshotIds({});
@@ -601,10 +603,10 @@ export const MwhSettingsModal: React.FC = () => {
     const keepCount = perGroupLimit > 0 ? perGroupLimit : 5;
     setConfirmModal({
       open: true,
-      title: '清理旧快照记录',
-      message: `确定每个工作区仅保留最近 ${keepCount} 次快照，并自动清理其余历史记录吗？`,
+      title: t('audit.pruneConfirmTitle'),
+      message: t('audit.pruneConfirmMsg', { count: keepCount }),
       danger: false,
-      confirmText: '确认清理',
+      confirmText: t('audit.pruneConfirmBtn'),
       onConfirm: () => {
         mwhService.pruneSnapshots(keepCount);
         setSelectedSnapshotIds({});
@@ -613,7 +615,8 @@ export const MwhSettingsModal: React.FC = () => {
   };
 
   const pairing = mwhService.getPairingArtifacts();
-  const currentProfile = getPermissionProfileMeta(state.confinementMode, state.approvalPolicy);
+  const currentProfile = getPermissionProfileMeta(state.confinementMode, state.approvalPolicy, lang);
+  const permissionProfiles = getPermissionProfileList(lang);
 
   const chromeDark = state.chromeDark !== false;
   /* 取值对齐 muse.ai 官方设置中心：暗 #1C1D20 / #27282C / #1E1F23，亮 #EFECE6 / #F7F6F2 / #E6E4DE */
@@ -655,7 +658,7 @@ export const MwhSettingsModal: React.FC = () => {
             key="mwh-settings-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="MWH 本地引擎设置中心"
+            aria-label={t('modal.ariaLabel')}
             initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.97, y: 6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 4 }}
@@ -664,12 +667,12 @@ export const MwhSettingsModal: React.FC = () => {
           >
             {/* Left Navigation Column (1:1 Muse Official Settings Sidebar) */}
             <nav
-              aria-label="设置面板导航"
+              aria-label={t('modal.navAriaLabel')}
               className="w-[200px] shrink-0 h-full flex flex-col py-5 px-3.5"
             >
               <div>
                 <div className="px-3 pb-4" data-tour-id="tour-activity-entry">
-                  <h2 className="text-[19px] font-bold tracking-tight">设置</h2>
+                  <h2 className="text-[19px] font-bold tracking-tight">{t('modal.title')}</h2>
                 </div>
 
                 <div className="space-y-0.5" data-tour-id="tour-advanced-center">
@@ -692,7 +695,7 @@ export const MwhSettingsModal: React.FC = () => {
                         }`}
                       >
                         <Icon className="w-[17px] h-[17px] shrink-0 opacity-80" />
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{t(item.labelKey)}</span>
                       </button>
                     );
                   })}
@@ -705,7 +708,7 @@ export const MwhSettingsModal: React.FC = () => {
               {/* Sticky Panel Header with Close X Button */}
               <div className="flex items-center justify-between px-6 pt-5 pb-3 shrink-0">
                 <h3 className={`text-[13.5px] font-medium ${mutedText}`}>
-                  {NAV_ITEMS.find((n) => n.id === state.activeSettingsTab)?.sectionHeader}
+                  {(() => { const item = NAV_ITEMS.find((i) => i.id === state.activeSettingsTab); return item ? t(item.sectionHeaderKey) : ''; })()}
                 </h3>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -716,8 +719,8 @@ export const MwhSettingsModal: React.FC = () => {
                       setTourStepIndex(0);
                       setTourOpen(true);
                     }}
-                    title="功能使用引导"
-                    aria-label="功能使用引导"
+                    title={t('modal.tourTitle')}
+                    aria-label={t('modal.tourTitle')}
                     className="w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-120 cursor-pointer hover:bg-white/[0.08] text-[#D8D9E0]"
                   >
                     <HelpCircle className="w-4 h-4" />
@@ -725,7 +728,7 @@ export const MwhSettingsModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => mwhService.closeSettingsModal()}
-                    aria-label="关闭设置弹窗"
+                    aria-label={t('modal.closeAriaLabel')}
                     className="w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-120 cursor-pointer hover:bg-white/[0.08] text-[#D8D9E0]"
                   >
                     <X className="w-4 h-4" />
@@ -748,16 +751,16 @@ export const MwhSettingsModal: React.FC = () => {
                     {(state.activeSettingsTab === 'connectors' || state.activeSettingsTab === 'permissions') && (
                       <div className="space-y-4 pt-1">
                         <div className={`text-[13px] font-semibold tracking-wide ${mutedText}`}>
-                          连接器
+                          {t('connectors.title')}
                         </div>
                         <div className={`rounded-2xl p-4 space-y-3 ${cardBg}`}>
                           <div className="flex items-center justify-between gap-2 min-w-0">
                             <div className="min-w-0">
                               <div className="text-[14px] font-medium truncate">
-                                生成 SKILL.md 配对说明与 MCP 模板
+                                {t('connectors.pairingTitle')}
                               </div>
                               <div className={`text-xs mt-0.5 truncate ${mutedText}`}>
-                                当前端点：{maskEndpointUrl(mwhService.getActivePublicBaseUrl(), isEndpointPeeked)} · 当前档位：{currentProfile.shortLabel}
+                                {t('connectors.pairingMeta', { endpoint: maskEndpointUrl(mwhService.getActivePublicBaseUrl(), isEndpointPeeked), profile: currentProfile.shortLabel })}
                               </div>
                             </div>
                             <span className={`text-xs font-mono shrink-0 px-2 py-0.5 rounded bg-black/20 ${mutedText}`}>
@@ -767,7 +770,7 @@ export const MwhSettingsModal: React.FC = () => {
 
                           <details className="rounded-xl px-3 py-2 text-[11.5px] cursor-pointer group bg-white/[0.03]">
                             <summary className="font-medium text-[#A5B4FC] flex items-center justify-between select-none">
-                              <span>查看完整配对说明 (无密钥)</span>
+                              <span>{t('connectors.viewPairing')}</span>
                               <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
                             </summary>
                             <pre
@@ -784,14 +787,14 @@ export const MwhSettingsModal: React.FC = () => {
                                 onClick={() => {
                                   mwhService.copyTextWithToast(
                                     pairing.skillMarkdownPrompt,
-                                    '已复制无密钥 SKILL.md 配对说明，可直接粘贴至会话框',
+                                    t('connectors.copiedPairingToast'),
                                     true,
                                   );
                                 }}
                                 className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105 text-white flex items-center gap-1.5 transition-all duration-120 cursor-pointer whitespace-nowrap max-w-full min-w-0 overflow-hidden text-ellipsis"
                               >
                                 <Copy className="w-3.5 h-3.5 shrink-0" />
-                                <span>一键复制配对口令</span>
+                                <span>{t('connectors.copyPairing')}</span>
                               </button>
 
                               <button
@@ -799,13 +802,13 @@ export const MwhSettingsModal: React.FC = () => {
                                 onClick={() =>
                                   mwhService.copyTextWithToast(
                                     pairing.mcpJsonConfig,
-                                    '已复制 Streamable HTTP MCP JSON 模板',
+                                    t('connectors.copiedMcpJsonToast'),
                                   )
                                 }
                                 className={`px-3.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap max-w-full min-w-0 overflow-hidden text-ellipsis ${subtleBg} hover:opacity-85`}
                               >
                                 <Copy className="w-3.5 h-3.5 shrink-0" />
-                                <span>复制 MCP JSON</span>
+                                <span>{t('connectors.copyMcpJson')}</span>
                               </button>
                             </div>
                           </div>
@@ -816,23 +819,23 @@ export const MwhSettingsModal: React.FC = () => {
                             [
                               {
                                 id: 'cloudflare-named',
-                                title: 'Cloudflare 固定域名',
-                                sub: '常驻固定域名 · 免重配',
+                                title: t('connectors.driver.cfNamed.title'),
+                                sub: t('connectors.driver.cfNamed.sub'),
                               },
                               {
                                 id: 'cloudflare-quick',
-                                title: 'Cloudflare 临时公网',
-                                sub: 'trycloudflare · 零配置拉起',
+                                title: t('connectors.driver.cfQuick.title'),
+                                sub: t('connectors.driver.cfQuick.sub'),
                               },
                               {
                                 id: 'tailscale-funnel',
-                                title: 'Tailscale 私网直连',
-                                sub: 'MagicDNS · 100.x 私网',
+                                title: t('connectors.driver.tsFunnel.title'),
+                                sub: t('connectors.driver.tsFunnel.sub'),
                               },
                               {
                                 id: 'custom-tls',
-                                title: '自定义公网反代',
-                                sub: '自建 TLS / FRP 端点',
+                                title: t('connectors.driver.customTls.title'),
+                                sub: t('connectors.driver.customTls.sub'),
                               },
                             ] as Array<{ id: TunnelDriverType; title: string; sub: string }>
                           ).map((drv) => {
@@ -862,7 +865,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   {isLoading ? (
                                     <Loader2 className="w-3.5 h-3.5 animate-spin text-[#A5B4FC]" />
                                   ) : active ? (
-                                    <span className="text-[11px] font-mono text-white/90 px-1.5 py-0.5 rounded bg-white/[0.1] border border-white/[0.08]">生效中</span>
+                                    <span className="text-[11px] font-mono text-white/90 px-1.5 py-0.5 rounded bg-white/[0.1] border border-white/[0.08]">{t('common.active')}</span>
                                   ) : null}
                                 </div>
                                 <div className={`text-[11.5px] mt-1 ${mutedText}`}>{drv.sub}</div>
@@ -875,11 +878,11 @@ export const MwhSettingsModal: React.FC = () => {
                           {state.tunnel.activeDriver === 'cloudflare-named' && (
                             <>
                               <div className="text-[13.5px] font-medium">
-                                Cloudflare Named Tunnel 配置
+                                {t('connectors.cfNamed.title')}
                               </div>
                               <div className="grid grid-cols-1 gap-2.5 text-xs">
                                 <label className="space-y-1">
-                                  <span className={mutedText}>固定公网域名 (绑定至 127.0.0.1:19820)</span>
+                                  <span className={mutedText}>{t('connectors.cfNamed.domainLabel')}</span>
                                   <input
                                     type="text"
                                     value={state.tunnel.cfNamedDomain}
@@ -909,10 +912,10 @@ export const MwhSettingsModal: React.FC = () => {
                               <div className="flex items-center justify-between">
                                 <div>
                                   <div className="text-[13.5px] font-medium">
-                                    Cloudflare Quick Tunnel (临时公网)
+                                    {t('connectors.cfQuick.title')}
                                   </div>
                                   <div className={`text-xs ${mutedText}`}>
-                                    按需运行 cloudflared 临时公网隧道
+                                    {t('connectors.cfQuick.sub')}
                                   </div>
                                 </div>
                                 <button
@@ -931,15 +934,15 @@ export const MwhSettingsModal: React.FC = () => {
                                   {tunnelActionLoading === 'spawn_quick' ? (
                                     <>
                                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                      <span>拉起中...</span>
+                                      <span>{t('connectors.cfQuick.starting')}</span>
                                     </>
                                   ) : (
-                                    <span>重新拉起临时隧道</span>
+                                    <span>{t('connectors.cfQuick.restart')}</span>
                                   )}
                                 </button>
                               </div>
                               <div className={`px-3 py-2 rounded-xl font-mono text-xs truncate ${subtleBg}`}>
-                                当前分配域名: {state.tunnel.cfQuickUrl || 'LOCAL-ONLY · 未拉起公网隧道'}
+                                {t('connectors.cfQuick.currentDomain', { url: state.tunnel.cfQuickUrl || t('connectors.localOnly') })}
                               </div>
                             </div>
                           )}
@@ -947,11 +950,11 @@ export const MwhSettingsModal: React.FC = () => {
                           {state.tunnel.activeDriver === 'tailscale-funnel' && (
                             <div className="space-y-2.5 text-xs">
                               <div className="text-[13.5px] font-medium">
-                                Tailscale 私网 IP (100.x.y.z) 与 Funnel 网关
+                                {t('connectors.tailscale.title')}
                               </div>
                               <div className="grid grid-cols-2 gap-2">
                                 <label className="space-y-1">
-                                  <span className={mutedText}>Tailscale 节点 IP</span>
+                                  <span className={mutedText}>{t('connectors.tailscale.ipLabel')}</span>
                                   <input
                                     type="text"
                                     value={state.tunnel.tailscaleIp}
@@ -962,7 +965,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   />
                                 </label>
                                 <label className="space-y-1">
-                                  <span className={mutedText}>MagicDNS Funnel 地址</span>
+                                  <span className={mutedText}>{t('connectors.tailscale.magicDnsLabel')}</span>
                                   <input
                                     type="text"
                                     value={state.tunnel.tailscaleMagicDns}
@@ -981,10 +984,10 @@ export const MwhSettingsModal: React.FC = () => {
                           {state.tunnel.activeDriver === 'custom-tls' && (
                             <div className="space-y-2.5 text-xs">
                               <div className="text-[13.5px] font-medium">
-                                自定义公网 TLS / FRP 反向代理端点
+                                {t('connectors.customTls.title')}
                               </div>
                               <label className="space-y-1 block">
-                                <span className={mutedText}>公网 HTTPS 反代地址</span>
+                                <span className={mutedText}>{t('connectors.customTls.urlLabel')}</span>
                                 <input
                                   type="text"
                                   value={state.tunnel.customPublicUrl}
@@ -1004,7 +1007,7 @@ export const MwhSettingsModal: React.FC = () => {
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="text-[13.5px] font-medium">
-                              当前生效端点与鉴权密钥 (Streamable HTTP MCP / REST)
+                              {t('connectors.endpoints.title')}
                             </div>
                             <button
                               type="button"
@@ -1012,8 +1015,8 @@ export const MwhSettingsModal: React.FC = () => {
                               onClick={() => setIsEndpointPeeked((prev) => !prev)}
                               title={
                                 isEndpointPeeked
-                                  ? '隐藏完整端点域名'
-                                  : '临时显示完整端点域名 (15s 自动隐藏)'
+                                  ? t('connectors.endpoints.hideUrl')
+                                  : t('connectors.endpoints.peekUrl')
                               }
                               className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 transition-colors duration-120 cursor-pointer flex items-center gap-1 text-[11px]"
                             >
@@ -1022,7 +1025,7 @@ export const MwhSettingsModal: React.FC = () => {
                               ) : (
                                 <Eye className="w-3.5 h-3.5" />
                               )}
-                              <span>{isEndpointPeeked ? '隐藏端点域名' : '显示完整域名'}</span>
+                              <span>{isEndpointPeeked ? t('connectors.endpoints.hideBtn') : t('connectors.endpoints.showBtn')}</span>
                             </button>
                           </div>
 
@@ -1037,12 +1040,12 @@ export const MwhSettingsModal: React.FC = () => {
                               onClick={() =>
                                 mwhService.copyTextWithToast(
                                   pairing.mcpEndpoint,
-                                  '已复制 Streamable HTTP MCP URL',
+                                  t('connectors.endpoints.copiedMcpUrl'),
                                 )
                               }
                               className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 transition-colors duration-120 cursor-pointer shrink-0"
                             >
-                              复制
+                              {t('common.copy')}
                             </button>
                           </div>
 
@@ -1055,11 +1058,11 @@ export const MwhSettingsModal: React.FC = () => {
                             <button
                               type="button"
                               onClick={() =>
-                                mwhService.copyTextWithToast(pairing.restEndpoint, '已复制 REST API URL')
+                                mwhService.copyTextWithToast(pairing.restEndpoint, t('connectors.endpoints.copiedRestUrl'))
                               }
                               className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 transition-colors duration-120 cursor-pointer shrink-0"
                             >
-                              复制
+                              {t('common.copy')}
                             </button>
                           </div>
 
@@ -1074,7 +1077,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 type="button"
                                 data-action="toggle-token-peek"
                                 onClick={() => setIsTokenPeeked((prev) => !prev)}
-                                title={isTokenPeeked ? '隐藏明文' : '查看完整明文 (15s 自动隐藏)'}
+                                title={isTokenPeeked ? t('connectors.endpoints.hideToken') : t('connectors.endpoints.peekToken')}
                                 className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 text-white transition-colors duration-120 cursor-pointer flex items-center"
                               >
                                 {isTokenPeeked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -1085,12 +1088,12 @@ export const MwhSettingsModal: React.FC = () => {
                                   const token = mwhService.getRealToken() || state.tunnel.bearerToken;
                                   mwhService.copyTextWithToast(
                                     token,
-                                    '已复制真实 Bearer Token (无脱敏，可直接填入连接器)'
+                                    t('connectors.endpoints.copiedToken')
                                   );
                                 }}
                                 className="px-2 py-1 rounded bg-black/10 hover:bg-black/20 transition-colors duration-120 cursor-pointer"
                               >
-                                复制真实 Token
+                                {t('connectors.endpoints.copyRealToken')}
                               </button>
                               <button
                                 type="button"
@@ -1098,7 +1101,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 className="px-2.5 py-1 rounded bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 flex items-center gap-1 transition-all duration-120 cursor-pointer"
                               >
                                 <RefreshCw className="w-3 h-3" />
-                                <span>轮换</span>
+                                <span>{t('connectors.endpoints.rotateToken')}</span>
                               </button>
                             </div>
                           </div>
@@ -1106,16 +1109,16 @@ export const MwhSettingsModal: React.FC = () => {
 
                         {/* 小节：权限 */}
                         <div className={`text-[13px] font-semibold tracking-wide mt-6 mb-2 ${mutedText}`}>
-                          权限
+                          {t('permissions.title')}
                         </div>
 
                         <div
                           className="space-y-2"
                           role="radiogroup"
-                          aria-label="四档权限模式"
+                          aria-label={t('permissions.ariaLabel')}
                           data-tour-id="tour-permission-modes"
                         >
-                          {PERMISSION_PROFILE_LIST.map((prof) => {
+                          {permissionProfiles.map((prof) => {
                             const selected = currentProfile.id === prof.id;
                             const isDanger = prof.id === 'full-access';
 
@@ -1130,10 +1133,10 @@ export const MwhSettingsModal: React.FC = () => {
                                   if (isDanger && !selected) {
                                     setConfirmModal({
                                       open: true,
-                                      title: '切换至完全访问模式',
-                                      message: '警告：完全访问模式将关闭安全围栏与审批，命令与写操作将全量无阻碍执行。是否确认切换？',
+                                      title: t('permissions.fullAccessConfirmTitle'),
+                                      message: t('permissions.fullAccessConfirmMsg'),
                                       danger: true,
-                                      confirmText: '确认切换',
+                                      confirmText: t('permissions.fullAccessConfirmBtn'),
                                       onConfirm: async () => {
                                         setSwitchingMode(prof.id);
                                         try {
@@ -1168,7 +1171,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   {switchingMode === prof.id ? (
                                     <span className="flex items-center gap-1 text-xs text-[#A5B4FC] font-mono">
                                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                      <span>切换中...</span>
+                                      <span>{t('permissions.switching')}</span>
                                     </span>
                                   ) : selected ? (
                                     <span
@@ -1176,7 +1179,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         isDanger ? 'text-[#F28B82]' : 'text-[#A5B4FC]'
                                       }`}
                                     >
-                                      当前生效
+                                      {t('common.currentActive')}
                                     </span>
                                   ) : null}
                                 </div>
@@ -1195,17 +1198,17 @@ export const MwhSettingsModal: React.FC = () => {
                           >
                             <div>
                               <div className="text-xs font-medium">
-                                开启「完全访问」2 小时后自动降级回「变更前确认」
+                                {t('permissions.autoDowngradeLabel')}
                               </div>
                               <div className={`text-[11px] font-mono mt-0.5 ${mutedText}`}>
-                                剩余计时: {Math.floor(state.autoDowngradeRemainingSec / 60)}m{' '}
+                                {t('permissions.autoDowngradeRemain', { minutes: Math.floor(state.autoDowngradeRemainingSec / 60) })}
                                 {state.autoDowngradeRemainingSec % 60}s
                               </div>
                             </div>
                             <MwhSwitch
                               checked={Boolean(state.autoDowngradeTwoHours)}
                               onChange={() => mwhService.toggleAutoDowngradeTwoHours()}
-                              label="开启「完全访问」2 小时后自动降级"
+                              label={t('permissions.autoDowngradeAria')}
                               dark={chromeDark}
                             />
                           </div>
@@ -1213,19 +1216,19 @@ export const MwhSettingsModal: React.FC = () => {
                             className={`p-3 rounded-xl flex items-center justify-between gap-3 mt-3 ${subtleBg}`}
                           >
                             <div>
-                              <div className="text-xs font-medium">多端审批（Muse 官方卡片优先）</div>
+                              <div className="text-xs font-medium">{t('permissions.multiDeviceTitle')}</div>
                               <div className={`text-[11px] mt-0.5 leading-relaxed ${mutedText}`}>
-                                关闭时所有需要确认的操作都在本机浮岛审批。开启后，非破坏性的日常写入、普通命令与子代理派发直接交由 Muse
-                                官方卡片确认（手机、网页、Mac 同步弹窗），不再在本机二次拦截；而
-                                <span className="text-[#EAB364]"> 递归删除、git push -f、系统管理指令及越界敏感写</span>
-                                等高危操作仍强制执行单次参数绑定确认（可通过本机浮岛或手机端一次性 HMAC 链接批准并立即同步执行），防止被 Muse
-                                的「始终允许」按工具名误放行。
+                                {t('permissions.multiDeviceBodyPrefix')}
+                                
+                                <span className="text-[#EAB364]">{t('permissions.multiDeviceBodyHighlight')}</span>
+                                {t('permissions.multiDeviceBodySuffix')}
+                                
                               </div>
                             </div>
                             <MwhSwitch
                               checked={Boolean(state.multiDeviceApproval)}
                               onChange={() => mwhService.toggleMultiDeviceApproval()}
-                              label="多端审批"
+                              label={t('permissions.multiDeviceAria')}
                               dark={chromeDark}
                             />
                           </div>
@@ -1234,11 +1237,11 @@ export const MwhSettingsModal: React.FC = () => {
                         {/* 动态安全边界说明 */}
                         <div className={`rounded-2xl p-4 space-y-2.5 ${cardBg}`}>
                           <div className="text-[13.5px] font-medium">
-                            当前档位安全机制与边界说明 · {currentProfile.shortLabel}
+                            {t('permissions.detailsTitle', { profile: currentProfile.shortLabel })}
                           </div>
 
                           <div className="space-y-1 text-xs">
-                            <div className="font-medium text-[#7DD3FC]">当前生效的保护机制：</div>
+                            <div className="font-medium text-[#7DD3FC]">{t('permissions.enforcedTitle')}</div>
                             {currentProfile.enforcedProtections.map((line, idx) => (
                               <div key={idx} className="pl-3 leading-relaxed opacity-90">
                                 - {line}
@@ -1247,7 +1250,7 @@ export const MwhSettingsModal: React.FC = () => {
                           </div>
 
                           <div className="space-y-1 text-xs pt-1">
-                            <div className="font-medium text-[#EAB364]">未覆盖边界说明：</div>
+                            <div className="font-medium text-[#EAB364]">{t('permissions.uncoveredTitle')}</div>
                             {currentProfile.uncoveredBoundaries.map((line, idx) => (
                               <div key={idx} className="pl-3 leading-relaxed opacity-90">
                                 - {line}
@@ -1262,12 +1265,12 @@ export const MwhSettingsModal: React.FC = () => {
                     {(state.activeSettingsTab === 'daemon' || state.activeSettingsTab === 'subagents') && (
                       <div className="space-y-4 pt-1">
                         <div className={`text-[13px] font-semibold tracking-wide ${mutedText}`}>
-                          工作区
+                          {t('daemon.title')}
                         </div>
                         <div className={`rounded-2xl p-4 space-y-3 ${cardBg}`}>
                           <div className="flex items-center justify-between">
                             <span className="text-[14px] font-medium">
-                              Windows 本地守护进程 (mwh-daemon.exe)
+                              {t('daemon.hostTitle')}
                             </span>
                             <span
                               className={`text-xs font-mono ${
@@ -1275,28 +1278,28 @@ export const MwhSettingsModal: React.FC = () => {
                               }`}
                             >
                               {state.daemon.connected
-                                ? '在线 (127.0.0.1:19820)'
-                                : '离线 · 未连接本地守护进程'}
+                                ? t('daemon.online')
+                                : t('daemon.offline')}
                             </span>
                           </div>
 
                           <div className="grid grid-cols-3 gap-2.5 text-xs font-mono">
                             <div className={`p-3 rounded-xl ${subtleBg}`}>
-                              <div className={mutedText}>进程 PID / 内存</div>
+                              <div className={mutedText}>{t('daemon.pidMem')}</div>
                               <div className="text-[13px] font-medium mt-0.5">
                                 #{state.daemon.pid} · {state.daemon.memoryMb} MB
                               </div>
                             </div>
                             <div className={`p-3 rounded-xl ${subtleBg}`}>
-                              <div className={mutedText}>静默无黑框标志</div>
+                              <div className={mutedText}>{t('daemon.silentFlag')}</div>
                               <div className="text-[13px] font-medium mt-0.5">
-                                {state.daemon.createNoWindowActive ? 'CREATE_NO_WINDOW' : '未启用'}
+                                {state.daemon.createNoWindowActive ? 'CREATE_NO_WINDOW' : t('daemon.notEnabled')}
                               </div>
                             </div>
                             <div className={`p-3 rounded-xl ${subtleBg}`}>
-                              <div className={mutedText}>活跃 Job Object 树</div>
+                              <div className={mutedText}>{t('daemon.activeJobObjects')}</div>
                               <div className="text-[13px] font-medium mt-0.5">
-                                {state.daemon.activeJobObjects} 个受控句柄
+                                {t('daemon.controlledHandles', { count: state.daemon.activeJobObjects })}
                               </div>
                             </div>
                           </div>
@@ -1313,7 +1316,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 className="flex-1 py-2.5 px-4 rounded-xl bg-[#D05A4E] hover:bg-[#B84A3E] text-white font-semibold text-[13px] flex items-center justify-center gap-2 transition-colors duration-120 cursor-pointer ring-2 ring-[#F28B82]/60"
                               >
                                 <ShieldAlert className="w-4 h-4" />
-                                <span>确认终止所有 Win32 Job Object 进程树？</span>
+                                <span>{t('daemon.confirmKillAll')}</span>
                               </button>
                               <button
                                 type="button"
@@ -1321,7 +1324,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 onClick={() => setConfirmingEmergencyKill(false)}
                                 className={`py-2.5 px-4 rounded-xl text-[13px] font-medium ${subtleBg} hover:opacity-80 transition-opacity duration-120 cursor-pointer`}
                               >
-                                取消
+                                {t('common.cancel')}
                               </button>
                             </div>
                           ) : (
@@ -1332,7 +1335,7 @@ export const MwhSettingsModal: React.FC = () => {
                               className="w-full py-2.5 px-4 rounded-xl bg-[#E06C60] hover:bg-[#D05A4E] text-white font-medium text-[13px] flex items-center justify-center gap-2 transition-colors duration-120 cursor-pointer"
                             >
                               <ShieldAlert className="w-4 h-4" />
-                              <span>全局急停（终止所有 Win32 Job Object 进程树）</span>
+                              <span>{t('daemon.emergencyStopAll')}</span>
                             </button>
                           )}
                         </div>
@@ -1340,10 +1343,10 @@ export const MwhSettingsModal: React.FC = () => {
                         <div className={`rounded-2xl p-4 space-y-3 ${cardBg}`}>
                           <div>
                             <div className="text-[13.5px] font-medium">
-                              授权工作区目录白名单 (Workspace Roots)
+                              {t('daemon.workspacesTitle')}
                             </div>
                             <div className={`text-xs mt-0.5 ${mutedText}`}>
-                              计划模式 / 变更前确认 / 自主模式下仅允许写访问以下物理路径；完全访问下跨目录普通读写不额外标为高危
+                              {t('daemon.workspacesDesc')}
                             </div>
                           </div>
 
@@ -1352,8 +1355,8 @@ export const MwhSettingsModal: React.FC = () => {
                               type="text"
                               value={newWorkspaceInput}
                               onChange={(e) => setNewWorkspaceInput(e.target.value)}
-                              placeholder="输入本地绝对路径，例如 E:\Workspace\MyRustApp"
-                              aria-label="新增授权工作区路径"
+                              placeholder={t('daemon.workspacePlaceholder')}
+                              aria-label={t('daemon.workspaceInputAria')}
                               className={`flex-1 px-3 py-2 rounded-xl text-xs font-mono border-0 outline-none ${subtleBg}`}
                             />
                             <button
@@ -1365,7 +1368,7 @@ export const MwhSettingsModal: React.FC = () => {
                               className="px-3.5 py-2 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105 text-white flex items-center gap-1.5 transition-all duration-120 cursor-pointer whitespace-nowrap"
                             >
                               <FolderPlus className="w-3.5 h-3.5" />
-                              <span>添加目录</span>
+                              <span>{t('daemon.addWorkspace')}</span>
                             </button>
                           </div>
 
@@ -1379,7 +1382,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => mwhService.removeWorkspaceRoot(rootPath)}
-                                  aria-label={`移除工作区 ${rootPath}`}
+                                  aria-label={t('daemon.removeWorkspaceAria', { path: rootPath })}
                                   className="text-[#F28B82] hover:text-[#E06C60] p-1 transition-colors duration-120 cursor-pointer shrink-0"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1391,7 +1394,7 @@ export const MwhSettingsModal: React.FC = () => {
 
                         {/* 小节：代理 */}
                         <div className={`text-[13px] font-semibold tracking-wide mt-6 mb-2 ${mutedText}`}>
-                          代理
+                          {t('agents.title')}
                         </div>
 
                         {/* 自定义 ACP 代理档案 */}
@@ -1399,13 +1402,13 @@ export const MwhSettingsModal: React.FC = () => {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="text-[13.5px] font-medium">自定义 ACP 代理</span>
+                                <span className="text-[13.5px] font-medium">{t('agents.customAcpTitle')}</span>
                                 <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#6366F1]/16 text-[#A5B4FC]">
                                   Agent Client Protocol
                                 </span>
                               </div>
                               <div className={`text-xs ${mutedText} mt-0.5`}>
-                                全局通用配置 (%USERPROFILE%\.mwh\acp-profiles.json) · 可按档案独立启停 · 实时热更新
+                                {t('agents.customAcpDesc')}
                               </div>
                             </div>
 
@@ -1415,7 +1418,7 @@ export const MwhSettingsModal: React.FC = () => {
                               className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1]/20 text-[#A5B4FC] hover:bg-[#6366F1]/30 flex items-center gap-1.5 transition-colors cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
-                              添加 ACP 代理
+                              {t('agents.addAcp')}
                             </button>
                           </div>
 
@@ -1425,14 +1428,14 @@ export const MwhSettingsModal: React.FC = () => {
                               className={`p-4 rounded-xl text-center space-y-2 border border-dashed border-white/[0.06] ${subtleBg}`}
                             >
                               <div className={`text-xs ${mutedText}`}>
-                                暂无自定义 ACP 代理。添加后支持路径探测、按档案独立启停与 Worktree 隔离运行。
+                                {t('agents.emptyAcp')}
                               </div>
                               <button
                                 type="button"
                                 onClick={() => openAcpCreateModal()}
                                 className="px-3 py-1 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/15 transition-colors cursor-pointer"
                               >
-                                + 添加首个 ACP 代理
+                                {t('agents.addFirstAcp')}
                               </button>
                             </div>
                           ) : (
@@ -1457,27 +1460,27 @@ export const MwhSettingsModal: React.FC = () => {
                                       >
                                         {profile.detected ? (
                                           <>
-                                            <Check className="w-3 h-3" /> 可执行文件就绪
+                                            <Check className="w-3 h-3" /> {t('agents.execReady')}
                                           </>
                                         ) : (
                                           <>
-                                            <AlertCircle className="w-3 h-3" /> 未找到可执行文件
+                                            <AlertCircle className="w-3 h-3" /> {t('agents.execMissing')}
                                           </>
                                         )}
                                       </span>
                                       {!profile.enabled && (
                                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-500/20 text-neutral-400">
-                                          已停用
+                                          {t('agents.disabledBadge')}
                                         </span>
                                       )}
                                     </div>
 
                                     <div className={`text-[11px] font-mono truncate mt-1 ${mutedText}`}>
-                                      <span className="text-neutral-400">命令:</span>{' '}
+                                      <span className="text-neutral-400">{t('agents.commandLabel')}</span>{' '}
                                       {profile.binaryPath || profile.command}
                                       {profile.args && profile.args.length > 0 && (
                                         <span className="opacity-60 ml-2">
-                                          参数: {profile.args.join(' ')}
+                                          {t('agents.argsLabel', { args: profile.args.join(' ') })}
                                         </span>
                                       )}
                                     </div>
@@ -1488,7 +1491,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     <MwhSwitch
                                       checked={profile.enabled !== false}
                                       onChange={() => mwhService.toggleAcpProfile(profile.id)}
-                                      label={`${profile.enabled !== false ? '停用' : '启用'} ${
+                                      label={`${profile.enabled !== false ? t('common.disable') : t('common.enable')} ${
                                         profile.display_name || profile.id
                                       }`}
                                       dark={chromeDark}
@@ -1499,7 +1502,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       type="button"
                                       onClick={() => openAcpEditModal(profile)}
                                       className="p-1.5 rounded-lg hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer"
-                                      title="编辑 ACP 代理"
+                                      title={t('agents.editAcpTitle')}
                                     >
                                       <Edit2 className="w-3.5 h-3.5" />
                                     </button>
@@ -1509,7 +1512,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       type="button"
                                       onClick={() => handleDeleteAcp(profile.id)}
                                       className="p-1.5 rounded-lg hover:bg-[#E06C60]/20 text-neutral-400 hover:text-[#F28B82] transition-colors cursor-pointer"
-                                      title="删除 ACP 代理"
+                                      title={t('agents.deleteAcpTitle')}
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -1525,25 +1528,25 @@ export const MwhSettingsModal: React.FC = () => {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="text-[13.5px] font-medium">
-                                Git Worktree 并发隔离分支池 (代理权限 &lt;= 父权限)
+                                {t('agents.worktreeTitle')}
                               </div>
                               <div className={`text-xs ${mutedText}`}>
-                                当前父级档位：{currentProfile.shortLabel}
+                                {t('agents.currentParentProfile', { profile: currentProfile.shortLabel })}
                               </div>
                             </div>
 
                             <div className="flex items-center gap-1.5">
                               <select
-                                aria-label="选择请求的代理模式"
+                                aria-label={t('agents.selectChildModeAria')}
                                 value={requestedSpawnMode}
                                 onChange={(e) =>
                                   setRequestedSpawnMode(e.target.value as ConfinementMode)
                                 }
                                 className={`px-2.5 py-1.5 rounded-xl text-xs font-mono border-0 outline-none ${subtleBg}`}
                               >
-                                <option value="read-only">只读 (计划模式)</option>
-                                <option value="workspace-write">工作区读写 (变更前确认 / 自主)</option>
-                                <option value="danger-full-access">完全访问</option>
+                                <option value="read-only">{t('agents.modeReadOnly')}</option>
+                                <option value="workspace-write">{t('agents.modeWorkspaceWrite')}</option>
+                                <option value="danger-full-access">{t('agents.modeFullAccess')}</option>
                               </select>
                               <button
                                 type="button"
@@ -1556,7 +1559,7 @@ export const MwhSettingsModal: React.FC = () => {
                                 }}
                                 className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 transition-all duration-120 cursor-pointer whitespace-nowrap"
                               >
-                                新建隔离 Worktree
+                                {t('agents.createWorktree')}
                               </button>
                             </div>
                           </div>
@@ -1573,8 +1576,8 @@ export const MwhSettingsModal: React.FC = () => {
                                     <div className="flex items-center gap-2 text-xs font-mono min-w-0 truncate">
                                       <span className="font-semibold text-[#A5B4FC]">{wt.id}</span>
                                       <span className="truncate">· {wt.branchName}</span>
-                                      <span>· 代理: {wt.agentId}</span>
-                                      <span>· 生效: {wt.childMode}</span>
+                                      <span>{t('agents.worktreeAgent', { id: wt.agentId })}</span>
+                                      <span>{t('agents.worktreeEffective', { mode: wt.childMode })}</span>
                                     </div>
 
                                     <div className="flex items-center gap-1.5 shrink-0">
@@ -1585,12 +1588,12 @@ export const MwhSettingsModal: React.FC = () => {
                                           className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 flex items-center gap-1 transition-all duration-120 cursor-pointer"
                                         >
                                           <GitMerge className="w-3 h-3" />
-                                          <span>合并回主分支</span>
+                                          <span>{t('agents.mergeBack')}</span>
                                         </button>
                                       )}
                                       {wt.status === 'MISSING' && (
                                         <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#D99B43]/15 text-[#EAB364]">
-                                          已清理 (MISSING)
+                                          {t('agents.cleanedMissing')}
                                         </span>
                                       )}
                                       <button
@@ -1598,7 +1601,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         onClick={() => mwhService.removeWorktree(wt.id)}
                                         className="px-2.5 py-1 rounded-lg text-xs bg-[#E06C60]/15 text-[#F28B82] hover:bg-[#E06C60]/25 transition-colors duration-120 cursor-pointer"
                                       >
-                                        清理分支
+                                        {t('agents.cleanBranch')}
                                       </button>
                                     </div>
                                   </div>
@@ -1614,7 +1617,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   {pages.length > 1 && (
                                     <div className="flex items-center justify-end gap-2 text-[11px] font-mono">
                                       <span className={mutedText}>
-                                        输出流分页 {pageIdx + 1}/{pages.length}
+                                        {t('agents.outputPagination', { current: pageIdx + 1, total: pages.length })}
                                       </span>
                                       <button
                                         type="button"
@@ -1626,7 +1629,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         }
                                         className="px-2 py-0.5 rounded bg-black/10 hover:bg-black/20 transition-colors duration-120 cursor-pointer"
                                       >
-                                        切换分页
+                                        {t('agents.switchPage')}
                                       </button>
                                     </div>
                                   )}
@@ -1644,13 +1647,13 @@ export const MwhSettingsModal: React.FC = () => {
                         {/* Header Banner */}
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h4 className="text-[16px] font-bold tracking-tight">本机 MCP 与 Skill</h4>
+                            <h4 className="text-[16px] font-bold tracking-tight">{t('resources.title')}</h4>
                             <div className="text-xs space-y-0.5 mt-1 leading-relaxed">
                               <p className={chromeDark ? 'text-[#ececee]' : 'text-[#1d1d1f]'}>
-                                打开即对 Muse 生效，默认全部关闭。
+                                {t('resources.activationNote')}
                               </p>
                               <p className={mutedText}>
-                                MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。
+                                {t('resources.sandboxNote')}
                               </p>
                             </div>
                           </div>
@@ -1666,7 +1669,7 @@ export const MwhSettingsModal: React.FC = () => {
                               } border border-white/5`}
                             >
                               <RefreshCw className={`w-3.5 h-3.5 ${resScanning ? 'animate-spin' : ''}`} />
-                              <span>{resScanning ? '扫描中...' : '扫描本机'}</span>
+                              <span>{resScanning ? t('resources.scanning') : t('resources.scanLocal')}</span>
                             </button>
                             <button
                               type="button"
@@ -1674,7 +1677,7 @@ export const MwhSettingsModal: React.FC = () => {
                               className="px-3 py-1.5 rounded-[10px] text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 flex items-center gap-1.5 transition-all duration-120 cursor-pointer shadow-sm"
                             >
                               <Plus className="w-3.5 h-3.5" />
-                              <span>添加</span>
+                              <span>{t('resources.add')}</span>
                             </button>
                           </div>
                         </div>
@@ -1684,7 +1687,7 @@ export const MwhSettingsModal: React.FC = () => {
                           <div className={`rounded-[14px] p-4 space-y-3.5 ${cardBg} border border-[#6366F1]/25`}>
                             <div className="flex items-center justify-between">
                               <span className="text-[13.5px] font-semibold text-[#A5B4FC]">
-                                {resEditingId ? '编辑资源' : '添加本机资源'}
+                                {resEditingId ? t('resources.editTitle') : t('resources.addTitle')}
                               </span>
                               <button
                                 type="button"
@@ -1698,7 +1701,7 @@ export const MwhSettingsModal: React.FC = () => {
                             {/* Kind Selector (only if not editing) */}
                             {!resEditingId && (
                               <div className="flex items-center gap-2">
-                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>资源类型</span>
+                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.typeLabel')}</span>
                                 <div className="flex items-center gap-1.5">
                                   <button
                                     type="button"
@@ -1709,7 +1712,7 @@ export const MwhSettingsModal: React.FC = () => {
                                         : 'bg-white/5 text-neutral-400 hover:bg-white/10'
                                     }`}
                                   >
-                                    本机 MCP
+                                    {t('resources.localMcp')}
                                   </button>
                                   <button
                                     type="button"
@@ -1728,12 +1731,12 @@ export const MwhSettingsModal: React.FC = () => {
 
                             {/* Display Name */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                              <span className={`text-xs ${mutedText} w-20 shrink-0`}>显示名称</span>
+                              <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.displayNameLabel')}</span>
                               <input
                                 type="text"
                                 value={resDisplayName}
                                 onChange={(e) => setResDisplayName(e.target.value)}
-                                placeholder="例如: MyTools 或 CodeAssist"
+                                placeholder={t('resources.displayNamePlaceholder')}
                                 className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                               />
                             </div>
@@ -1742,7 +1745,7 @@ export const MwhSettingsModal: React.FC = () => {
                             {resKind === 'mcp' && (
                               <>
                                 <div className="flex items-center gap-2">
-                                  <span className={`text-xs ${mutedText} w-20 shrink-0`}>传输协议</span>
+                                  <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.transportLabel')}</span>
                                   <div className="flex items-center gap-1.5">
                                     <button
                                       type="button"
@@ -1772,32 +1775,32 @@ export const MwhSettingsModal: React.FC = () => {
                                 {resTransport === 'stdio' ? (
                                   <>
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>执行命令</span>
+                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.cmdLabel')}</span>
                                       <input
                                         type="text"
                                         value={resCommand}
                                         onChange={(e) => setResCommand(e.target.value)}
-                                        placeholder="例如: node 或 C:\path\to\server.exe"
+                                        placeholder={t('resources.cmdPlaceholder')}
                                         className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                       />
                                     </div>
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>启动参数</span>
+                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.argsLabel')}</span>
                                       <input
                                         type="text"
                                         value={resArgs}
                                         onChange={(e) => setResArgs(e.target.value)}
-                                        placeholder="例如: dist/index.js --port 8080 (空格分隔)"
+                                        placeholder={t('resources.argsPlaceholder')}
                                         className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                       />
                                     </div>
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>工作目录</span>
+                                      <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.cwdLabel')}</span>
                                       <input
                                         type="text"
                                         value={resCwd}
                                         onChange={(e) => setResCwd(e.target.value)}
-                                        placeholder="可选，默认用户主目录"
+                                        placeholder={t('resources.cwdPlaceholder')}
                                         className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                       />
                                     </div>
@@ -1809,7 +1812,7 @@ export const MwhSettingsModal: React.FC = () => {
                                       type="text"
                                       value={resHttpUrl}
                                       onChange={(e) => setResHttpUrl(e.target.value)}
-                                      placeholder="例如: http://127.0.0.1:8000/mcp"
+                                      placeholder={t('resources.urlPlaceholder')}
                                       className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                     />
                                   </div>
@@ -1820,12 +1823,12 @@ export const MwhSettingsModal: React.FC = () => {
                             {/* Skill-specific fields */}
                             {resKind === 'skill' && (
                               <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>Skill 目录</span>
+                                <span className={`text-xs ${mutedText} w-20 shrink-0`}>{t('resources.skillDirLabel')}</span>
                                 <input
                                   type="text"
                                   value={resSkillDir}
                                   onChange={(e) => setResSkillDir(e.target.value)}
-                                  placeholder="需包含 SKILL.md 的本地目录绝对路径或 ~ 路径"
+                                  placeholder={t('resources.skillDirPlaceholder')}
                                   className={`flex-1 rounded-[8px] px-3 py-1.5 text-xs font-mono outline-none focus:ring-1 focus:ring-[#6366F1] ${subtleBg}`}
                                 />
                               </div>
@@ -1837,13 +1840,13 @@ export const MwhSettingsModal: React.FC = () => {
                                 className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ${subtleBg}`}
                               >
                                 <span className="text-xs leading-relaxed">
-                                  标记为只读（在计划模式下放行探查）
+                                  {t('resources.readOnlyLabel')}
                                 </span>
                                 <MwhSwitch
                                   checked={resReadonly}
                                   onChange={setResReadonly}
-                                  label="标记为只读"
-                                  title="只读资源在计划模式下仍可被探查"
+                                  label={t('resources.readOnlyAria')}
+                                  title={t('resources.readOnlyTitle')}
                                   dark={chromeDark}
                                 />
                               </div>
@@ -1854,12 +1857,12 @@ export const MwhSettingsModal: React.FC = () => {
                               <div
                                 className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ${subtleBg}`}
                               >
-                                <span className="text-xs leading-relaxed">立即启用（默认关闭）</span>
+                                <span className="text-xs leading-relaxed">{t('resources.enableNowLabel')}</span>
                                 <MwhSwitch
                                   checked={resEnabled}
                                   onChange={setResEnabled}
-                                  label="立即启用"
-                                  title="添加完成后立即对 Muse 生效"
+                                  label={t('resources.enableNowAria')}
+                                  title={t('resources.enableNowTitle')}
                                   dark={chromeDark}
                                 />
                               </div>
@@ -1874,18 +1877,18 @@ export const MwhSettingsModal: React.FC = () => {
                                 className="px-2.5 py-1 rounded-[8px] text-xs bg-white/5 hover:bg-white/10 text-neutral-300 flex items-center gap-1 cursor-pointer transition-colors"
                               >
                                 <RefreshCw className={`w-3 h-3 ${resProbing ? 'animate-spin' : ''}`} />
-                                <span>{resProbing ? '探测中...' : '探测连接'}</span>
+                                <span>{resProbing ? t('resources.probing') : t('resources.probeConn')}</span>
                               </button>
 
                               {resProbeResult && (
                                 <div className="text-xs">
                                   {resProbeResult.ok ? (
                                     <span className="text-[#7DD3FC]">
-                                      探测成功{resProbeResult.tools ? `（发现 ${resProbeResult.tools.length} 个工具）` : ''}
+                                      {t('resources.probeConnOk', { tools: resProbeResult.tools ? t('resources.probeConnTools', { count: resProbeResult.tools.length }) : '' })}
                                     </span>
                                   ) : (
                                     <span className="text-[#EAB364]">
-                                      探测失败: {resProbeResult.error || resProbeResult.faultReason || '无法建立连接'}
+                                      {t('resources.probeConnFail', { error: resProbeResult.error || resProbeResult.faultReason || t('resources.probeConnDefaultErr') })}
                                     </span>
                                   )}
                                 </div>
@@ -1897,14 +1900,14 @@ export const MwhSettingsModal: React.FC = () => {
                                   onClick={() => setResAddOpen(false)}
                                   className="px-3 py-1 rounded-[8px] text-xs bg-white/5 hover:bg-white/10 text-neutral-300 cursor-pointer"
                                 >
-                                  取消
+                                  {t('common.cancel')}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={handleSaveResource}
                                   className="px-3 py-1 rounded-[8px] text-xs bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 font-medium cursor-pointer"
                                 >
-                                  保存
+                                  {t('common.save')}
                                 </button>
                               </div>
                             </div>
@@ -1915,17 +1918,17 @@ export const MwhSettingsModal: React.FC = () => {
                         <div className={`rounded-[14px] p-4 space-y-3 ${cardBg}`}>
                           <div>
                             <div className="text-[14px] font-semibold text-[#1d1d1f] dark:text-[#ececee]">
-                              本机 MCP
+                              {t('resources.localMcp')}
                             </div>
                             <div className={`text-xs ${mutedText} mt-0.5`}>
-                              启用后，工具会出现在 Muse 现有的 /mcp 里，直接调用即可。
+                              {t('resources.mcpSectionSub')}
                             </div>
                           </div>
 
                           <div className="space-y-2">
                             {state.resources.entries.filter((e) => e.kind === 'mcp').length === 0 ? (
                               <div className={`text-xs ${mutedText} py-3 text-center`}>
-                                暂无已登记的本机 MCP 服务器，可通过上方「扫描本机」自动发现或「添加」手动配置。
+                                {t('resources.mcpEmpty')}
                               </div>
                             ) : (
                               state.resources.entries
@@ -1968,24 +1971,24 @@ export const MwhSettingsModal: React.FC = () => {
                                             {entry.displayName || entry.id}
                                           </span>
                                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
-                                            {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
+                                            {entry.sourceLabel || (entry.source === 'scan' ? t('resources.sourceScan') : t('resources.sourceManual'))}
                                           </span>
                                           {isFault ? (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D99B43]/15 text-[#EAB364] shrink-0 font-medium">
-                                              {entry.faultReason || '启动故障'}
+                                              {entry.faultReason || t('resources.faultStart')}
                                             </span>
                                           ) : isRunning ? (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#38BDF8]/12 text-[#7DD3FC] shrink-0">
-                                              运行正常
+                                              {t('resources.statusRunning')}
                                             </span>
                                           ) : (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-500/10 text-neutral-400 shrink-0">
-                                              已关闭
+                                              {t('resources.statusClosed')}
                                             </span>
                                           )}
                                           {entry.readonly && (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
-                                              只读
+                                              {t('resources.readOnlyBadge')}
                                             </span>
                                           )}
                                         </div>
@@ -1995,21 +1998,21 @@ export const MwhSettingsModal: React.FC = () => {
                                             className={`text-[11px] font-medium tabular-nums tracking-normal ${mutedText} shrink-0 whitespace-nowrap`}
                                             style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
                                           >
-                                            {entry.toolCount ?? entry.exposedToolNames?.length ?? 0} 个工具
+                                            {t('resources.toolCount', { count: entry.toolCount ?? entry.exposedToolNames?.length ?? 0 })}
                                           </span>
                                           <div className="flex items-center gap-2">
                                           <MwhSwitch
                                             checked={entry.enabled}
                                             onChange={(next) => mwhService.toggleResource(entry.id, next)}
-                                            label={`${entry.enabled ? '停用' : '启用'} ${
+                                            label={`${entry.enabled ? t('common.disable') : t('common.enable')} ${
                                               entry.displayName || entry.id
                                             }`}
                                             title={
                                               isFault
-                                                ? entry.faultReason || '启动故障，开关保持启用由你决定是否关闭'
+                                                ? entry.faultReason || t('resources.faultTitle')
                                                 : entry.enabled
-                                                  ? '已启用，点击停用'
-                                                  : '已停用，点击启用'
+                                                  ? t('resources.toggleOnTitle')
+                                                  : t('resources.toggleOffTitle')
                                             }
                                             dark={chromeDark}
                                           />
@@ -2017,7 +2020,7 @@ export const MwhSettingsModal: React.FC = () => {
                                             type="button"
                                             onClick={() => handleOpenEditResource(entry)}
                                             className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                                            title="编辑"
+                                            title={t('common.edit')}
                                           >
                                             <Edit2 className="w-3.5 h-3.5" />
                                           </button>
@@ -2025,7 +2028,7 @@ export const MwhSettingsModal: React.FC = () => {
                                             type="button"
                                             onClick={() => handleDeleteResource(entry)}
                                             className="p-1 rounded text-[#F28B82] hover:text-[#E06C60] hover:bg-white/5 cursor-pointer"
-                                            title="删除"
+                                            title={t('common.delete')}
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
@@ -2037,29 +2040,29 @@ export const MwhSettingsModal: React.FC = () => {
                                       {isExpanded && (
                                         <div className={`mt-2.5 pt-2.5 border-t border-white/5 space-y-2`}>
                                           <div className="text-[11.5px] font-medium text-neutral-400">
-                                            将出现在 Muse 的 tools/list
+                                            {t('resources.toolsMounted')}
                                           </div>
                                           {isFault && (
                                             <div className="text-xs text-[#EAB364]">
-                                              已暂时从 /mcp 撤下，修复后会自动恢复
+                                              {t('resources.toolsUnmounted')}
                                             </div>
                                           )}
                                           {entry.exposedToolNames && entry.exposedToolNames.length > 0 ? (
                                             <div className="flex flex-wrap gap-1.5">
-                                              {entry.exposedToolNames.map((t, idx) => (
+                                              {entry.exposedToolNames.map((tool, idx) => (
                                                 <div
                                                   key={idx}
                                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 text-[11px] font-normal font-mono text-neutral-300"
-                                                  title={`原名: ${t.original}`}
+                                                  title={t('resources.originalName', { name: tool.original })}
                                                 >
-                                                  <span>{t.exposed}</span>
-                                                  <span className="text-[11px] font-normal text-neutral-500">({t.original})</span>
+                                                  <span>{tool.exposed}</span>
+                                                  <span className="text-[11px] font-normal text-neutral-500">({tool.original})</span>
                                                 </div>
                                               ))}
                                             </div>
                                           ) : (
                                             <div className={`text-xs ${mutedText}`}>
-                                              暂无工具（启用且运行正常后自动列出）
+                                              {t('resources.noTools')}
                                             </div>
                                           )}
                                         </div>
@@ -2078,14 +2081,14 @@ export const MwhSettingsModal: React.FC = () => {
                               Skill
                             </div>
                             <div className={`text-xs ${mutedText} mt-0.5`}>
-                              名称和简短说明会自动备好，需要全文时再读一次。
+                              {t('resources.skillSectionSub')}
                             </div>
                           </div>
 
                           <div className="space-y-2">
                             {state.resources.entries.filter((e) => e.kind === 'skill').length === 0 ? (
                               <div className={`text-xs ${mutedText} py-3 text-center`}>
-                                暂无已登记的 Skill，可通过上方「扫描本机」自动发现或「添加」手动配置。
+                                {t('resources.skillEmpty')}
                               </div>
                             ) : (
                               state.resources.entries
@@ -2131,19 +2134,19 @@ export const MwhSettingsModal: React.FC = () => {
                                             {entry.displayName || entry.id}
                                           </span>
                                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-neutral-400 shrink-0">
-                                            {entry.sourceLabel || (entry.source === 'scan' ? '扫描发现' : '手动添加')}
+                                            {entry.sourceLabel || (entry.source === 'scan' ? t('resources.sourceScan') : t('resources.sourceManual'))}
                                           </span>
                                           {skillFault ? (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D99B43]/15 text-[#EAB364] font-semibold shrink-0">
-                                              {entry.faultReason || '不可用'}
+                                              {entry.faultReason || t('resources.faultUnavailable')}
                                             </span>
                                           ) : isReady ? (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#38BDF8]/12 text-[#7DD3FC] shrink-0">
-                                              已就绪
+                                              {t('resources.statusReady')}
                                             </span>
                                           ) : (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-500/10 text-neutral-400 shrink-0">
-                                              已关闭
+                                              {t('resources.statusClosed')}
                                             </span>
                                           )}
                                         </div>
@@ -2152,17 +2155,17 @@ export const MwhSettingsModal: React.FC = () => {
                                           <MwhSwitch
                                             checked={entry.enabled}
                                             onChange={(next) => mwhService.toggleResource(entry.id, next)}
-                                            label={`${entry.enabled ? '停用' : '启用'} ${
+                                            label={`${entry.enabled ? t('common.disable') : t('common.enable')} ${
                                               entry.displayName || entry.id
                                             }`}
-                                            title={entry.enabled ? '已启用，点击停用' : '已停用，点击启用'}
+                                            title={entry.enabled ? t('resources.toggleOnTitle') : t('resources.toggleOffTitle')}
                                             dark={chromeDark}
                                           />
                                           <button
                                             type="button"
                                             onClick={() => handleOpenEditResource(entry)}
                                             className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                                            title="编辑"
+                                            title={t('common.edit')}
                                           >
                                             <Edit2 className="w-3.5 h-3.5" />
                                           </button>
@@ -2170,7 +2173,7 @@ export const MwhSettingsModal: React.FC = () => {
                                             type="button"
                                             onClick={() => handleDeleteResource(entry)}
                                             className="p-1 rounded text-[#F28B82] hover:text-[#E06C60] hover:bg-white/5 cursor-pointer"
-                                            title="删除"
+                                            title={t('common.delete')}
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
@@ -2181,10 +2184,10 @@ export const MwhSettingsModal: React.FC = () => {
                                       {isExpanded && (
                                         <div className="mt-2.5 pt-2.5 border-t border-white/5 space-y-1.5 text-xs">
                                           <div className="text-neutral-300 leading-relaxed">
-                                            {entry.skillDescription || '暂无说明'}
+                                            {entry.skillDescription || t('resources.noDescription')}
                                           </div>
                                           <div className="font-mono text-[11px] text-neutral-500">
-                                            来源目录: {entry.skillDirDisplay || '~'}
+                                            {t('resources.sourceDir', { dir: entry.skillDirDisplay || '~' })}
                                           </div>
                                         </div>
                                       )}
@@ -2204,36 +2207,36 @@ export const MwhSettingsModal: React.FC = () => {
                           {/* Header + Toolbar */}
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-[13.5px] font-medium">写前影子快照</div>
+                              <div className="text-[13.5px] font-medium">{t('audit.snapshotsTitle')}</div>
                               <div className={`text-[11px] mt-0.5 ${mutedText}`}>
-                                Muse 写入前自动保存的安全检查点，支持单条无损还原
+                                {t('audit.snapshotsDesc')}
                               </div>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-1.5 text-xs">
                               <select
-                                aria-label="快照排序方式"
+                                aria-label={t('audit.sortAria')}
                                 value={snapshotSort}
                                 onChange={(e) =>
                                   setSnapshotSort(e.target.value as SnapshotSortOrder)
                                 }
                                 className={`px-2 py-1 rounded-lg text-[11.5px] border-0 outline-none cursor-pointer ${subtleBg}`}
                               >
-                                <option value="newest">最新优先</option>
-                                <option value="oldest">最早优先</option>
-                                <option value="files-desc">按改动文件数</option>
+                                <option value="newest">{t('audit.sortNewest')}</option>
+                                <option value="oldest">{t('audit.sortOldest')}</option>
+                                <option value="files-desc">{t('audit.sortFilesDesc')}</option>
                               </select>
 
                               <select
-                                aria-label="每组显示条数"
+                                aria-label={t('audit.limitAria')}
                                 value={perGroupLimit}
                                 onChange={(e) => setPerGroupLimit(Number(e.target.value))}
                                 className={`px-2 py-1 rounded-lg text-[11.5px] border-0 outline-none cursor-pointer ${subtleBg}`}
                               >
-                                <option value={3}>每目录最近 3 次</option>
-                                <option value={5}>每目录最近 5 次</option>
-                                <option value={10}>每目录最近 10 次</option>
-                                <option value={0}>显示全部 ({state.snapshots.length})</option>
+                                <option value={3}>{t('audit.limitN', { count: 3 })}</option>
+                                <option value={5}>{t('audit.limitN', { count: 5 })}</option>
+                                <option value={10}>{t('audit.limitN', { count: 10 })}</option>
+                                <option value={0}>{t('audit.limitAll', { count: state.snapshots.length })}</option>
                               </select>
                             </div>
                           </div>
@@ -2263,7 +2266,7 @@ export const MwhSettingsModal: React.FC = () => {
                                     disabled={visibleSnapshotIds.length === 0}
                                     className="px-2 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-40 transition-colors duration-120 cursor-pointer whitespace-nowrap"
                                   >
-                                    {allVisibleSelected ? '取消全选' : '全选当前可见'}
+                                    {allVisibleSelected ? t('audit.deselectAll') : t('audit.selectAllVisible')}
                                   </button>
                                   <button
                                     type="button"
@@ -2271,10 +2274,10 @@ export const MwhSettingsModal: React.FC = () => {
                                     disabled={groupedSnapshots.length === 0}
                                     className="px-2 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-40 transition-colors duration-120 cursor-pointer whitespace-nowrap"
                                   >
-                                    {allGroupsCollapsed ? '全部展开' : '全部折叠'}
+                                    {allGroupsCollapsed ? t('audit.expandAll') : t('audit.collapseAll')}
                                   </button>
                                   <span className={`text-[11.5px] truncate ${mutedText}`}>
-                                    已选 {activeSelectedIds.length} 条记录
+                                    {t('audit.selectedCount', { count: activeSelectedIds.length })}
                                   </span>
                                 </div>
 
@@ -2283,10 +2286,10 @@ export const MwhSettingsModal: React.FC = () => {
                                     type="button"
                                     onClick={handlePruneRecentSnapshots}
                                     disabled={state.snapshots.length === 0}
-                                    title="按工作区仅保留最近 N 条快照记录，自动清理更早记录"
+                                    title={t('audit.pruneTitle')}
                                     className="px-2.5 py-1 rounded-lg text-[11.5px] bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-40 transition-colors duration-120 cursor-pointer whitespace-nowrap"
                                   >
-                                    磁盘瘦身：各目录仅留 {perGroupLimit > 0 ? perGroupLimit : 5} 次
+                                    {t('audit.pruneBtn', { count: perGroupLimit > 0 ? perGroupLimit : 5 })}
                                   </button>
                                   <button
                                     type="button"
@@ -2296,7 +2299,7 @@ export const MwhSettingsModal: React.FC = () => {
                                   >
                                     <Trash2 className="w-3 h-3" />
                                     <span>
-                                      删除所选记录
+                                      {t('audit.deleteSelected')}
                                       {activeSelectedIds.length > 0 ? ` (${activeSelectedIds.length})` : ''}
                                     </span>
                                   </button>
@@ -2308,7 +2311,7 @@ export const MwhSettingsModal: React.FC = () => {
                           {/* Grouped Snapshot List */}
                           {groupedSnapshots.length === 0 ? (
                             <div className={`p-4 rounded-xl text-center text-xs ${subtleBg} ${mutedText}`}>
-                              暂无写前影子快照记录
+                              {t('audit.snapshotsEmpty')}
                             </div>
                           ) : (
                             <div className="space-y-2.5 pr-1 max-h-[460px] overflow-y-auto overscroll-contain">
@@ -2369,8 +2372,8 @@ export const MwhSettingsModal: React.FC = () => {
                                       <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-mono">
                                         <span className="px-2 py-0.5 rounded-full bg-white/[0.08] text-[#c4c5cc] border border-white/[0.06]">
                                           {isTrimmed
-                                            ? `${limitedItems.length}/${group.items.length} 条快照`
-                                            : `${group.items.length} 条快照`}
+                                            ? t('audit.groupCountPartial', { shown: limitedItems.length, total: group.items.length })
+                                            : t('audit.groupCountTotal', { total: group.items.length })}
                                         </span>
                                       </div>
                                     </button>
@@ -2393,7 +2396,7 @@ export const MwhSettingsModal: React.FC = () => {
                                                 <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                                                   <input
                                                     type="checkbox"
-                                                    aria-label={`选择快照 ${snap.id}`}
+                                                    aria-label={t('audit.selectSnapAria', { id: snap.id })}
                                                     checked={checked}
                                                     onChange={(e) => {
                                                       const val = e.target.checked;
@@ -2406,9 +2409,9 @@ export const MwhSettingsModal: React.FC = () => {
                                                   />
                                                   <span
                                                     className="text-xs font-semibold text-[#ECECEE] truncate"
-                                                    title={snap.triggerReason || '写入前快照'}
+                                                    title={snap.triggerReason || t('audit.defaultSnapReason')}
                                                   >
-                                                    {snap.triggerReason || '写入前快照'}
+                                                    {snap.triggerReason || t('audit.defaultSnapReason')}
                                                   </span>
                                                 </div>
 
@@ -2422,10 +2425,10 @@ export const MwhSettingsModal: React.FC = () => {
                                                     onClick={() => {
                                                       setConfirmModal({
                                                         open: true,
-                                                        title: '回滚至该影子快照',
-                                                        message: `确定要将工作区回滚至快照 "${snap.id}" 吗？工作区自该快照之后的所有修改将被覆盖还原。`,
+                                                        title: t('audit.rollbackConfirmTitle'),
+                                                        message: t('audit.rollbackConfirmMsg', { id: snap.id }),
                                                         danger: true,
-                                                        confirmText: '确认回滚',
+                                                        confirmText: t('audit.rollbackConfirmBtn'),
                                                         onConfirm: () => {
                                                           mwhService.rollbackSnapshot(snap.id);
                                                         },
@@ -2442,14 +2445,14 @@ export const MwhSettingsModal: React.FC = () => {
                                                     ) : (
                                                       <RotateCcw className="w-3.5 h-3.5" />
                                                     )}
-                                                    <span>{snap.rolledBack ? '已回滚' : '回滚此快照'}</span>
+                                                    <span>{snap.rolledBack ? t('audit.rolledBack') : t('audit.rollbackThis')}</span>
                                                   </button>
                                                 </div>
                                               </div>
 
                                               <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#8E909A] pl-6 overflow-hidden truncate">
                                                 <span className="text-[#A5B4FC] shrink-0" title={snap.diffStat}>
-                                                  {fileCount} 个文件变动
+                                                  {t('audit.fileChanges', { count: fileCount })}
                                                 </span>
                                                 <span className="opacity-40 shrink-0">·</span>
                                                 <span className="shrink-0" title={`Git Tree Hash: ${snap.treeHash}`}>
@@ -2476,7 +2479,7 @@ export const MwhSettingsModal: React.FC = () => {
                                               }
                                               className="text-xs text-[#A5B4FC] hover:underline cursor-pointer"
                                             >
-                                              查看该目录下其余 {group.items.length - limitedItems.length} 条快照...
+                                              {t('audit.viewMoreSnaps', { count: group.items.length - limitedItems.length })}
                                             </button>
                                           </div>
                                         )}
@@ -2492,12 +2495,12 @@ export const MwhSettingsModal: React.FC = () => {
                         <div className={`rounded-2xl p-4 space-y-3 min-w-0 overflow-hidden ${cardBg}`}>
                           <div className="flex items-center justify-between gap-2">
                             <div className="text-[13.5px] font-medium truncate">
-                              本地审计日志 (.mwh/logs/audit.jsonl)
+                              {t('audit.logsTitle')}
                             </div>
 
                             <div
                               role="group"
-                              aria-label="按决策过滤审计日志"
+                              aria-label={t('audit.filterDecisionAria')}
                               className={`flex items-center p-1 rounded-xl gap-1 text-xs font-mono shrink-0 ${subtleBg}`}
                             >
                               {(['ALL', 'ALLOW', 'ASK', 'BLOCK'] as const).map((flt) => (
@@ -2559,11 +2562,11 @@ export const MwhSettingsModal: React.FC = () => {
                                         </span>
                                         {entry.toolName === 'switch_mode' && (
                                           <span className="px-1.5 py-0.5 rounded bg-[#D99B43]/20 text-[#EAB364] text-[10.5px] font-semibold">
-                                            模式变更
+                                            {t('audit.modeChange')}
                                           </span>
                                         )}
                                         <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10.5px] opacity-85">
-                                          来源: {entry.actor}
+                                          {t('audit.actorLabel', { actor: entry.actor })}
                                         </span>
                                       </div>
                                       <span className="opacity-60 shrink-0">
@@ -2617,12 +2620,12 @@ export const MwhSettingsModal: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-sm font-semibold">
-                          {acpEditingId ? '编辑 ACP 代理' : '添加自定义 ACP 代理'}
+                          {acpEditingId ? t('agents.modalEditTitle') : t('agents.modalAddTitle')}
                         </div>
                         <div className={`text-xs ${mutedText} mt-0.5`}>
                           {acpEditingId
-                            ? `修改 ${acpEditingId} 的启动路径与参数`
-                            : '基于 Agent Client Protocol / 外部引擎配置'}
+                            ? t('agents.modalEditSub', { id: acpEditingId })
+                            : t('agents.modalAddSub')}
                         </div>
                       </div>
                       <button
@@ -2639,7 +2642,7 @@ export const MwhSettingsModal: React.FC = () => {
                       {/* 唯一标识 ID */}
                       <div className="space-y-1">
                         <label className="text-xs font-medium block">
-                          代理标识 (ID) <span className="text-[#F28B82]">*</span>
+                          {t('agents.formIdLabel')} <span className="text-[#F28B82]">*</span>
                         </label>
                         <input
                           type="text"
@@ -2647,22 +2650,22 @@ export const MwhSettingsModal: React.FC = () => {
                           disabled={Boolean(acpEditingId) || acpSaving}
                           value={acpFormId}
                           onChange={(e) => setAcpFormId(e.target.value)}
-                          placeholder="例如: codebuddy 或 agy"
+                          placeholder={t('agents.formIdPlaceholder')}
                           pattern="^[a-zA-Z0-9_\-]+$"
-                          title="只允许英文字母、数字、下划线和短横线"
+                          title={t('agents.formIdTitle')}
                           className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1] disabled:opacity-60`}
                         />
                       </div>
 
                       {/* 显示名称 */}
                       <div className="space-y-1">
-                        <label className="text-xs font-medium block">显示名称 (Display Name)</label>
+                        <label className="text-xs font-medium block">{t('agents.formNameLabel')}</label>
                         <input
                           type="text"
                           disabled={acpSaving}
                           value={acpFormDisplayName}
                           onChange={(e) => setAcpFormDisplayName(e.target.value)}
-                          placeholder="例如: CodeBuddy 助手"
+                          placeholder={t('agents.formNamePlaceholder')}
                           className={`w-full px-3 py-1.5 rounded-xl text-xs border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1]`}
                         />
                       </div>
@@ -2671,14 +2674,14 @@ export const MwhSettingsModal: React.FC = () => {
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-medium block">
-                            可执行文件路径 (Command) <span className="text-[#F28B82]">*</span>
+                            {t('agents.formCmdLabel')} <span className="text-[#F28B82]">*</span>
                           </label>
                           <button
                             type="button"
                             onClick={handleProbeAcp}
                             className="text-[11px] font-mono text-[#A5B4FC] hover:text-white underline cursor-pointer"
                           >
-                            探测路径
+                            {t('agents.probePath')}
                           </button>
                         </div>
                         <input
@@ -2690,7 +2693,7 @@ export const MwhSettingsModal: React.FC = () => {
                             setAcpFormCommand(e.target.value);
                             setAcpProbeStatus(null);
                           }}
-                          placeholder="例如: C:\Program Files\nodejs\node.exe 或 node"
+                          placeholder={t('agents.formCmdPlaceholder')}
                           className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1]`}
                         />
 
@@ -2707,13 +2710,13 @@ export const MwhSettingsModal: React.FC = () => {
                               <>
                                 <Check className="w-3.5 h-3.5 shrink-0" />
                                 <span className="truncate">
-                                  可执行文件已就绪: {acpProbeStatus.path}
+                                  {t('agents.probeOk', { path: acpProbeStatus.path || '' })}
                                 </span>
                               </>
                             ) : (
                               <>
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                <span>未找到可执行文件 ({acpProbeStatus.error || '检查路径拼写'})</span>
+                                <span>{t('agents.probeFail', { error: acpProbeStatus.error || t('agents.probeCheckSpelling') })}</span>
                               </>
                             )}
                           </div>
@@ -2722,17 +2725,17 @@ export const MwhSettingsModal: React.FC = () => {
 
                       {/* 启动参数 Args */}
                       <div className="space-y-1">
-                        <label className="text-xs font-medium block">启动参数 (Args)</label>
+                        <label className="text-xs font-medium block">{t('agents.formArgsLabel')}</label>
                         <input
                           type="text"
                           disabled={acpSaving}
                           value={acpFormArgs}
                           onChange={(e) => setAcpFormArgs(e.target.value)}
-                          placeholder="以空格分隔，例如: C:\path\to\agent.js --acp"
+                          placeholder={t('agents.formArgsPlaceholder')}
                           className={`w-full px-3 py-1.5 rounded-xl text-xs font-mono border border-transparent ${subtleBg} focus:outline-none focus:border-[#6366F1]`}
                         />
                         <div className={`text-[10.5px] ${mutedText}`}>
-                          提示：执行时输入提示词将自动作为后续参数或经 stdin 管道传递。
+                          {t('agents.formArgsHint')}
                         </div>
                       </div>
 
@@ -2740,12 +2743,12 @@ export const MwhSettingsModal: React.FC = () => {
                       <div
                         className={`flex items-center justify-between gap-3 rounded-[10px] px-3 py-2 ${subtleBg}`}
                       >
-                        <span className="text-xs leading-relaxed">立即启用此代理</span>
+                        <span className="text-xs leading-relaxed">{t('agents.enableNow')}</span>
                         <MwhSwitch
                           checked={acpFormEnabled}
                           onChange={setAcpFormEnabled}
-                          label="立即启用此代理"
-                          title="保存后立即参与代理调度"
+                          label={t('agents.enableNow')}
+                          title={t('agents.enableNowTitle')}
                           disabled={acpSaving}
                           dark={chromeDark}
                         />
@@ -2759,14 +2762,14 @@ export const MwhSettingsModal: React.FC = () => {
                           onClick={() => setAcpModalOpen(false)}
                           className="px-3.5 py-1.5 rounded-xl text-xs font-medium hover:bg-white/10 transition-colors cursor-pointer"
                         >
-                          取消
+                          {t('common.cancel')}
                         </button>
                         <button
                           type="submit"
                           disabled={acpSaving}
                           className="px-4 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105 text-white transition-all cursor-pointer disabled:opacity-50"
                         >
-                          {acpSaving ? '保存中...' : '保存并生效'}
+                          {acpSaving ? t('agents.saving') : t('agents.saveAndApply')}
                         </button>
                       </div>
                     </form>
@@ -2784,7 +2787,7 @@ export const MwhSettingsModal: React.FC = () => {
                 <div
                   role="dialog"
                   aria-modal="true"
-                  aria-label="MWH 功能使用引导"
+                  aria-label={t('tour.ariaLabel')}
                   data-testid="mwh-tour-overlay"
                   data-tour-active-target={activeTourStep.target}
                   className="fixed inset-0 z-[950] flex items-center justify-center p-4 bg-black/60 backdrop-blur-[2px]"
@@ -2798,13 +2801,13 @@ export const MwhSettingsModal: React.FC = () => {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#6366F1]/16 text-[#A5B4FC]">
-                        步骤 {tourStepIndex + 1} / {TOUR_STEPS.length}
+                        {t('tour.stepCounter', { current: tourStepIndex + 1, total: TOUR_STEPS.length })}
                       </span>
                       <div className="flex items-center gap-1.5">
                         {TOUR_STEPS.map((s, idx) => (
                           <span
                             key={s.id}
-                            title={s.title}
+                            title={t(s.titleKey)}
                             className={`h-1.5 rounded-full transition-all duration-180 ${
                               idx === tourStepIndex
                                 ? 'w-4 bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)]'
@@ -2817,15 +2820,15 @@ export const MwhSettingsModal: React.FC = () => {
                         type="button"
                         data-action="tour-close"
                         onClick={() => setTourOpen(false)}
-                        aria-label="结束引导"
+                        aria-label={t('tour.closeAriaLabel')}
                         className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-neutral-400 hover:text-white cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
-                    <div className="text-[14.5px] font-semibold">{activeTourStep.title}</div>
-                    <p className={`text-xs leading-relaxed ${mutedText}`}>{activeTourStep.body}</p>
+                    <div className="text-[14.5px] font-semibold">{t(activeTourStep.titleKey)}</div>
+                    <p className={`text-xs leading-relaxed ${mutedText}`}>{t(activeTourStep.bodyKey)}</p>
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                       <button
@@ -2834,7 +2837,7 @@ export const MwhSettingsModal: React.FC = () => {
                         onClick={() => setTourOpen(false)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-medium ${subtleBg} hover:opacity-85 cursor-pointer`}
                       >
-                        跳过引导
+                        {t('tour.skip')}
                       </button>
                       <div className="flex items-center gap-2">
                         {!isFirstStep && (
@@ -2844,7 +2847,7 @@ export const MwhSettingsModal: React.FC = () => {
                             onClick={() => setTourStepIndex((prev) => Math.max(0, prev - 1))}
                             className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/15 cursor-pointer"
                           >
-                            上一步
+                            {t('tour.prev')}
                           </button>
                         )}
                         <button
@@ -2864,7 +2867,7 @@ export const MwhSettingsModal: React.FC = () => {
                           }}
                           className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] text-white hover:brightness-105 cursor-pointer"
                         >
-                          {isLastStep ? '完成引导' : '下一步'}
+                          {isLastStep ? t('tour.finish') : t('tour.next')}
                         </button>
                       </div>
                     </div>
@@ -2900,7 +2903,7 @@ export const MwhSettingsModal: React.FC = () => {
                       onClick={() => setConfirmModal(null)}
                       className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-[#C8C9D0] hover:bg-white/[0.08] transition-colors cursor-pointer"
                     >
-                      取消
+                      {t('common.cancel')}
                     </button>
                     <button
                       type="button"
@@ -2915,7 +2918,7 @@ export const MwhSettingsModal: React.FC = () => {
                           : 'bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:brightness-105'
                       }`}
                     >
-                      {confirmModal.confirmText || '确定'}
+                      {confirmModal.confirmText || t('common.confirm')}
                     </button>
                   </div>
                 </div>

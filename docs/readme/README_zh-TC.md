@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：讓 Muse 接入你的 Windows" width="100%">
+  <img src="../../assets/brand/mwh-cover-zh-TW.svg" alt="Muse-Win-Harness：讓 Muse 接入你的 Windows" width="100%">
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 > 2. **源於 Vibe Coding / AI 輔助開發**：本專案由開發者與編碼 Agent 透過 **Vibe Coding（AI 輔助迭代工程）** 協作完成並配合自動化門禁驗證。AI 輔助生成程式碼仍可能存在未預見的邊界問題，請務必妥善備份重要資料並參閱 [`DISCLAIMER.md`](../../DISCLAIMER.md)。
 
 <p align="center">
-  <img src="../../assets/brand/mwh-ui-mockup.svg" alt="Muse-Win-Harness 桌面視窗" width="96%">
+  <img src="../../assets/brand/mwh-ui-mockup-zh-TW.svg" alt="Muse-Win-Harness 桌面視窗" width="96%">
 </p>
 
 <p align="center">

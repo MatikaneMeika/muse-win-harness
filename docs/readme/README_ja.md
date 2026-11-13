@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../assets/brand/mwh-cover.svg" alt="Muse-Win-Harness：Muse をあなたの Windows につなぐ" width="100%">
+  <img src="../../assets/brand/mwh-cover-ja.svg" alt="Muse-Win-Harness：Muse をあなたの Windows につなぐ" width="100%">
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 > 2. **Vibe Coding / AI 支援開発による構築**：本プロジェクトは AI コーディングエージェントとの協業（**Vibe Coding**）と自動検証ゲートによって構築されました。AI 生成コードには予期せぬエッジケースが含まれる可能性があるため、重要なデータは事前にバックアップの上、[`DISCLAIMER.md`](../../DISCLAIMER.md) をご確認ください。
 
 <p align="center">
-  <img src="../../assets/brand/mwh-ui-mockup.svg" alt="Muse-Win-Harness のデスクトップ画面" width="96%">
+  <img src="../../assets/brand/mwh-ui-mockup-ja.svg" alt="Muse-Win-Harness のデスクトップ画面" width="96%">
 </p>
 
 <p align="center">

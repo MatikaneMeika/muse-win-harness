@@ -108,6 +108,1720 @@ const ICON = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Host-language detection & i18n
+ *
+ * Compliance: only harmless public page attributes are inspected
+ * (html/body lang + data-lang/data-locale, content-language meta, and the
+ * active language control inside an explicit settings/dialog surface).
+ * No cookies, no credentials, no chat content, no network interception.
+ * There is deliberately no language dropdown in the injected UI: the
+ * dictionary follows Muse.ai and falls back to navigator.language.
+ * ------------------------------------------------------------------ */
+
+const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'ja', 'en'];
+
+function localeFromRaw(raw) {
+  const value = String(raw == null ? '' : raw).trim();
+  if (!value) return null;
+  const tag = value.toLowerCase().replace(/_/g, '-');
+  if (/^zh(?:-|$)/.test(tag)) {
+    if (/(?:^|-)(?:tw|hk|mo)(?:-|$)/.test(tag) || tag.indexOf('hant') !== -1) return 'zh-TW';
+    return 'zh-CN';
+  }
+  if (/^ja(?:-|$)/.test(tag)) return 'ja';
+  if (/^en(?:-|$)/.test(tag)) return 'en';
+  return null;
+}
+
+function normalizeLocale(raw) {
+  return localeFromRaw(raw) || 'en';
+}
+
+/**
+ * Phrases are keyed by their zh-CN source text. Values use {0}/{1} for the
+ * dynamic fragments of the source phrase so word order can differ per locale.
+ * zh-CN is generated as the identity dictionary below.
+ */
+const MWH_I18N = {
+  en: {
+    // Chrome
+    '本地宿主引擎 (MWH)': 'Local host engine (MWH)',
+    '功能使用引导': 'Feature tour',
+    '关闭面板': 'Close panel',
+    '权限模式': 'Permission modes',
+    '连接端点与凭据': 'Endpoints & credentials',
+    '服务端点与认证密钥': 'Service endpoints & credentials',
+    '正在读取...': 'Reading...',
+    '未生成': 'Not generated',
+    '未拿到端点': 'Endpoint unavailable',
+    '未连接宿主': 'Host not connected',
+    '公网活跃': 'Public tunnel active',
+    '仅本地': 'Local only',
+    '停止临时隧道': 'Stop temporary tunnel',
+    '停止中': 'Stopping',
+    '停止隧道': 'Stop tunnel',
+    '拉起中': 'Starting',
+    '拉起公网隧道': 'Start public tunnel',
+    '重新拉起': 'Restart',
+    '启动临时隧道': 'Start temporary tunnel',
+    '复制完整 MCP URL': 'Copy full MCP URL',
+    '复制完整 REST URL': 'Copy full REST URL',
+    '点击直接复制真实 Token': 'Click to copy the real token',
+    '隐藏明文': 'Hide plaintext',
+    '查看完整明文 (15s 自动隐藏)': 'Reveal plaintext (auto-hides in 15s)',
+    '查看完整明文': 'Reveal plaintext',
+    '隐藏': 'Hide',
+    '查看': 'Show',
+    '复制完整真实 Token (用于请求头)': 'Copy the real token (for request headers)',
+    '复制完整真实 Token': 'Copy the real token',
+    '复制完整 Token': 'Copy full token',
+    '生成中...': 'Generating...',
+    '轮换密钥': 'Rotate key',
+    '复制配对口令': 'Copy pairing prompt',
+    '复制 MCP JSON': 'Copy MCP JSON',
+    '复制 MCP JSON (含 Token)': 'Copy MCP JSON (with token)',
+    '打开高级配置中心': 'Open advanced settings',
+    '连接与权限 · 工作区与代理 · 资源库 · 审计日志':
+      'Connectors · Workspaces · Resources · Audit',
+    '4 个配置域': '4 sections',
+    '宿主守护就绪': 'Host daemon ready',
+    '宿主未连接': 'Host not connected',
+    '一键启动未拉起宿主': 'One-click start did not launch the host',
+    'Muse 连通: {0}': 'Muse link: {0}',
+    '已连通 Muse 连接器': 'connected to the Muse connector',
+    '待连接 / 未接入': 'not connected yet',
+    '2h 降级 · {0}': 'Auto-downgrade in {0}',
+    '2h 降级已关': 'Auto-downgrade off',
+    '完全访问 2 小时后自动降级': 'Full access auto-downgrades after 2 hours',
+    '隐藏完整端点域名': 'Hide the full endpoint domain',
+    '临时显示完整端点域名 (15s)': 'Reveal full endpoint domain (15s)',
+    '临时显示完整端点域名': 'Reveal full endpoint domain',
+    '隐藏端点完整域名': 'Hide the full endpoint domain',
+    '查看完整端点域名 (15s 自动恢复脱敏)': 'Reveal full domain (re-masked in 15s)',
+    '显示完整域名': 'Show full domain',
+    '隐藏端点域名': 'Hide domain',
+    '复制': 'Copy',
+    '包含宿主 MCP 端点协议规范与协同指引，可一键复制并填入 Muse 连接器':
+      'Includes the host MCP protocol guide and coordination rules; copy it straight into the Muse connector.',
+    '查看 MCP JSON 模板与无密钥配对说明':
+      'View the MCP JSON template and key-free pairing guide',
+
+    // Connection status
+    '无服务连接': 'No service connection',
+    '已连接': 'Connected',
+    '未连接': 'Disconnected',
+    '公网隧道在线': 'Public tunnel online',
+    '公网隧道未启动': 'Public tunnel not started',
+    '宿主无响应': 'Host not responding',
+    '宿主未就绪': 'Host not ready',
+    '宿主未连接，无法生成配对信息；请先运行 MWH启动.cmd 并确认页脚显示「宿主守护就绪」':
+      'The host is not connected, so pairing details cannot be generated. Run MWH启动.cmd and wait until the footer shows "Host daemon ready".',
+    '宿主未连接，无法生成 MCP JSON；请先运行 MWH启动.cmd 并确认页脚显示「宿主守护就绪」':
+      'The host is not connected, so the MCP JSON cannot be generated. Run MWH启动.cmd and wait until the footer shows "Host daemon ready".',
+    '宿主返回的不是控制面状态': 'The host did not return control-plane state',
+    '操作失败': 'Action failed',
+    '未知错误': 'Unknown error',
+
+    // Permission profiles
+    '计划模式': 'Plan mode',
+    '计划 (只读)': 'Plan (read-only)',
+    '仅探查不修改': 'Inspect only, never modify',
+    '计划模式（只读，先计划再改）': 'Plan mode (read-only, plan before changing)',
+    '仅允许读取工作区文件、检索代码与只读状态查询，先制定方案再动手，拦截一切文件修改与写入命令。':
+      'Only workspace reads, code search and read-only status queries are allowed. Draft a plan first; every file edit and write command is blocked.',
+    '拦截所有文件写入、编辑、重命名与删除调用 (fs_mutate)':
+      'Blocks every write, edit, rename and delete call (fs_mutate)',
+    '仅放行白名单只读探针命令 (git status / git log / git diff / rg / Get-ChildItem)':
+      'Allows only allowlisted read-only probes (git status / git log / git diff / rg / Get-ChildItem)',
+    '强制校验物理路径 (realpathSync.native) 阻断 NTFS Junction 与符号链接越界读取':
+      'Resolves physical paths (realpathSync.native) to block NTFS junctions and symlink escapes',
+    '授权工作区目录内的非黑名单明文文件仍可被读取分析':
+      'Non-blocklisted plaintext files inside authorized workspaces can still be read and analysed',
+    '无法执行编译、测试脚本或启动写文件代理':
+      'Cannot run builds or tests, or start an agent that writes files',
+    '变更前确认': 'Confirm before changes',
+    '写前弹窗确认': 'Ask before every write',
+    '变更前确认（改文件前问 · 默认）': 'Confirm before changes (asks before edits · default)',
+    '只读探针静默放行；每次修改文件、运行脚本或拉起代理前均在桌面浮岛询问确认。':
+      'Read-only probes pass silently; every file edit, script run or agent launch asks for approval in the desktop island.',
+    '严格校验 realpath 物理路径，阻断 NTFS Junction 与符号链接越界写入':
+      'Strict realpath checks block NTFS junction and symlink write escapes',
+    '内置敏感路径硬黑名单：拦截 .env*、~/.ssh、~/.aws、%APPDATA% 与浏览器凭据目录':
+      'Hard blocklist for sensitive paths: .env*, ~/.ssh, ~/.aws, %APPDATA% and browser credential stores',
+    '写文件或执行命令前在底部浮岛弹出确认，批准后自动记录无密钥回执供 Muse 轮询':
+      'Asks in the bottom island before writing or running commands, then records a key-free receipt for Muse to poll',
+    '每次写操作前自动创建 Git Shadow 快照，支持按工作区单条一键回滚':
+      'Creates a Git Shadow snapshot before each write, restorable per workspace with one click',
+    '经人工确认放行的工作区脚本在当前登录用户权限下运行，无 OS 内核级虚拟化沙箱':
+      'Approved workspace scripts run with the current user token, without an OS-level virtualization sandbox',
+    '自主模式': 'Autonomous',
+    '自动快照放行': 'Auto-snapshot and allow',
+    '自主模式（有风险才问）': 'Autonomous (asks only for risk)',
+    '授权工作区内的常规文件读写自动创建写前快照并静默执行，仅高风险命令或破坏性操作询问确认。':
+      'Routine reads and writes inside authorized workspaces snapshot first and run silently; only high-risk or destructive actions ask.',
+    '保留完整工作区路径围栏 (realpath) 与敏感凭据路径黑名单拦截':
+      'Keeps the full realpath workspace fence and the sensitive credential blocklist',
+    '工作区内常规 fs_mutate 读写自动前置创建 Git Shadow 影子快照，无需逐次点击确认':
+      'Routine fs_mutate calls inside the workspace snapshot first and skip per-action clicks',
+    '高风险命令、强制推送 (git push --force)、递归删除 (rm -rf / Remove-Item -Recurse) 与系统级指令仍强制要求人工确认':
+      'High-risk commands, force pushes (git push --force), recursive deletes (rm -rf / Remove-Item -Recurse) and system-level commands still require approval',
+    '所有子进程绑定 Win32 Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) + CREATE_NO_WINDOW':
+      'Every child process is bound to a Win32 Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) + CREATE_NO_WINDOW',
+    '授权工作区内的常规代码修改会自动落盘，若需撤销请前往「数据控制」单条回滚快照':
+      'Routine edits inside authorized workspaces are written automatically; to undo one, roll back its snapshot under Data control',
+    '完全访问': 'Full access',
+    '跨盘普通放行': 'Cross-drive allow',
+    '完全访问（减少确认）': 'Full access (fewer prompts)',
+    '解除工作区目录围栏，跨盘普通文件读写直接执行；仅强制推送、递归删除、磁盘格式化及敏感凭据路径仍需确认。':
+      'Removes the workspace fence so ordinary cross-drive reads and writes run directly; only force pushes, recursive deletes, disk formatting and sensitive credential paths still ask.',
+    '工作区外的普通文件读写、重命名、单文件删除不再因「越界」单独升为 critical，大幅减少打断':
+      'Ordinary reads, writes, renames and single-file deletes outside the workspace are no longer escalated to critical for being out of scope',
+    '真正破坏性操作（强制推送、递归删除、磁盘格式化、系统管理命令）及敏感凭据黑名单路径仍强制要求人工确认':
+      'Truly destructive actions (force push, recursive delete, disk format, system administration) and blocklisted credential paths still require approval',
+    '保留 Win32 Job Object 进程树句柄追踪、全局急停、审计日志与 2 小时自动降级保护计时器':
+      'Keeps Win32 Job Object tree tracking, emergency stop, audit logging and the 2-hour auto-downgrade timer',
+    '左侧活动栏 MWH 状态图标与面板常亮红环警示（不渲染全窗口边框光晕）':
+      'The MWH activity icon and panel keep a steady red ring (no full-window border glow)',
+    '已解除工作区目录边界限制，模型可跨盘读写普通目录文件，请仅在受信任任务中开启':
+      'The workspace boundary is lifted, so the model can read and write ordinary files across drives. Enable only for trusted tasks.',
+
+    // Tour
+    '左栏入口与健康状态': 'Sidebar entry and health',
+    '点击 Muse 左侧导航栏 MWH 紫蓝徽标随时呼出或收起控制抽屉；徽标右下角圆点实时反映宿主守护与公网隧道连通状态（冰川青蓝为就绪，赤陶珊瑚红为离线）。':
+      'Click the MWH badge in Muse’s left navigation to open or fold the control drawer. The dot on the badge tracks host daemon and public tunnel health: glacier cyan is ready, terracotta coral is offline.',
+    '四档权限与 2 小时自动降级': 'Four permission tiers and 2-hour auto-downgrade',
+    '按任务风险一键切换「计划模式（只读） / 变更前确认（默认） / 自主模式（自动快照） / 完全访问（跨盘放行）」。开启完全访问时支持 2 小时自动降级保护。':
+      'Switch by task risk: Plan (read-only) / Confirm before changes (default) / Autonomous (auto snapshots) / Full access (cross-drive). Full access supports a 2-hour auto-downgrade.',
+    '端点防窥脱敏与一键配对': 'Masked endpoints and one-click pairing',
+    '公网 MCP/REST 端点与 Bearer Token 默认自动脱敏防截屏泄露（点击眼睛图标可临时查看 15 秒）；点击「复制配对口令」或「复制 MCP JSON」即可一键填入 Muse 连接器。':
+      'Public MCP/REST endpoints and the Bearer token are masked to prevent screenshot leaks; the eye icon reveals them for 15 seconds. Copy the pairing prompt or MCP JSON straight into the Muse connector.',
+    '四栏高级配置中心': 'Four-tab advanced settings',
+    '展开右侧伴随子面板，集中管理「连接与权限」、「工作区与代理（目录白名单与 ACP 引擎）」、「资源库（本机 MCP 与 Skill 原地开关）」及「审计日志（Git Shadow 写前快照单条回滚）」。':
+      'The side panel groups connectors and permissions, workspaces and agents (directory allowlist and ACP engines), the resource library (local MCP and skills toggled in place), and the audit log with one-click Git Shadow rollback.',
+    '底部实时审批灵动岛': 'Live approval island',
+    '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。':
+      'When Muse asks to edit files or run a command, the bottom island expands with the risk level and target path: allow once, always allow in this workspace, reject, or force stop a running task.',
+    '结束引导 (Esc)': 'End tour (Esc)',
+    '结束引导': 'End tour',
+    '跳过引导': 'Skip tour',
+    '上一步': 'Back',
+    '下一步': 'Next',
+    '完成引导': 'Finish',
+    '步骤 {0} / {1}': 'Step {0} / {1}',
+
+    // Connectors tab
+    '连接与权限': 'Connectors & permissions',
+    '网络隧道与四档权限': 'Tunnels and four permission tiers',
+    '工作区与代理': 'Workspaces & agents',
+    '目录白名单与 ACP 引擎': 'Directory allowlist and ACP engines',
+    '资源库': 'Resource library',
+    '本机 MCP 与 Skill': 'Local MCP & skills',
+    '审计日志': 'Audit log',
+    '影子快照与审计日志': 'Shadow snapshots & audit log',
+    'Cloudflare 固定域名': 'Cloudflare named domain',
+    'Named Tunnel · 推荐常驻免配对': 'Named Tunnel · persistent, no re-pairing',
+    'Cloudflare 临时隧道': 'Cloudflare quick tunnel',
+    'Quick Tunnel · 现场按需拉起': 'Quick Tunnel · start on demand',
+    'Tailscale 私网 / Funnel': 'Tailscale private network / Funnel',
+    '100.x.y.z 组网与 MagicDNS': '100.x.y.z mesh and MagicDNS',
+    '自定义 TLS / FRP 反代': 'Custom TLS / FRP proxy',
+    '自有云服务器 / Nginx / FRP 端点': 'Your own server / Nginx / FRP endpoint',
+    '正在切换...': 'Switching...',
+    '当前生效': 'Active',
+    'Cloudflare Named Tunnel 配置': 'Cloudflare Named Tunnel setup',
+    '固定公网域名 (指向 127.0.0.1:19820)': 'Public domain (points to 127.0.0.1:19820)',
+    '留空则保持已保存的 Token 不变': 'Leave blank to keep the saved token',
+    '保存中...': 'Saving...',
+    '保存并应用': 'Save and apply',
+    'Cloudflare Quick Tunnel (临时公网)': 'Cloudflare Quick Tunnel (temporary)',
+    '已拉起并转发至 127.0.0.1:19820': 'Running and forwarding to 127.0.0.1:19820',
+    '未拉起 (仅本地监听 127.0.0.1:19820)': 'Not running (local listener on 127.0.0.1:19820 only)',
+    '当前域名: {0}': 'Current domain: {0}',
+    '未开启公网隧道 · 本地 127.0.0.1:19820': 'No public tunnel · local 127.0.0.1:19820 only',
+    'Tailscale 私网直连与 Funnel 网关': 'Tailscale private network and Funnel gateway',
+    'Tailscale 节点 IP': 'Tailscale node IP',
+    'MagicDNS 地址': 'MagicDNS address',
+    '自定义 TLS / FRP 反向代理': 'Custom TLS / FRP reverse proxy',
+    '公网 HTTPS 地址': 'Public HTTPS address',
+    '四档权限模式': 'Permission modes',
+    '「完全访问」2 小时自动降级': 'Full access auto-downgrade after 2 hours',
+    '剩余计时: {0}': 'Time left: {0}',
+    '已开启，点击关闭': 'On, click to turn off',
+    '已关闭，点击开启': 'Off, click to turn on',
+    '多端审批': 'Multi-device approval',
+    '关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。':
+      'Off: approvals stay in the local island. On: routine writes, ordinary commands and subagent launches use Muse’s native cards (phone, web and Mac can approve) with no second island prompt. Destructive actions such as disk deletes and force pushes are still checked locally against the command. If that tool is set to “always allow” in Muse, the native card is skipped too.',
+    '安全机制与边界如实披露 (No Security Washing)': 'Safeguards and limits disclosed (no security washing)',
+    '当前生效的保护机制：': 'Active protections:',
+    '未覆盖边界说明：': 'Uncovered boundaries:',
+
+    // Daemon tab
+    '工作区': 'Workspaces',
+    '授权工作区目录白名单 (Workspace Roots)': 'Authorized workspace roots',
+    '新增授权工作区路径': 'New authorized workspace path',
+    '输入本地绝对路径，例如 E:\\Workspace\\MyRustApp': 'Enter an absolute local path, e.g. C:\\Workspace\\MyApp',
+    '添加目录': 'Add folder',
+    '移除工作区': 'Remove workspace',
+    '尚未授权任何工作区目录': 'No workspace authorized yet',
+    'Windows 本地守护进程 (mwh-daemon.exe)': 'Windows local daemon (mwh-daemon.exe)',
+    '在线 (127.0.0.1:19820)': 'Online (127.0.0.1:19820)',
+    '离线 · 未连接本地守护进程': 'Offline · local daemon not connected',
+    '进程 PID / 内存': 'Process PID / memory',
+    '静默无黑框标志': 'No console window',
+    '未启用': 'Disabled',
+    '活跃 Job Object 树': 'Active Job Object trees',
+    '{0} 个受控句柄': '{0} tracked handles',
+    '全局急停（终止所有 Win32 Job Object 进程树）':
+      'Emergency stop (terminate all Win32 Job Object process trees)',
+    '确认对所有受控 Win32 Job Object 进程树执行全局急停？':
+      'Run an emergency stop on every tracked Win32 Job Object process tree?',
+    '立即急停': 'Stop now',
+    '添加 ACP 代理': 'Add ACP agent',
+    '添加自定义 ACP 代理': 'Add custom ACP agent',
+    '自定义 ACP 代理': 'Custom ACP agents',
+    '全局通用配置 (%USERPROFILE%\\.mwh\\acp-profiles.json) · 可按档案独立启停 · 实时热更新':
+      'Shared config (%USERPROFILE%\\.mwh\\acp-profiles.json) · toggle each profile · live hot reload',
+    '暂无自定义 ACP 代理。添加后支持路径探测、按档案独立启停与 Worktree 隔离运行。':
+      'No custom ACP agents yet. Add one to probe its path, toggle it independently and run it in an isolated worktree.',
+    '+ 添加首个 ACP 代理': '+ Add your first ACP agent',
+    '已停用': 'Disabled',
+    '已启用，点击停用': 'Enabled, click to disable',
+    '已停用，点击启用': 'Disabled, click to enable',
+    '可执行文件就绪': 'Executable ready',
+    '未找到可执行文件': 'Executable not found',
+    '命令: {0}': 'Command: {0}',
+    '参数: {0}': 'Args: {0}',
+    '编辑 ACP 代理': 'Edit ACP agent',
+    '删除 ACP 代理': 'Delete ACP agent',
+    'Git Worktree 并发隔离分支池 (代理权限 <= 父权限)':
+      'Git worktree isolation pool (agent permissions <= parent)',
+    '当前父级档位：{0}': 'Parent mode: {0}',
+    '选择请求的代理模式': 'Requested agent mode',
+    '只读 (计划模式)': 'Read-only (plan mode)',
+    '工作区读写 (变更前确认 / 自主)': 'Workspace write (confirm / autonomous)',
+    '新建隔离 Worktree': 'New isolated worktree',
+    '· 代理: {0}': '· agent: {0}',
+    '· 生效: {0}': '· effective: {0}',
+    '合并回主分支': 'Merge into main',
+    '已清理 (MISSING)': 'Cleaned up (MISSING)',
+    '清理分支': 'Clean up branch',
+    '切换分页': 'Next page',
+    '暂无隔离 Worktree 分支': 'No isolated worktree branches yet',
+
+    // Resource library
+    '打开即对 Muse 生效，默认全部关闭。': 'Takes effect in Muse immediately; everything starts disabled.',
+    'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。':
+      'MCP runs with your Windows user permissions and no extra sandbox. Quitting or an emergency stop also terminates spawned child processes.',
+    '扫描中...': 'Scanning...',
+    '扫描本机': 'Scan this PC',
+    '添加': 'Add',
+    '编辑资源': 'Edit resource',
+    '添加本机资源': 'Add local resource',
+    '资源类型': 'Type',
+    '本机 MCP': 'Local MCP',
+    '显示名称 (Display Name)': 'Display name',
+    '例如: MyTools': 'e.g. MyTools',
+    '传输协议': 'Transport',
+    '执行命令 (Command)': 'Command',
+    '例如: node 或 C:\\tools\\server.exe': 'e.g. node or C:\\path\\to\\server.exe',
+    '启动参数 (Args)': 'Arguments',
+    '以空格分隔，例如: dist/index.js --port 8080': 'Space separated, e.g. dist/index.js --port 8080',
+    '工作目录 (CWD, 可选)': 'Working directory (optional)',
+    '默认用户主目录': 'Defaults to the user home directory',
+    'Skill 目录路径': 'Skill directory',
+    '需包含 SKILL.md 的本地目录': 'Local directory containing SKILL.md',
+    '标记为只读（在计划模式下放行探查）': 'Mark as read-only (still probeable in plan mode)',
+    '标记为只读': 'Mark as read-only',
+    '只读资源在计划模式下仍可被探查': 'Read-only resources can still be probed in plan mode',
+    '立即启用（默认关闭）': 'Enable immediately (off by default)',
+    '立即启用': 'Enable immediately',
+    '添加完成后立即对 Muse 生效': 'Takes effect in Muse as soon as it is added',
+    '探测中...': 'Probing...',
+    '探测连接': 'Test connection',
+    '探测成功': 'Connected',
+    '探测失败: {0}': 'Probe failed: {0}',
+    '取消': 'Cancel',
+    '保存': 'Save',
+    '启用后，工具会出现在 Muse 现有的 /mcp 里，直接调用即可。':
+      'Once enabled, these tools appear in Muse’s existing /mcp endpoint and can be called directly.',
+    '暂无已登记的本机 MCP 服务器，可通过上方「扫描本机」自动发现或「添加」手动配置。':
+      'No local MCP servers registered yet. Use “Scan this PC” above or “Add” to configure one.',
+    '扫描发现': 'Found by scan',
+    '手动添加': 'Added manually',
+    '启动故障': 'Startup fault',
+    '已关闭': 'Disabled',
+    '只读': 'Read-only',
+    '{0} 个工具': '{0} tools',
+    '启动故障，开关保持启用由你决定是否关闭':
+      'Startup fault; the switch stays on so you decide when to turn it off',
+    '将出现在 Muse 的 tools/list': 'Will appear in Muse’s tools/list',
+    '已暂时从 /mcp 撤下，修复后会自动恢复': 'Temporarily removed from /mcp; restores automatically once fixed',
+    '原名: {0}': 'Original name: {0}',
+    '暂无工具（启用且运行正常后自动列出）': 'No tools yet (listed once enabled and running)',
+    '名称和简短说明会自动备好，需要全文时再读一次。':
+      'Names and short descriptions are prepared automatically; the full text is read only when needed.',
+    '暂无已登记的 Skill，可通过上方「扫描本机」自动发现或「添加」手动配置。':
+      'No skills registered yet. Use “Scan this PC” above or “Add” to configure one.',
+    '不可用': 'Unavailable',
+    '已就绪': 'Ready',
+    '暂无说明': 'No description',
+    '来源目录: {0}': 'Source directory: {0}',
+
+    // Snapshots & audit
+    '写前影子快照': 'Pre-write shadow snapshots',
+    'Muse 写入前自动保存的安全检查点，支持单条无损还原':
+      'Safety checkpoints saved automatically before Muse writes, restorable one at a time',
+    '最新优先': 'Newest first',
+    '最早优先': 'Oldest first',
+    '按改动文件数': 'By files changed',
+    '每目录最近 3 次': 'Latest 3 per folder',
+    '每目录最近 5 次': 'Latest 5 per folder',
+    '每目录最近 10 次': 'Latest 10 per folder',
+    '显示全部 ({0})': 'Show all ({0})',
+    '取消全选': 'Clear selection',
+    '全选当前可见': 'Select visible',
+    '全部展开': 'Expand all',
+    '全部折叠': 'Collapse all',
+    '已选 {0} 条记录': '{0} selected',
+    '磁盘瘦身（清理旧快照）': 'Disk cleanup (prune old snapshots)',
+    '按工作区仅保留最近 N 条快照记录，自动清理更早记录':
+      'Keep only the latest N snapshots per workspace and remove older records',
+    '磁盘瘦身：仅留 {0}': 'Disk cleanup: keep {0}',
+    '删除所选记录 ({0})': 'Delete selected ({0})',
+    '删除所选记录': 'Delete selected',
+    '删除所选快照': 'Delete selected snapshots',
+    '暂无写前影子快照记录': 'No pre-write snapshots yet',
+    '{0}/{1} 条快照': '{0}/{1} snapshots',
+    '{0} 条快照': '{0} snapshots',
+    '选择快照 {0}': 'Select snapshot {0}',
+    '写入前快照': 'Pre-write snapshot',
+    '回滚影子快照': 'Roll back snapshot',
+    '回滚此快照': 'Roll back this snapshot',
+    '已回滚': 'Rolled back',
+    '{0} 个文件变动': '{0} files changed',
+    '查看该目录下其余 {0} 条快照...': 'Show the other {0} snapshots in this folder...',
+    '本地审计日志 (.mwh/logs/audit.jsonl)': 'Local audit log (.mwh/logs/audit.jsonl)',
+    '暂无审计记录': 'No audit records yet',
+    '模式变更': 'Mode change',
+    '来源: {0}': 'Source: {0}',
+    '条快照...': ' snapshots...',
+
+    // Approval island
+    '待授权': 'Approval',
+    '运行中': 'Running',
+    '已完成': 'Done',
+    '待命': 'Standby',
+    '本地任务执行完成 · 修改 {0} 个文件': 'Task finished · {0} files changed',
+    '执行完成 · 改动数未统计': 'Finished · change count unavailable',
+    '执行完成 · 未检测到文件改动': 'Finished · no file changes detected',
+    '等待本机执行授权 · {0}': 'Awaiting local execution approval · {0}',
+    '本地任务执行中': 'Running local task',
+    '空闲·待命': 'Idle · standby',
+    'CREATE_NO_WINDOW · 耗时 {0} · 步骤 {1}/{2}': 'CREATE_NO_WINDOW · {0} · step {1}/{2}',
+    '高危 · 需签名': 'High risk · signature required',
+    '队列 {0}/{1}': 'Queue {0}/{1}',
+    '风险 {0}': 'Risk {0}',
+    '确认强杀？': 'Stop it?',
+    '强杀中止': 'Force stop',
+    '关闭任务提示': 'Dismiss task notice',
+    '展开任务面板': 'Expand task panel',
+    '收起为胶囊': 'Collapse to capsule',
+    '当前没有进行中的本机任务': 'No local tasks running',
+    '云端下发命令后会在这里实时显示进度、耗时与输出；点右侧箭头可收成胶囊常驻。':
+      'Commands from the cloud stream progress, timing and output here. Use the arrow to collapse the panel into a capsule.',
+    '目标路径: {0}': 'Target path: {0}',
+    '写前影子快照: {0}': 'Pre-write snapshot: {0}',
+    '拒绝': 'Reject',
+    '本工作区始终允许': 'Always allow in this workspace',
+    '允许一次': 'Allow once',
+    '一键回滚快照': 'Roll back snapshot',
+    '合并 Worktree': 'Merge worktree',
+    'MWH 底部任务与审批面板': 'MWH task and approval panel',
+    '调整面板大小': 'Resize panel',
+
+    // Confirm dialogs
+    '安全确认': 'Confirm',
+    '确定': 'OK',
+    '高风险安全确认': 'High-risk confirmation',
+    '警告：完全访问模式将解除授权工作区围栏，跨盘普通文件读写与命令直接静默执行，仅格式化等极端破坏性操作保留拦截。是否确认切换？':
+      'Warning: full access lifts the workspace fence, so ordinary cross-drive reads, writes and commands run silently; only extreme actions such as formatting are still blocked. Switch anyway?',
+    '确认切换': 'Switch',
+    '确认删除': 'Delete',
+    '确认回滚': 'Roll back',
+    '确认轮换': 'Rotate',
+    '清理旧快照': 'Prune old snapshots',
+    '确定要删除自定义 ACP 代理 "{0}" 吗？此操作将立即热更新移除。':
+      'Delete the custom ACP agent "{0}"? It is removed immediately with a hot reload.',
+    '确定要从资源库中移除 "{0}" 吗？此操作将立即生效。':
+      'Remove "{0}" from the resource library?',
+    '将永久删除已选 {0} 条写前影子快照记录，磁盘会释放对应空间；删除后无法再回滚到这些检查点（你的代码不受影响）。是否确认？':
+      'This permanently deletes {0} selected pre-write snapshots and frees the disk space; those checkpoints can no longer be restored (your code is untouched). Continue?',
+    '将按工作区仅保留最近 {0} 条快照记录，更早的历史快照会被永久清除以释放磁盘空间。此操作只删快照、不改动你的代码。是否继续？':
+      'Only the latest {0} snapshots per workspace will remain; older ones are permanently removed to free disk space. Only snapshots are deleted, your code is untouched. Continue?',
+
+    // Toasts
+    '已复制到剪贴板': 'Copied to clipboard',
+    '复制失败，请重试': 'Copy failed, please retry',
+    '当前环境不支持剪贴板': 'Clipboard is not available here',
+    '已切换到「{0}」': 'Switched to "{0}"',
+    '切换失败: {0}': 'Switch failed: {0}',
+    '已复制完整真实 Bearer Token': 'Copied the real Bearer token',
+    '已复制完整真实 Bearer Token 到剪贴板': 'Copied the real Bearer token to the clipboard',
+    '已轮换新 Token 并复制到剪贴板': 'Rotated the token and copied it to the clipboard',
+    '已复制 MCP JSON 配置 (含真实 Token)': 'Copied the MCP JSON (with the real token)',
+    '已复制无密钥 SKILL.md 配对说明': 'Copied the key-free SKILL.md pairing guide',
+    '已请求重新拉起临时隧道': 'Requested a restart of the temporary tunnel',
+    '临时公网隧道已停止': 'Temporary public tunnel stopped',
+    '已触发全局急停': 'Emergency stop triggered',
+    '已回滚至快照 {0}': 'Rolled back to snapshot {0}',
+    '回滚中...': 'Rolling back...',
+    '回滚失败: {0}': 'Rollback failed: {0}',
+    '保存失败: {0}': 'Save failed: {0}',
+    '删除失败: {0}': 'Delete failed: {0}',
+    '切换驱动失败: {0}': 'Could not switch the driver: {0}',
+    '加载审计与快照失败: {0}': 'Could not load audit and snapshot data: {0}',
+    '扫描失败: {0}': 'Scan failed: {0}',
+    '扫描完成：发现 {0} 项，添加 {1} 项': 'Scan complete: {0} found, {1} added',
+    'ACP 代理已保存并热更新': 'ACP agent saved and hot-reloaded',
+    '已删除资源 {0}': 'Resource {0} deleted',
+    '已添加工作区: {0}': 'Workspace added: {0}',
+    '已移除工作区: {0}': 'Workspace removed: {0}',
+    '该工作区已在白名单中': 'That workspace is already allowed',
+    '探测失败': 'Probe failed',
+    '保存失败': 'Save failed',
+    '删除失败': 'Delete failed',
+  },
+  ja: {
+    '本地宿主引擎 (MWH)': 'ローカルホストエンジン (MWH)',
+    '功能使用引导': '機能ツアー',
+    '关闭面板': 'パネルを閉じる',
+    '权限模式': '権限モード',
+    '连接端点与凭据': 'エンドポイントと認証情報',
+    '服务端点与认证密钥': 'サービスエンドポイントと認証情報',
+    '正在读取...': '読み込み中...',
+    '未生成': '未生成',
+    '未拿到端点': 'エンドポイント未取得',
+    '未连接宿主': 'ホスト未接続',
+    '公网活跃': '公開トンネル稼働中',
+    '仅本地': 'ローカルのみ',
+    '停止临时隧道': '一時トンネルを停止',
+    '停止中': '停止中',
+    '停止隧道': 'トンネルを停止',
+    '拉起中': '起動中',
+    '拉起公网隧道': '公開トンネルを起動',
+    '重新拉起': '再起動',
+    '启动临时隧道': '一時トンネルを起動',
+    '复制完整 MCP URL': 'MCP URL 全体をコピー',
+    '复制完整 REST URL': 'REST URL 全体をコピー',
+    '点击直接复制真实 Token': 'クリックで実際のトークンをコピー',
+    '隐藏明文': '平文を隠す',
+    '查看完整明文 (15s 自动隐藏)': '平文を表示（15 秒後に自動で隠す）',
+    '查看完整明文': '平文を表示',
+    '隐藏': '隠す',
+    '查看': '表示',
+    '复制完整真实 Token (用于请求头)': '実際のトークンをコピー（リクエストヘッダー用）',
+    '复制完整真实 Token': '実際のトークンをコピー',
+    '复制完整 Token': 'トークン全体をコピー',
+    '生成中...': '生成中...',
+    '轮换密钥': 'キーをローテート',
+    '复制配对口令': 'ペアリングプロンプトをコピー',
+    '复制 MCP JSON': 'MCP JSON をコピー',
+    '复制 MCP JSON (含 Token)': 'MCP JSON をコピー（トークン込み）',
+    '打开高级配置中心': '詳細設定を開く',
+    '连接与权限 · 工作区与代理 · 资源库 · 审计日志':
+      '接続と権限 · ワークスペースとエージェント · リソース · 監査ログ',
+    '4 个配置域': '4 セクション',
+    '宿主守护就绪': 'ホストデーモン準備完了',
+    '宿主未连接': 'ホスト未接続',
+    '一键启动未拉起宿主': 'ワンクリック起動でホストが起動しませんでした',
+    'Muse 连通: {0}': 'Muse 接続: {0}',
+    '已连通 Muse 连接器': 'Muse コネクタに接続済み',
+    '待连接 / 未接入': '未接続',
+    '2h 降级 · {0}': '自動ダウングレード {0}',
+    '2h 降级已关': '自動ダウングレード オフ',
+    '完全访问 2 小时后自动降级': 'フルアクセスは 2 時間後に自動ダウングレード',
+    '隐藏完整端点域名': 'エンドポイントのドメイン全体を隠す',
+    '临时显示完整端点域名 (15s)': 'ドメイン全体を一時表示（15 秒）',
+    '临时显示完整端点域名': 'ドメイン全体を一時表示',
+    '隐藏端点完整域名': 'エンドポイントのドメイン全体を隠す',
+    '查看完整端点域名 (15s 自动恢复脱敏)': 'ドメイン全体を表示（15 秒後に再マスク）',
+    '显示完整域名': 'ドメイン全体を表示',
+    '隐藏端点域名': 'ドメインを隠す',
+    '复制': 'コピー',
+    '包含宿主 MCP 端点协议规范与协同指引，可一键复制并填入 Muse 连接器':
+      'ホスト MCP のプロトコル仕様と連携ガイドを含みます。コピーして Muse コネクタに貼り付けられます。',
+    '查看 MCP JSON 模板与无密钥配对说明': 'MCP JSON テンプレートと鍵なしペアリング手順を表示',
+    '无服务连接': 'サービス未接続',
+    '已连接': '接続済み',
+    '未连接': '未接続',
+    '公网隧道在线': '公開トンネル オンライン',
+    '公网隧道未启动': '公開トンネル 未起動',
+    '宿主无响应': 'ホストが応答しません',
+    '宿主未就绪': 'ホスト未準備',
+    '宿主未连接，无法生成配对信息；请先运行 MWH启动.cmd 并确认页脚显示「宿主守护就绪」':
+      'ホスト未接続のためペアリング情報を生成できません。MWH启动.cmd を実行し、フッターに「ホストデーモン準備完了」が表示されるまでお待ちください。',
+    '宿主未连接，无法生成 MCP JSON；请先运行 MWH启动.cmd 并确认页脚显示「宿主守护就绪」':
+      'ホスト未接続のため MCP JSON を生成できません。MWH启动.cmd を実行し、フッターに「ホストデーモン準備完了」が表示されるまでお待ちください。',
+    '宿主返回的不是控制面状态': 'ホストが制御プレーンの状態を返しませんでした',
+    '操作失败': '操作に失敗しました',
+    '未知错误': '不明なエラー',
+    '计划模式': '計画モード',
+    '计划 (只读)': '計画（読み取り専用）',
+    '仅探查不修改': '調査のみ、変更なし',
+    '计划模式（只读，先计划再改）': '計画モード（読み取り専用、計画してから変更）',
+    '仅允许读取工作区文件、检索代码与只读状态查询，先制定方案再动手，拦截一切文件修改与写入命令。':
+      'ワークスペースの読み取り、コード検索、読み取り専用の状態確認のみを許可します。まず計画を立て、ファイル変更と書き込みコマンドはすべて遮断します。',
+    '拦截所有文件写入、编辑、重命名与删除调用 (fs_mutate)':
+      'ファイルの書き込み・編集・名前変更・削除の呼び出しをすべて遮断 (fs_mutate)',
+    '仅放行白名单只读探针命令 (git status / git log / git diff / rg / Get-ChildItem)':
+      '許可リストの読み取り専用プローブのみ実行 (git status / git log / git diff / rg / Get-ChildItem)',
+    '强制校验物理路径 (realpathSync.native) 阻断 NTFS Junction 与符号链接越界读取':
+      '物理パスを厳格に検証 (realpathSync.native) し、NTFS ジャンクションとシンボリックリンクの越境を遮断',
+    '授权工作区目录内的非黑名单明文文件仍可被读取分析':
+      '許可ワークスペース内のブロックリスト外の平文ファイルは読み取り・分析できます',
+    '无法执行编译、测试脚本或启动写文件代理':
+      'ビルドやテストの実行、ファイルを書き込むエージェントの起動はできません',
+    '变更前确认': '変更前に確認',
+    '写前弹窗确认': '書き込み前に確認',
+    '变更前确认（改文件前问 · 默认）': '変更前に確認（編集前に確認 · 既定）',
+    '只读探针静默放行；每次修改文件、运行脚本或拉起代理前均在桌面浮岛询问确认。':
+      '読み取り専用プローブはそのまま通し、ファイル編集・スクリプト実行・エージェント起動のたびにデスクトップアイランドで確認します。',
+    '严格校验 realpath 物理路径，阻断 NTFS Junction 与符号链接越界写入':
+      'realpath を厳格に検証し、NTFS ジャンクションとシンボリックリンクの越境書き込みを遮断',
+    '内置敏感路径硬黑名单：拦截 .env*、~/.ssh、~/.aws、%APPDATA% 与浏览器凭据目录':
+      '機密パスのハードブロックリスト：.env*、~/.ssh、~/.aws、%APPDATA%、ブラウザの認証情報を遮断',
+    '写文件或执行命令前在底部浮岛弹出确认，批准后自动记录无密钥回执供 Muse 轮询':
+      '書き込みやコマンド実行の前に下部アイランドで確認し、承認後は鍵なしの受領記録を Muse のポーリング用に残します',
+    '每次写操作前自动创建 Git Shadow 快照，支持按工作区单条一键回滚':
+      '書き込みのたびに Git Shadow スナップショットを作成し、ワークスペース単位で 1 件ずつワンクリック復元できます',
+    '经人工确认放行的工作区脚本在当前登录用户权限下运行，无 OS 内核级虚拟化沙箱':
+      '承認済みのワークスペーススクリプトは現在のユーザー権限で実行され、OS カーネルレベルの仮想化サンドボックスはありません',
+    '自主模式': '自律モード',
+    '自动快照放行': '自動スナップショットで許可',
+    '自主模式（有风险才问）': '自律モード（リスク時のみ確認）',
+    '授权工作区内的常规文件读写自动创建写前快照并静默执行，仅高风险命令或破坏性操作询问确认。':
+      '許可ワークスペース内の通常の読み書きは書き込み前スナップショットを作成して静かに実行し、高リスクまたは破壊的な操作のみ確認します。',
+    '保留完整工作区路径围栏 (realpath) 与敏感凭据路径黑名单拦截':
+      'realpath によるワークスペース境界と機密認証情報のブロックリストを維持',
+    '工作区内常规 fs_mutate 读写自动前置创建 Git Shadow 影子快照，无需逐次点击确认':
+      'ワークスペース内の通常の fs_mutate は事前に Git Shadow スナップショットを作成し、都度のクリックは不要',
+    '高风险命令、强制推送 (git push --force)、递归删除 (rm -rf / Remove-Item -Recurse) 与系统级指令仍强制要求人工确认':
+      '高リスクコマンド、強制プッシュ (git push --force)、再帰削除 (rm -rf / Remove-Item -Recurse)、システムコマンドは引き続き承認が必要',
+    '所有子进程绑定 Win32 Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) + CREATE_NO_WINDOW':
+      'すべての子プロセスを Win32 Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) + CREATE_NO_WINDOW に紐付け',
+    '授权工作区内的常规代码修改会自动落盘，若需撤销请前往「数据控制」单条回滚快照':
+      '許可ワークスペース内の通常の変更は自動保存されます。取り消す場合は「データ管理」で該当スナップショットを復元してください',
+    '完全访问': 'フルアクセス',
+    '跨盘普通放行': 'ドライブ横断を許可',
+    '完全访问（减少确认）': 'フルアクセス（確認を削減）',
+    '解除工作区目录围栏，跨盘普通文件读写直接执行；仅强制推送、递归删除、磁盘格式化及敏感凭据路径仍需确认。':
+      'ワークスペースの境界を解除し、ドライブをまたぐ通常の読み書きを直接実行します。強制プッシュ、再帰削除、ディスクのフォーマット、機密認証情報のパスのみ確認します。',
+    '工作区外的普通文件读写、重命名、单文件删除不再因「越界」单独升为 critical，大幅减少打断':
+      'ワークスペース外の通常の読み書き・名前変更・単一ファイル削除は「範囲外」だけでは critical に昇格せず、中断が大幅に減ります',
+    '真正破坏性操作（强制推送、递归删除、磁盘格式化、系统管理命令）及敏感凭据黑名单路径仍强制要求人工确认':
+      '真に破壊的な操作（強制プッシュ、再帰削除、ディスクのフォーマット、システム管理コマンド）とブロックリストの認証情報パスは引き続き承認が必要',
+    '保留 Win32 Job Object 进程树句柄追踪、全局急停、审计日志与 2 小时自动降级保护计时器':
+      'Win32 Job Object のプロセスツリー追跡、緊急停止、監査ログ、2 時間の自動ダウングレードタイマーを維持',
+    '左侧活动栏 MWH 状态图标与面板常亮红环警示（不渲染全窗口边框光晕）':
+      '左のアクティビティバーの MWH アイコンとパネルに赤いリングを常時表示（ウィンドウ全体の縁取り発光はなし）',
+    '已解除工作区目录边界限制，模型可跨盘读写普通目录文件，请仅在受信任任务中开启':
+      'ワークスペースの境界を解除したため、モデルはドライブをまたいで通常のファイルを読み書きできます。信頼できるタスクでのみ有効にしてください',
+    '左栏入口与健康状态': 'サイドバーの入口と状態',
+    '点击 Muse 左侧导航栏 MWH 紫蓝徽标随时呼出或收起控制抽屉；徽标右下角圆点实时反映宿主守护与公网隧道连通状态（冰川青蓝为就绪，赤陶珊瑚红为离线）。':
+      'Muse 左のナビゲーションにある MWH バッジをクリックするとコントロールドロワーを開閉できます。バッジ右下のドットはホストデーモンと公開トンネルの状態を示します（グレイシャーシアンは準備完了、テラコッタコーラルはオフライン）。',
+    '四档权限与 2 小时自动降级': '4 段階の権限と 2 時間の自動ダウングレード',
+    '按任务风险一键切换「计划模式（只读） / 变更前确认（默认） / 自主模式（自动快照） / 完全访问（跨盘放行）」。开启完全访问时支持 2 小时自动降级保护。':
+      'タスクのリスクに応じて切り替えます。「計画モード（読み取り専用） / 変更前に確認（既定） / 自律モード（自動スナップショット） / フルアクセス（ドライブ横断）」。フルアクセスでは 2 時間後の自動ダウングレードを利用できます。',
+    '端点防窥脱敏与一键配对': 'エンドポイントのマスクとワンクリックペアリング',
+    '公网 MCP/REST 端点与 Bearer Token 默认自动脱敏防截屏泄露（点击眼睛图标可临时查看 15 秒）；点击「复制配对口令」或「复制 MCP JSON」即可一键填入 Muse 连接器。':
+      '公開 MCP/REST エンドポイントと Bearer トークンはスクリーンショット漏えい防止のため既定でマスクされます（目のアイコンで 15 秒間表示）。「ペアリングプロンプトをコピー」または「MCP JSON をコピー」で Muse コネクタに貼り付けられます。',
+    '四栏高级配置中心': '4 タブの詳細設定',
+    '展开右侧伴随子面板，集中管理「连接与权限」、「工作区与代理（目录白名单与 ACP 引擎）」、「资源库（本机 MCP 与 Skill 原地开关）」及「审计日志（Git Shadow 写前快照单条回滚）」。':
+      '右側のサブパネルに、接続と権限、ワークスペースとエージェント（ディレクトリ許可リストと ACP エンジン）、リソースライブラリ（ローカル MCP と Skill のオン/オフ）、監査ログ（Git Shadow の書き込み前スナップショットを 1 件ずつ復元）をまとめています。',
+    '底部实时审批灵动岛': 'ライブ承認アイランド',
+    '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。':
+      'Muse がファイル変更やコマンド実行を要求すると、下部アイランドが展開してリスクレベルと対象パスを表示します。「1 回だけ許可 / このワークスペースでは常に許可 / 拒否」を選べ、実行中のタスクは強制停止できます。',
+    '结束引导 (Esc)': 'ツアーを終了 (Esc)',
+    '结束引导': 'ツアーを終了',
+    '跳过引导': 'ツアーをスキップ',
+    '上一步': '戻る',
+    '下一步': '次へ',
+    '完成引导': '完了',
+    '步骤 {0} / {1}': 'ステップ {0} / {1}',
+    '连接与权限': '接続と権限',
+    '网络隧道与四档权限': 'ネットワークトンネルと 4 段階権限',
+    '工作区与代理': 'ワークスペースとエージェント',
+    '目录白名单与 ACP 引擎': 'ディレクトリ許可リストと ACP エンジン',
+    '资源库': 'リソースライブラリ',
+    '本机 MCP 与 Skill': 'ローカル MCP と Skill',
+    '审计日志': '監査ログ',
+    '影子快照与审计日志': 'シャドウスナップショットと監査ログ',
+    'Cloudflare 固定域名': 'Cloudflare 固定ドメイン',
+    'Named Tunnel · 推荐常驻免配对': 'Named Tunnel · 常時稼働・再ペアリング不要',
+    'Cloudflare 临时隧道': 'Cloudflare クイックトンネル',
+    'Quick Tunnel · 现场按需拉起': 'Quick Tunnel · 必要時に起動',
+    'Tailscale 私网 / Funnel': 'Tailscale プライベート網 / Funnel',
+    '100.x.y.z 组网与 MagicDNS': '100.x.y.z メッシュと MagicDNS',
+    '自定义 TLS / FRP 反代': 'カスタム TLS / FRP リバースプロキシ',
+    '自有云服务器 / Nginx / FRP 端点': '自前のサーバー / Nginx / FRP エンドポイント',
+    '正在切换...': '切り替え中...',
+    '当前生效': '現在有効',
+    'Cloudflare Named Tunnel 配置': 'Cloudflare Named Tunnel 設定',
+    '固定公网域名 (指向 127.0.0.1:19820)': '公開ドメイン（127.0.0.1:19820 を指す）',
+    '留空则保持已保存的 Token 不变': '空欄のままにすると保存済みトークンを保持します',
+    '保存中...': '保存中...',
+    '保存并应用': '保存して適用',
+    'Cloudflare Quick Tunnel (临时公网)': 'Cloudflare Quick Tunnel（一時公開）',
+    '已拉起并转发至 127.0.0.1:19820': '起動済み・127.0.0.1:19820 へ転送中',
+    '未拉起 (仅本地监听 127.0.0.1:19820)': '未起動（127.0.0.1:19820 のローカル待受のみ）',
+    '当前域名: {0}': '現在のドメイン: {0}',
+    '未开启公网隧道 · 本地 127.0.0.1:19820': '公開トンネルなし · ローカル 127.0.0.1:19820 のみ',
+    'Tailscale 私网直连与 Funnel 网关': 'Tailscale プライベート接続と Funnel ゲートウェイ',
+    'Tailscale 节点 IP': 'Tailscale ノード IP',
+    'MagicDNS 地址': 'MagicDNS アドレス',
+    '自定义 TLS / FRP 反向代理': 'カスタム TLS / FRP リバースプロキシ',
+    '公网 HTTPS 地址': '公開 HTTPS アドレス',
+    '四档权限模式': '権限モード',
+    '「完全访问」2 小时自动降级': '「フルアクセス」2 時間後の自動ダウングレード',
+    '剩余计时: {0}': '残り時間: {0}',
+    '已开启，点击关闭': 'オン、クリックでオフ',
+    '已关闭，点击开启': 'オフ、クリックでオン',
+    '多端审批': 'マルチデバイス承認',
+    '关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。':
+      'オフのときはローカルアイランドで承認します。オンのときは、日常的な書き込み・通常のコマンド・サブエージェントの起動を Muse 標準カード（スマートフォン・Web・Mac で承認可能）で確認し、アイランドの二重表示は行いません。ディスク削除や強制プッシュなどの破壊的操作は、引き続きコマンド単位でローカル確認します。Muse でそのツールを「常に許可」にしている場合、標準カードもスキップされます。',
+    '安全机制与边界如实披露 (No Security Washing)': '保護機構と限界をそのまま開示（No Security Washing）',
+    '当前生效的保护机制：': '現在有効な保護機構：',
+    '未覆盖边界说明：': '対象外の境界：',
+    '工作区': 'ワークスペース',
+    '授权工作区目录白名单 (Workspace Roots)': '許可ワークスペースルート',
+    '新增授权工作区路径': '新しい許可ワークスペースパス',
+    '输入本地绝对路径，例如 E:\\Workspace\\MyRustApp': 'ローカルの絶対パスを入力（例: C:\\Workspace\\MyApp）',
+    '添加目录': 'フォルダを追加',
+    '移除工作区': 'ワークスペースを削除',
+    '尚未授权任何工作区目录': '許可されたワークスペースはまだありません',
+    'Windows 本地守护进程 (mwh-daemon.exe)': 'Windows ローカルデーモン (mwh-daemon.exe)',
+    '在线 (127.0.0.1:19820)': 'オンライン (127.0.0.1:19820)',
+    '离线 · 未连接本地守护进程': 'オフライン · ローカルデーモン未接続',
+    '进程 PID / 内存': 'プロセス PID / メモリ',
+    '静默无黑框标志': 'コンソール非表示',
+    '未启用': '無効',
+    '活跃 Job Object 树': 'アクティブな Job Object ツリー',
+    '{0} 个受控句柄': '追跡ハンドル {0} 件',
+    '全局急停（终止所有 Win32 Job Object 进程树）':
+      '緊急停止（すべての Win32 Job Object プロセスツリーを終了）',
+    '确认对所有受控 Win32 Job Object 进程树执行全局急停？':
+      '追跡中のすべての Win32 Job Object プロセスツリーを緊急停止しますか？',
+    '立即急停': '今すぐ停止',
+    '添加 ACP 代理': 'ACP エージェントを追加',
+    '添加自定义 ACP 代理': 'カスタム ACP エージェントを追加',
+    '自定义 ACP 代理': 'カスタム ACP エージェント',
+    '全局通用配置 (%USERPROFILE%\\.mwh\\acp-profiles.json) · 可按档案独立启停 · 实时热更新':
+      '共通設定 (%USERPROFILE%\\.mwh\\acp-profiles.json) · プロファイル単位でオン/オフ · リアルタイムでホットリロード',
+    '暂无自定义 ACP 代理。添加后支持路径探测、按档案独立启停与 Worktree 隔离运行。':
+      'カスタム ACP エージェントはまだありません。追加するとパスのプローブ、個別のオン/オフ、Worktree での分離実行ができます。',
+    '+ 添加首个 ACP 代理': '+ 最初の ACP エージェントを追加',
+    '已停用': '無効',
+    '已启用，点击停用': '有効、クリックで無効化',
+    '已停用，点击启用': '無効、クリックで有効化',
+    '可执行文件就绪': '実行ファイル準備完了',
+    '未找到可执行文件': '実行ファイルが見つかりません',
+    '命令: {0}': 'コマンド: {0}',
+    '参数: {0}': '引数: {0}',
+    '编辑 ACP 代理': 'ACP エージェントを編集',
+    '删除 ACP 代理': 'ACP エージェントを削除',
+    'Git Worktree 并发隔离分支池 (代理权限 <= 父权限)':
+      'Git Worktree 分離プール（エージェント権限 <= 親権限）',
+    '当前父级档位：{0}': '親モード: {0}',
+    '选择请求的代理模式': '要求するエージェントモード',
+    '只读 (计划模式)': '読み取り専用（計画モード）',
+    '工作区读写 (变更前确认 / 自主)': 'ワークスペース書き込み（変更前に確認 / 自律）',
+    '新建隔离 Worktree': '分離 Worktree を新規作成',
+    '· 代理: {0}': '· エージェント: {0}',
+    '· 生效: {0}': '· 実効: {0}',
+    '合并回主分支': 'メインにマージ',
+    '已清理 (MISSING)': '削除済み (MISSING)',
+    '清理分支': 'ブランチを削除',
+    '切换分页': '次のページ',
+    '暂无隔离 Worktree 分支': '分離 Worktree ブランチはまだありません',
+    '打开即对 Muse 生效，默认全部关闭。': '開いた時点で Muse に反映され、既定ではすべて無効です。',
+    'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。':
+      'MCP は Windows のユーザー権限で動作し、追加のサンドボックスはありません。終了時や緊急停止時には、起動した子プロセスもまとめて終了します。',
+    '扫描中...': 'スキャン中...',
+    '扫描本机': 'この PC をスキャン',
+    '添加': '追加',
+    '编辑资源': 'リソースを編集',
+    '添加本机资源': 'ローカルリソースを追加',
+    '资源类型': '種類',
+    '本机 MCP': 'ローカル MCP',
+    '显示名称 (Display Name)': '表示名',
+    '例如: MyTools': '例: MyTools',
+    '传输协议': 'トランスポート',
+    '执行命令 (Command)': 'コマンド',
+    '例如: node 或 C:\\tools\\server.exe': '例: node または C:\\path\\to\\server.exe',
+    '启动参数 (Args)': '引数',
+    '以空格分隔，例如: dist/index.js --port 8080': 'スペース区切り、例: dist/index.js --port 8080',
+    '工作目录 (CWD, 可选)': '作業ディレクトリ（任意）',
+    '默认用户主目录': '既定はユーザーのホームディレクトリ',
+    'Skill 目录路径': 'Skill ディレクトリ',
+    '需包含 SKILL.md 的本地目录': 'SKILL.md を含むローカルディレクトリ',
+    '标记为只读（在计划模式下放行探查）': '読み取り専用として登録（計画モードでもプローブ可能）',
+    '标记为只读': '読み取り専用として登録',
+    '只读资源在计划模式下仍可被探查': '読み取り専用リソースは計画モードでもプローブできます',
+    '立即启用（默认关闭）': 'すぐに有効化（既定はオフ）',
+    '立即启用': 'すぐに有効化',
+    '添加完成后立即对 Muse 生效': '追加後すぐに Muse へ反映されます',
+    '探测中...': 'プローブ中...',
+    '探测连接': '接続をテスト',
+    '探测成功': '接続しました',
+    '探测失败: {0}': 'プローブ失敗: {0}',
+    '取消': 'キャンセル',
+    '保存': '保存',
+    '启用后，工具会出现在 Muse 现有的 /mcp 里，直接调用即可。':
+      '有効にすると、ツールが Muse の既存の /mcp に表示され、そのまま呼び出せます。',
+    '暂无已登记的本机 MCP 服务器，可通过上方「扫描本机」自动发现或「添加」手动配置。':
+      '登録済みのローカル MCP サーバーはありません。上の「この PC をスキャン」で自動検出するか、「追加」で手動設定してください。',
+    '扫描发现': 'スキャンで検出',
+    '手动添加': '手動で追加',
+    '启动故障': '起動エラー',
+    '已关闭': '無効',
+    '只读': '読み取り専用',
+    '{0} 个工具': 'ツール {0} 個',
+    '启动故障，开关保持启用由你决定是否关闭':
+      '起動エラーです。スイッチは有効のままなので、無効にするかはご判断ください',
+    '将出现在 Muse 的 tools/list': 'Muse の tools/list に表示されます',
+    '已暂时从 /mcp 撤下，修复后会自动恢复': '/mcp から一時的に外れています。修正すると自動で復帰します',
+    '原名: {0}': '元の名前: {0}',
+    '暂无工具（启用且运行正常后自动列出）': 'ツールはまだありません（有効かつ正常稼働後に自動で一覧化）',
+    '名称和简短说明会自动备好，需要全文时再读一次。':
+      '名前と短い説明は自動で用意され、全文は必要なときだけ読み込まれます。',
+    '暂无已登记的 Skill，可通过上方「扫描本机」自动发现或「添加」手动配置。':
+      '登録済みの Skill はありません。上の「この PC をスキャン」で自動検出するか、「追加」で手動設定してください。',
+    '不可用': '利用不可',
+    '已就绪': '準備完了',
+    '暂无说明': '説明なし',
+    '来源目录: {0}': 'ソースディレクトリ: {0}',
+    '写前影子快照': '書き込み前シャドウスナップショット',
+    'Muse 写入前自动保存的安全检查点，支持单条无损还原':
+      'Muse の書き込み前に自動保存されるセーフティチェックポイント。1 件ずつ無損失で復元できます',
+    '最新优先': '新しい順',
+    '最早优先': '古い順',
+    '按改动文件数': '変更ファイル数順',
+    '每目录最近 3 次': 'フォルダごと最新 3 件',
+    '每目录最近 5 次': 'フォルダごと最新 5 件',
+    '每目录最近 10 次': 'フォルダごと最新 10 件',
+    '显示全部 ({0})': 'すべて表示 ({0})',
+    '取消全选': '選択を解除',
+    '全选当前可见': '表示中をすべて選択',
+    '全部展开': 'すべて展開',
+    '全部折叠': 'すべて折りたたむ',
+    '已选 {0} 条记录': '{0} 件を選択中',
+    '磁盘瘦身（清理旧快照）': 'ディスク整理（古いスナップショットを削除）',
+    '按工作区仅保留最近 N 条快照记录，自动清理更早记录':
+      'ワークスペースごとに最新 N 件のスナップショットだけを残し、それ以前を削除します',
+    '磁盘瘦身：仅留 {0}': 'ディスク整理: {0} 件を保持',
+    '删除所选记录 ({0})': '選択を削除 ({0})',
+    '删除所选记录': '選択を削除',
+    '删除所选快照': '選択したスナップショットを削除',
+    '暂无写前影子快照记录': '書き込み前スナップショットはまだありません',
+    '{0}/{1} 条快照': '{0}/{1} 件のスナップショット',
+    '{0} 条快照': '{0} 件のスナップショット',
+    '选择快照 {0}': 'スナップショット {0} を選択',
+    '写入前快照': '書き込み前スナップショット',
+    '回滚影子快照': 'スナップショットを復元',
+    '回滚此快照': 'このスナップショットを復元',
+    '已回滚': '復元済み',
+    '{0} 个文件变动': '{0} 件のファイル変更',
+    '查看该目录下其余 {0} 条快照...': 'このフォルダの残り {0} 件を表示...',
+    '本地审计日志 (.mwh/logs/audit.jsonl)': 'ローカル監査ログ (.mwh/logs/audit.jsonl)',
+    '暂无审计记录': '監査記録はまだありません',
+    '模式变更': 'モード変更',
+    '来源: {0}': 'ソース: {0}',
+    '条快照...': ' 件のスナップショット...',
+    '待授权': '承認待ち',
+    '运行中': '実行中',
+    '已完成': '完了',
+    '待命': '待機中',
+    '本地任务执行完成 · 修改 {0} 个文件': 'タスク完了 · {0} 件のファイルを変更',
+    '执行完成 · 改动数未统计': '完了 · 変更数は未集計',
+    '执行完成 · 未检测到文件改动': '完了 · ファイル変更は検出されませんでした',
+    '等待本机执行授权 · {0}': 'ローカル実行の承認待ち · {0}',
+    '本地任务执行中': 'ローカルタスクを実行中',
+    '空闲·待命': 'アイドル · 待機中',
+    'CREATE_NO_WINDOW · 耗时 {0} · 步骤 {1}/{2}': 'CREATE_NO_WINDOW · {0} · ステップ {1}/{2}',
+    '高危 · 需签名': '高リスク · 署名が必要',
+    '队列 {0}/{1}': 'キュー {0}/{1}',
+    '风险 {0}': 'リスク {0}',
+    '确认强杀？': '強制停止しますか？',
+    '强杀中止': '強制停止',
+    '关闭任务提示': 'タスク通知を閉じる',
+    '展开任务面板': 'タスクパネルを展開',
+    '收起为胶囊': 'カプセルに折りたたむ',
+    '当前没有进行中的本机任务': '実行中のローカルタスクはありません',
+    '云端下发命令后会在这里实时显示进度、耗时与输出；点右侧箭头可收成胶囊常驻。':
+      'クラウドから届いたコマンドの進捗・経過時間・出力がここに表示されます。右の矢印でカプセルに折りたためます。',
+    '目标路径: {0}': '対象パス: {0}',
+    '写前影子快照: {0}': '書き込み前スナップショット: {0}',
+    '拒绝': '拒否',
+    '本工作区始终允许': 'このワークスペースでは常に許可',
+    '允许一次': '1 回だけ許可',
+    '一键回滚快照': 'スナップショットを復元',
+    '合并 Worktree': 'Worktree をマージ',
+    'MWH 底部任务与审批面板': 'MWH タスク・承認パネル',
+    '调整面板大小': 'パネルのサイズを変更',
+    '安全确认': '確認',
+    '确定': 'OK',
+    '高风险安全确认': '高リスクの確認',
+    '警告：完全访问模式将解除授权工作区围栏，跨盘普通文件读写与命令直接静默执行，仅格式化等极端破坏性操作保留拦截。是否确认切换？':
+      '警告: フルアクセスではワークスペースの境界が解除され、ドライブをまたぐ通常の読み書きやコマンドがそのまま実行されます。フォーマットなど極端に破壊的な操作のみ遮断します。切り替えますか？',
+    '确认切换': '切り替える',
+    '确认删除': '削除',
+    '确认回滚': '復元',
+    '确认轮换': 'ローテート',
+    '清理旧快照': '古いスナップショットを削除',
+    '确定要删除自定义 ACP 代理 "{0}" 吗？此操作将立即热更新移除。':
+      'カスタム ACP エージェント「{0}」を削除しますか？ホットリロードで即座に削除されます。',
+    '确定要从资源库中移除 "{0}" 吗？此操作将立即生效。': 'リソース「{0}」をリソースライブラリから削除しますか？',
+    '将永久删除已选 {0} 条写前影子快照记录，磁盘会释放对应空间；删除后无法再回滚到这些检查点（你的代码不受影响）。是否确认？':
+      '選択した書き込み前スナップショット {0} 件を完全に削除し、ディスク容量を解放します。削除後はこれらのチェックポイントへ復元できません（コードは影響を受けません）。続行しますか？',
+    '将按工作区仅保留最近 {0} 条快照记录，更早的历史快照会被永久清除以释放磁盘空间。此操作只删快照、不改动你的代码。是否继续？':
+      'ワークスペースごとに最新 {0} 件のスナップショットだけを残し、それ以前はディスク容量のため完全に削除されます。削除されるのはスナップショットのみで、コードは変更されません。続行しますか？',
+    '已复制到剪贴板': 'クリップボードにコピーしました',
+    '复制失败，请重试': 'コピーに失敗しました。もう一度お試しください',
+    '当前环境不支持剪贴板': 'この環境ではクリップボードを利用できません',
+    '已切换到「{0}」': '「{0}」に切り替えました',
+    '切换失败: {0}': '切り替えに失敗しました: {0}',
+    '已复制完整真实 Bearer Token': '実際の Bearer トークンをコピーしました',
+    '已复制完整真实 Bearer Token 到剪贴板': '実際の Bearer トークンをクリップボードにコピーしました',
+    '已轮换新 Token 并复制到剪贴板': 'トークンをローテートし、クリップボードにコピーしました',
+    '已复制 MCP JSON 配置 (含真实 Token)': 'MCP JSON（実際のトークン込み）をコピーしました',
+    '已复制无密钥 SKILL.md 配对说明': '鍵を含まない SKILL.md ペアリング手順をコピーしました',
+    '已请求重新拉起临时隧道': '一時トンネルの再起動を要求しました',
+    '临时公网隧道已停止': '一時公開トンネルを停止しました',
+    '已触发全局急停': '緊急停止を実行しました',
+    '已回滚至快照 {0}': 'スナップショット {0} へ復元しました',
+    '回滚中...': '復元中...',
+    '回滚失败: {0}': '復元に失敗しました: {0}',
+    '保存失败: {0}': '保存に失敗しました: {0}',
+    '删除失败: {0}': '削除に失敗しました: {0}',
+    '切换驱动失败: {0}': 'ドライバーの切り替えに失敗しました: {0}',
+    '加载审计与快照失败: {0}': '監査・スナップショットの読み込みに失敗しました: {0}',
+    '扫描失败: {0}': 'スキャンに失敗しました: {0}',
+    '扫描完成：发现 {0} 项，添加 {1} 项': 'スキャン完了: {0} 件検出、{1} 件追加',
+    'ACP 代理已保存并热更新': 'ACP エージェントを保存し、ホットリロードしました',
+    '已删除资源 {0}': 'リソース {0} を削除しました',
+    '已添加工作区: {0}': 'ワークスペースを追加しました: {0}',
+    '已移除工作区: {0}': 'ワークスペースを削除しました: {0}',
+    '该工作区已在白名单中': 'このワークスペースは既に許可されています',
+    '探测失败': 'プローブ失敗',
+    '保存失败': '保存に失敗しました',
+    '删除失败': '削除に失敗しました',
+  },
+  'zh-TW': {
+    '本地宿主引擎 (MWH)': '本機宿主引擎 (MWH)',
+    '功能使用引导': '功能使用導引',
+    '关闭面板': '關閉面板',
+    '权限模式': '權限模式',
+    '连接端点与凭据': '連線端點與憑證',
+    '服务端点与认证密钥': '服務端點與驗證金鑰',
+    '正在读取...': '讀取中...',
+    '未生成': '未產生',
+    '未拿到端点': '未取得端點',
+    '未连接宿主': '未連線宿主',
+    '公网活跃': '公網作用中',
+    '仅本地': '僅本機',
+    '停止临时隧道': '停止臨時通道',
+    '停止中': '停止中',
+    '停止隧道': '停止通道',
+    '拉起中': '啟動中',
+    '拉起公网隧道': '啟動公網通道',
+    '重新拉起': '重新啟動',
+    '启动临时隧道': '啟動臨時通道',
+    '复制完整 MCP URL': '複製完整 MCP URL',
+    '复制完整 REST URL': '複製完整 REST URL',
+    '点击直接复制真实 Token': '點擊直接複製真實 Token',
+    '隐藏明文': '隱藏明文',
+    '查看完整明文 (15s 自动隐藏)': '檢視完整明文 (15s 後自動隱藏)',
+    '查看完整明文': '檢視完整明文',
+    '隐藏': '隱藏',
+    '查看': '檢視',
+    '复制完整真实 Token (用于请求头)': '複製完整真實 Token (用於請求標頭)',
+    '复制完整真实 Token': '複製完整真實 Token',
+    '复制完整 Token': '複製完整 Token',
+    '生成中...': '產生中...',
+    '轮换密钥': '輪替金鑰',
+    '复制配对口令': '複製配對指令',
+    '复制 MCP JSON': '複製 MCP JSON',
+    '复制 MCP JSON (含 Token)': '複製 MCP JSON (含 Token)',
+    '打开高级配置中心': '開啟進階設定中心',
+    '连接与权限 · 工作区与代理 · 资源库 · 审计日志':
+      '連線與權限 · 工作區與代理 · 資源庫 · 稽核日誌',
+    '4 个配置域': '4 個設定區',
+    '宿主守护就绪': '宿主守護就緒',
+    '宿主未连接': '宿主未連線',
+    '一键启动未拉起宿主': '一鍵啟動未拉起宿主',
+    'Muse 连通: {0}': 'Muse 連線: {0}',
+    '已连通 Muse 连接器': '已連通 Muse 連接器',
+    '待连接 / 未接入': '待連線 / 未接入',
+    '2h 降级 · {0}': '2h 降級 · {0}',
+    '2h 降级已关': '2h 降級已關',
+    '完全访问 2 小时后自动降级': '完整存取 2 小時後自動降級',
+    '隐藏完整端点域名': '隱藏完整端點網域',
+    '临时显示完整端点域名 (15s)': '臨時顯示完整端點網域 (15s)',
+    '临时显示完整端点域名': '臨時顯示完整端點網域',
+    '隐藏端点完整域名': '隱藏端點完整網域',
+    '查看完整端点域名 (15s 自动恢复脱敏)': '檢視完整端點網域 (15s 後自動恢復遮罩)',
+    '显示完整域名': '顯示完整網域',
+    '隐藏端点域名': '隱藏端點網域',
+    '复制': '複製',
+    '包含宿主 MCP 端点协议规范与协同指引，可一键复制并填入 Muse 连接器':
+      '包含宿主 MCP 端點協定規範與協同指引，可一鍵複製並填入 Muse 連接器',
+    '查看 MCP JSON 模板与无密钥配对说明': '檢視 MCP JSON 範本與無金鑰配對說明',
+    '无服务连接': '無服務連線',
+    '已连接': '已連線',
+    '未连接': '未連線',
+    '公网隧道在线': '公網通道線上',
+    '公网隧道未启动': '公網通道未啟動',
+    '宿主无响应': '宿主無回應',
+    '宿主未就绪': '宿主未就緒',
+    '宿主未连接，无法生成配对信息；请先运行 MWH启动.cmd 并确认页脚显示「宿主守护就绪」':
+      '宿主未連線，無法產生配對資訊；請先執行 MWH启动.cmd，並確認頁尾顯示「宿主守護就緒」',
+    '宿主未连接，无法生成 MCP JSON；请先运行 MWH启动.cmd 并确认页脚显示「宿主守护就绪」':
+      '宿主未連線，無法產生 MCP JSON；請先執行 MWH启动.cmd，並確認頁尾顯示「宿主守護就緒」',
+    '宿主返回的不是控制面状态': '宿主傳回的不是控制面狀態',
+    '操作失败': '操作失敗',
+    '未知错误': '未知錯誤',
+    '计划模式': '計畫模式',
+    '计划 (只读)': '計畫 (唯讀)',
+    '仅探查不修改': '僅探查不修改',
+    '计划模式（只读，先计划再改）': '計畫模式（唯讀，先計畫再改）',
+    '仅允许读取工作区文件、检索代码与只读状态查询，先制定方案再动手，拦截一切文件修改与写入命令。':
+      '僅允許讀取工作區檔案、檢索程式碼與唯讀狀態查詢；先擬定方案再動手，攔截所有檔案修改與寫入命令。',
+    '拦截所有文件写入、编辑、重命名与删除调用 (fs_mutate)':
+      '攔截所有檔案寫入、編輯、重新命名與刪除呼叫 (fs_mutate)',
+    '仅放行白名单只读探针命令 (git status / git log / git diff / rg / Get-ChildItem)':
+      '僅放行白名單唯讀探測命令 (git status / git log / git diff / rg / Get-ChildItem)',
+    '强制校验物理路径 (realpathSync.native) 阻断 NTFS Junction 与符号链接越界读取':
+      '強制驗證實體路徑 (realpathSync.native)，阻擋 NTFS Junction 與符號連結越界讀取',
+    '授权工作区目录内的非黑名单明文文件仍可被读取分析':
+      '授權工作區目錄內的非黑名單明文檔案仍可被讀取分析',
+    '无法执行编译、测试脚本或启动写文件代理':
+      '無法執行編譯、測試腳本或啟動寫檔代理',
+    '变更前确认': '變更前確認',
+    '写前弹窗确认': '寫入前彈窗確認',
+    '变更前确认（改文件前问 · 默认）': '變更前確認（改檔案前詢問 · 預設）',
+    '只读探针静默放行；每次修改文件、运行脚本或拉起代理前均在桌面浮岛询问确认。':
+      '唯讀探測直接放行；每次修改檔案、執行腳本或啟動代理前，均在桌面浮島詢問確認。',
+    '严格校验 realpath 物理路径，阻断 NTFS Junction 与符号链接越界写入':
+      '嚴格驗證 realpath 實體路徑，阻擋 NTFS Junction 與符號連結越界寫入',
+    '内置敏感路径硬黑名单：拦截 .env*、~/.ssh、~/.aws、%APPDATA% 与浏览器凭据目录':
+      '內建敏感路徑強制黑名單：攔截 .env*、~/.ssh、~/.aws、%APPDATA% 與瀏覽器憑證目錄',
+    '写文件或执行命令前在底部浮岛弹出确认，批准后自动记录无密钥回执供 Muse 轮询':
+      '寫入檔案或執行命令前在底部浮島彈出確認；核准後自動記錄無金鑰回執供 Muse 輪詢',
+    '每次写操作前自动创建 Git Shadow 快照，支持按工作区单条一键回滚':
+      '每次寫入前自動建立 Git Shadow 快照，支援依工作區單筆一鍵還原',
+    '经人工确认放行的工作区脚本在当前登录用户权限下运行，无 OS 内核级虚拟化沙箱':
+      '經人工確認放行的工作區腳本以目前登入使用者權限執行，無 OS 核心級虛擬化沙箱',
+    '自主模式': '自主模式',
+    '自动快照放行': '自動快照放行',
+    '自主模式（有风险才问）': '自主模式（有風險才問）',
+    '授权工作区内的常规文件读写自动创建写前快照并静默执行，仅高风险命令或破坏性操作询问确认。':
+      '授權工作區內的例行檔案讀寫會自動建立寫入前快照並靜默執行，僅高風險命令或破壞性操作詢問確認。',
+    '保留完整工作区路径围栏 (realpath) 与敏感凭据路径黑名单拦截':
+      '保留完整工作區路徑圍籬 (realpath) 與敏感憑證路徑黑名單攔截',
+    '工作区内常规 fs_mutate 读写自动前置创建 Git Shadow 影子快照，无需逐次点击确认':
+      '工作區內例行 fs_mutate 讀寫會先建立 Git Shadow 影子快照，無需逐次點擊確認',
+    '高风险命令、强制推送 (git push --force)、递归删除 (rm -rf / Remove-Item -Recurse) 与系统级指令仍强制要求人工确认':
+      '高風險命令、強制推送 (git push --force)、遞迴刪除 (rm -rf / Remove-Item -Recurse) 與系統級指令仍強制要求人工確認',
+    '所有子进程绑定 Win32 Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) + CREATE_NO_WINDOW':
+      '所有子行程綁定 Win32 Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) + CREATE_NO_WINDOW',
+    '授权工作区内的常规代码修改会自动落盘，若需撤销请前往「数据控制」单条回滚快照':
+      '授權工作區內的例行程式碼修改會自動寫入；如需撤銷，請前往「資料控制」單筆還原快照',
+    '完全访问': '完整存取',
+    '跨盘普通放行': '跨磁碟一般放行',
+    '完全访问（减少确认）': '完整存取（減少確認）',
+    '解除工作区目录围栏，跨盘普通文件读写直接执行；仅强制推送、递归删除、磁盘格式化及敏感凭据路径仍需确认。':
+      '解除工作區目錄圍籬，跨磁碟一般檔案讀寫直接執行；僅強制推送、遞迴刪除、磁碟格式化及敏感憑證路徑仍需確認。',
+    '工作区外的普通文件读写、重命名、单文件删除不再因「越界」单独升为 critical，大幅减少打断':
+      '工作區外的一般檔案讀寫、重新命名、單檔刪除不再因「越界」單獨升為 critical，大幅減少打斷',
+    '真正破坏性操作（强制推送、递归删除、磁盘格式化、系统管理命令）及敏感凭据黑名单路径仍强制要求人工确认':
+      '真正破壞性操作（強制推送、遞迴刪除、磁碟格式化、系統管理命令）及敏感憑證黑名單路徑仍強制要求人工確認',
+    '保留 Win32 Job Object 进程树句柄追踪、全局急停、审计日志与 2 小时自动降级保护计时器':
+      '保留 Win32 Job Object 行程樹控制代碼追蹤、全域急停、稽核日誌與 2 小時自動降級保護計時器',
+    '左侧活动栏 MWH 状态图标与面板常亮红环警示（不渲染全窗口边框光晕）':
+      '左側活動列 MWH 狀態圖示與面板常亮紅環警示（不繪製全視窗邊框光暈）',
+    '已解除工作区目录边界限制，模型可跨盘读写普通目录文件，请仅在受信任任务中开启':
+      '已解除工作區目錄邊界限制，模型可跨磁碟讀寫一般目錄檔案，請僅在受信任任務中開啟',
+    '左栏入口与健康状态': '左欄入口與健康狀態',
+    '点击 Muse 左侧导航栏 MWH 紫蓝徽标随时呼出或收起控制抽屉；徽标右下角圆点实时反映宿主守护与公网隧道连通状态（冰川青蓝为就绪，赤陶珊瑚红为离线）。':
+      '點擊 Muse 左側導覽列 MWH 紫藍徽標，隨時呼出或收合控制抽屜；徽標右下角圓點即時反映宿主守護與公網通道連線狀態（冰川青藍為就緒，赤陶珊瑚紅為離線）。',
+    '四档权限与 2 小时自动降级': '四段權限與 2 小時自動降級',
+    '按任务风险一键切换「计划模式（只读） / 变更前确认（默认） / 自主模式（自动快照） / 完全访问（跨盘放行）」。开启完全访问时支持 2 小时自动降级保护。':
+      '依任務風險一鍵切換「計畫模式（唯讀） / 變更前確認（預設） / 自主模式（自動快照） / 完整存取（跨磁碟放行）」。開啟完整存取時支援 2 小時自動降級保護。',
+    '端点防窥脱敏与一键配对': '端點防窺遮罩與一鍵配對',
+    '公网 MCP/REST 端点与 Bearer Token 默认自动脱敏防截屏泄露（点击眼睛图标可临时查看 15 秒）；点击「复制配对口令」或「复制 MCP JSON」即可一键填入 Muse 连接器。':
+      '公網 MCP/REST 端點與 Bearer Token 預設自動遮罩，避免截圖外洩（點擊眼睛圖示可暫時檢視 15 秒）；點擊「複製配對指令」或「複製 MCP JSON」即可一鍵填入 Muse 連接器。',
+    '四栏高级配置中心': '四欄進階設定中心',
+    '展开右侧伴随子面板，集中管理「连接与权限」、「工作区与代理（目录白名单与 ACP 引擎）」、「资源库（本机 MCP 与 Skill 原地开关）」及「审计日志（Git Shadow 写前快照单条回滚）」。':
+      '展開右側伴隨子面板，集中管理「連線與權限」、「工作區與代理（目錄白名單與 ACP 引擎）」、「資源庫（本機 MCP 與 Skill 原地開關）」及「稽核日誌（Git Shadow 寫入前快照單筆還原）」。',
+    '底部实时审批灵动岛': '底部即時審批靈動島',
+    '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。':
+      '當 Muse 要求修改檔案或執行命令時，底部靈動島會自動展開並顯示風險等級與目標路徑，支援「允許一次 / 本工作區一律允許 / 拒絕」及執行中強制中止。',
+    '结束引导 (Esc)': '結束導引 (Esc)',
+    '结束引导': '結束導引',
+    '跳过引导': '跳過導引',
+    '上一步': '上一步',
+    '下一步': '下一步',
+    '完成引导': '完成導引',
+    '步骤 {0} / {1}': '步驟 {0} / {1}',
+    '连接与权限': '連線與權限',
+    '网络隧道与四档权限': '網路通道與四段權限',
+    '工作区与代理': '工作區與代理',
+    '目录白名单与 ACP 引擎': '目錄白名單與 ACP 引擎',
+    '资源库': '資源庫',
+    '本机 MCP 与 Skill': '本機 MCP 與 Skill',
+    '审计日志': '稽核日誌',
+    '影子快照与审计日志': '影子快照與稽核日誌',
+    'Cloudflare 固定域名': 'Cloudflare 固定網域',
+    'Named Tunnel · 推荐常驻免配对': 'Named Tunnel · 常駐免重新配對',
+    'Cloudflare 临时隧道': 'Cloudflare 臨時通道',
+    'Quick Tunnel · 现场按需拉起': 'Quick Tunnel · 現場依需求啟動',
+    'Tailscale 私网 / Funnel': 'Tailscale 私有網路 / Funnel',
+    '100.x.y.z 组网与 MagicDNS': '100.x.y.z 組網與 MagicDNS',
+    '自定义 TLS / FRP 反代': '自訂 TLS / FRP 反向代理',
+    '自有云服务器 / Nginx / FRP 端点': '自有雲端主機 / Nginx / FRP 端點',
+    '正在切换...': '切換中...',
+    '当前生效': '目前生效',
+    'Cloudflare Named Tunnel 配置': 'Cloudflare Named Tunnel 設定',
+    '固定公网域名 (指向 127.0.0.1:19820)': '固定公網網域 (指向 127.0.0.1:19820)',
+    '留空则保持已保存的 Token 不变': '留空則保持已儲存的 Token 不變',
+    '保存中...': '儲存中...',
+    '保存并应用': '儲存並套用',
+    'Cloudflare Quick Tunnel (临时公网)': 'Cloudflare Quick Tunnel (臨時公網)',
+    '已拉起并转发至 127.0.0.1:19820': '已啟動並轉發至 127.0.0.1:19820',
+    '未拉起 (仅本地监听 127.0.0.1:19820)': '未啟動 (僅本機監聽 127.0.0.1:19820)',
+    '当前域名: {0}': '目前網域: {0}',
+    '未开启公网隧道 · 本地 127.0.0.1:19820': '未開啟公網通道 · 本機 127.0.0.1:19820',
+    'Tailscale 私网直连与 Funnel 网关': 'Tailscale 私有網路直連與 Funnel 閘道',
+    'Tailscale 节点 IP': 'Tailscale 節點 IP',
+    'MagicDNS 地址': 'MagicDNS 位址',
+    '自定义 TLS / FRP 反向代理': '自訂 TLS / FRP 反向代理',
+    '公网 HTTPS 地址': '公網 HTTPS 位址',
+    '四档权限模式': '四段權限模式',
+    '「完全访问」2 小时自动降级': '「完整存取」2 小時自動降級',
+    '剩余计时: {0}': '剩餘計時: {0}',
+    '已开启，点击关闭': '已開啟，點擊關閉',
+    '已关闭，点击开启': '已關閉，點擊開啟',
+    '多端审批': '多端審批',
+    '关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。':
+      '關閉時仍由本機浮島審批。開啟後，日常寫入、一般命令與派生次代理等改由 Muse 官方卡片確認（手機、網頁、Mac 皆可核准），不再二次彈出浮島。刪除磁碟、強制推送等破壞性操作仍在本機依命令檢查。若在 Muse 中對該工具選擇「一律允許」，官方卡片也會略過。',
+    '安全机制与边界如实披露 (No Security Washing)': '安全機制與邊界如實揭露 (No Security Washing)',
+    '当前生效的保护机制：': '目前生效的保護機制：',
+    '未覆盖边界说明：': '未涵蓋邊界說明：',
+    '工作区': '工作區',
+    '授权工作区目录白名单 (Workspace Roots)': '授權工作區目錄白名單 (Workspace Roots)',
+    '新增授权工作区路径': '新增授權工作區路徑',
+    '输入本地绝对路径，例如 E:\\Workspace\\MyRustApp': '輸入本機絕對路徑，例如 C:\\Workspace\\MyApp',
+    '添加目录': '新增目錄',
+    '移除工作区': '移除工作區',
+    '尚未授权任何工作区目录': '尚未授權任何工作區目錄',
+    'Windows 本地守护进程 (mwh-daemon.exe)': 'Windows 本機守護行程 (mwh-daemon.exe)',
+    '在线 (127.0.0.1:19820)': '線上 (127.0.0.1:19820)',
+    '离线 · 未连接本地守护进程': '離線 · 未連線本機守護行程',
+    '进程 PID / 内存': '行程 PID / 記憶體',
+    '静默无黑框标志': '靜默無黑框旗標',
+    '未启用': '未啟用',
+    '活跃 Job Object 树': '作用中 Job Object 樹',
+    '{0} 个受控句柄': '{0} 個受控控制代碼',
+    '全局急停（终止所有 Win32 Job Object 进程树）':
+      '全域急停（終止所有 Win32 Job Object 行程樹）',
+    '确认对所有受控 Win32 Job Object 进程树执行全局急停？':
+      '確認對所有受控 Win32 Job Object 行程樹執行全域急停？',
+    '立即急停': '立即急停',
+    '添加 ACP 代理': '新增 ACP 代理',
+    '添加自定义 ACP 代理': '新增自訂 ACP 代理',
+    '自定义 ACP 代理': '自訂 ACP 代理',
+    '全局通用配置 (%USERPROFILE%\\.mwh\\acp-profiles.json) · 可按档案独立启停 · 实时热更新':
+      '全域通用設定 (%USERPROFILE%\\.mwh\\acp-profiles.json) · 可依設定檔獨立啟停 · 即時熱更新',
+    '暂无自定义 ACP 代理。添加后支持路径探测、按档案独立启停与 Worktree 隔离运行。':
+      '尚無自訂 ACP 代理。新增後支援路徑探測、依設定檔獨立啟停與 Worktree 隔離執行。',
+    '+ 添加首个 ACP 代理': '+ 新增第一個 ACP 代理',
+    '已停用': '已停用',
+    '已启用，点击停用': '已啟用，點擊停用',
+    '已停用，点击启用': '已停用，點擊啟用',
+    '可执行文件就绪': '執行檔就緒',
+    '未找到可执行文件': '找不到執行檔',
+    '命令: {0}': '命令: {0}',
+    '参数: {0}': '參數: {0}',
+    '编辑 ACP 代理': '編輯 ACP 代理',
+    '删除 ACP 代理': '刪除 ACP 代理',
+    'Git Worktree 并发隔离分支池 (代理权限 <= 父权限)':
+      'Git Worktree 並行隔離分支池 (代理權限 <= 父權限)',
+    '当前父级档位：{0}': '目前父層等級：{0}',
+    '选择请求的代理模式': '選擇要求的代理模式',
+    '只读 (计划模式)': '唯讀 (計畫模式)',
+    '工作区读写 (变更前确认 / 自主)': '工作區讀寫 (變更前確認 / 自主)',
+    '新建隔离 Worktree': '新增隔離 Worktree',
+    '· 代理: {0}': '· 代理: {0}',
+    '· 生效: {0}': '· 生效: {0}',
+    '合并回主分支': '合併回主分支',
+    '已清理 (MISSING)': '已清理 (MISSING)',
+    '清理分支': '清理分支',
+    '切换分页': '切換分頁',
+    '暂无隔离 Worktree 分支': '尚無隔離 Worktree 分支',
+    '打开即对 Muse 生效，默认全部关闭。': '開啟即對 Muse 生效，預設全部關閉。',
+    'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。':
+      'MCP 在你的 Windows 使用者權限下執行，沒有額外沙箱。結束或急停時會一併結束已啟動的子行程。',
+    '扫描中...': '掃描中...',
+    '扫描本机': '掃描本機',
+    '添加': '新增',
+    '编辑资源': '編輯資源',
+    '添加本机资源': '新增本機資源',
+    '资源类型': '資源類型',
+    '本机 MCP': '本機 MCP',
+    '显示名称 (Display Name)': '顯示名稱 (Display Name)',
+    '例如: MyTools': '例如: MyTools',
+    '传输协议': '傳輸協定',
+    '执行命令 (Command)': '執行命令 (Command)',
+    '例如: node 或 C:\\tools\\server.exe': '例如: node 或 C:\\path\\to\\server.exe',
+    '启动参数 (Args)': '啟動參數 (Args)',
+    '以空格分隔，例如: dist/index.js --port 8080': '以空格分隔，例如: dist/index.js --port 8080',
+    '工作目录 (CWD, 可选)': '工作目錄 (CWD, 選填)',
+    '默认用户主目录': '預設使用者主目錄',
+    'Skill 目录路径': 'Skill 目錄',
+    '需包含 SKILL.md 的本地目录': '需包含 SKILL.md 的本機目錄',
+    '标记为只读（在计划模式下放行探查）': '標記為唯讀（在計畫模式下放行探查）',
+    '标记为只读': '標記為唯讀',
+    '只读资源在计划模式下仍可被探查': '唯讀資源在計畫模式下仍可被探查',
+    '立即启用（默认关闭）': '立即啟用（預設關閉）',
+    '立即启用': '立即啟用',
+    '添加完成后立即对 Muse 生效': '新增完成後立即對 Muse 生效',
+    '探测中...': '探測中...',
+    '探测连接': '探測連線',
+    '探测成功': '探測成功',
+    '探测失败: {0}': '探測失敗: {0}',
+    '取消': '取消',
+    '保存': '儲存',
+    '启用后，工具会出现在 Muse 现有的 /mcp 里，直接调用即可。':
+      '啟用後，工具會出現在 Muse 現有的 /mcp 中，直接呼叫即可。',
+    '暂无已登记的本机 MCP 服务器，可通过上方「扫描本机」自动发现或「添加」手动配置。':
+      '尚無已登記的本機 MCP 伺服器，可透過上方「掃描本機」自動探索或「新增」手動設定。',
+    '扫描发现': '掃描發現',
+    '手动添加': '手動新增',
+    '启动故障': '啟動故障',
+    '已关闭': '已關閉',
+    '只读': '唯讀',
+    '{0} 个工具': '{0} 個工具',
+    '启动故障，开关保持启用由你决定是否关闭':
+      '啟動故障，開關保持啟用，由你決定是否關閉',
+    '将出现在 Muse 的 tools/list': '將出現在 Muse 的 tools/list',
+    '已暂时从 /mcp 撤下，修复后会自动恢复': '已暫時從 /mcp 撤下，修復後會自動恢復',
+    '原名: {0}': '原名: {0}',
+    '暂无工具（启用且运行正常后自动列出）': '尚無工具（啟用且運作正常後自動列出）',
+    '名称和简短说明会自动备好，需要全文时再读一次。':
+      '名稱與簡短說明會自動備妥，需要全文時再讀取一次。',
+    '暂无已登记的 Skill，可通过上方「扫描本机」自动发现或「添加」手动配置。':
+      '尚無已登記的 Skill，可透過上方「掃描本機」自動探索或「新增」手動設定。',
+    '不可用': '無法使用',
+    '已就绪': '已就緒',
+    '暂无说明': '尚無說明',
+    '来源目录: {0}': '來源目錄: {0}',
+    '写前影子快照': '寫入前影子快照',
+    'Muse 写入前自动保存的安全检查点，支持单条无损还原':
+      'Muse 寫入前自動儲存的安全檢查點，支援單筆無損還原',
+    '最新优先': '最新優先',
+    '最早优先': '最早優先',
+    '按改动文件数': '依變更檔案數',
+    '每目录最近 3 次': '每目錄最近 3 次',
+    '每目录最近 5 次': '每目錄最近 5 次',
+    '每目录最近 10 次': '每目錄最近 10 次',
+    '显示全部 ({0})': '顯示全部 ({0})',
+    '取消全选': '取消全選',
+    '全选当前可见': '全選目前可見',
+    '全部展开': '全部展開',
+    '全部折叠': '全部收合',
+    '已选 {0} 条记录': '已選 {0} 筆記錄',
+    '磁盘瘦身（清理旧快照）': '磁碟精簡（清理舊快照）',
+    '按工作区仅保留最近 N 条快照记录，自动清理更早记录':
+      '依工作區僅保留最近 N 筆快照記錄，自動清理更早記錄',
+    '磁盘瘦身：仅留 {0}': '磁碟精簡：僅留 {0}',
+    '删除所选记录 ({0})': '刪除所選記錄 ({0})',
+    '删除所选记录': '刪除所選記錄',
+    '删除所选快照': '刪除所選快照',
+    '暂无写前影子快照记录': '尚無寫入前影子快照記錄',
+    '{0}/{1} 条快照': '{0}/{1} 筆快照',
+    '{0} 条快照': '{0} 筆快照',
+    '选择快照 {0}': '選擇快照 {0}',
+    '写入前快照': '寫入前快照',
+    '回滚影子快照': '還原影子快照',
+    '回滚此快照': '還原此快照',
+    '已回滚': '已還原',
+    '{0} 个文件变动': '{0} 個檔案變更',
+    '查看该目录下其余 {0} 条快照...': '檢視該目錄下其餘 {0} 筆快照...',
+    '本地审计日志 (.mwh/logs/audit.jsonl)': '本機稽核日誌 (.mwh/logs/audit.jsonl)',
+    '暂无审计记录': '尚無稽核記錄',
+    '模式变更': '模式變更',
+    '来源: {0}': '來源: {0}',
+    '条快照...': ' 筆快照...',
+    '待授权': '待授權',
+    '运行中': '執行中',
+    '已完成': '已完成',
+    '待命': '待命',
+    '本地任务执行完成 · 修改 {0} 个文件': '本機任務執行完成 · 修改 {0} 個檔案',
+    '执行完成 · 改动数未统计': '執行完成 · 變更數未統計',
+    '执行完成 · 未检测到文件改动': '執行完成 · 未偵測到檔案變更',
+    '等待本机执行授权 · {0}': '等待本機執行授權 · {0}',
+    '本地任务执行中': '本機任務執行中',
+    '空闲·待命': '閒置·待命',
+    'CREATE_NO_WINDOW · 耗时 {0} · 步骤 {1}/{2}': 'CREATE_NO_WINDOW · 耗時 {0} · 步驟 {1}/{2}',
+    '高危 · 需签名': '高風險 · 需簽章',
+    '队列 {0}/{1}': '佇列 {0}/{1}',
+    '风险 {0}': '風險 {0}',
+    '确认强杀？': '確認強制中止？',
+    '强杀中止': '強制中止',
+    '关闭任务提示': '關閉任務提示',
+    '展开任务面板': '展開任務面板',
+    '收起为胶囊': '收合為膠囊',
+    '当前没有进行中的本机任务': '目前沒有進行中的本機任務',
+    '云端下发命令后会在这里实时显示进度、耗时与输出；点右侧箭头可收成胶囊常驻。':
+      '雲端下達命令後會在這裡即時顯示進度、耗時與輸出；點右側箭頭可收成膠囊常駐。',
+    '目标路径: {0}': '目標路徑: {0}',
+    '写前影子快照: {0}': '寫入前影子快照: {0}',
+    '拒绝': '拒絕',
+    '本工作区始终允许': '本工作區一律允許',
+    '允许一次': '允許一次',
+    '一键回滚快照': '一鍵還原快照',
+    '合并 Worktree': '合併 Worktree',
+    'MWH 底部任务与审批面板': 'MWH 底部任務與審批面板',
+    '调整面板大小': '調整面板大小',
+    '安全确认': '安全確認',
+    '确定': '確定',
+    '高风险安全确认': '高風險安全確認',
+    '警告：完全访问模式将解除授权工作区围栏，跨盘普通文件读写与命令直接静默执行，仅格式化等极端破坏性操作保留拦截。是否确认切换？':
+      '警告：完整存取模式將解除授權工作區圍籬，跨磁碟一般檔案讀寫與命令直接靜默執行，僅格式化等極端破壞性操作保留攔截。是否確認切換？',
+    '确认切换': '確認切換',
+    '确认删除': '確認刪除',
+    '确认回滚': '確認還原',
+    '确认轮换': '確認輪替',
+    '清理旧快照': '清理舊快照',
+    '确定要删除自定义 ACP 代理 "{0}" 吗？此操作将立即热更新移除。':
+      '確定要刪除自訂 ACP 代理「{0}」嗎？此操作將立即熱更新移除。',
+    '确定要从资源库中移除 "{0}" 吗？此操作将立即生效。': '確定要從資源庫中移除「{0}」嗎？',
+    '将永久删除已选 {0} 条写前影子快照记录，磁盘会释放对应空间；删除后无法再回滚到这些检查点（你的代码不受影响）。是否确认？':
+      '將永久刪除已選的 {0} 筆寫入前影子快照記錄，並釋放對應磁碟空間；刪除後無法再還原至這些檢查點（你的程式碼不受影響）。是否確認？',
+    '将按工作区仅保留最近 {0} 条快照记录，更早的历史快照会被永久清除以释放磁盘空间。此操作只删快照、不改动你的代码。是否继续？':
+      '將依工作區僅保留最近 {0} 筆快照記錄，更早的歷史快照會被永久清除以釋放磁碟空間。此操作只刪快照、不改動你的程式碼。是否繼續？',
+    '已复制到剪贴板': '已複製到剪貼簿',
+    '复制失败，请重试': '複製失敗，請重試',
+    '当前环境不支持剪贴板': '目前環境不支援剪貼簿',
+    '已切换到「{0}」': '已切換至「{0}」',
+    '切换失败: {0}': '切換失敗: {0}',
+    '已复制完整真实 Bearer Token': '已複製完整真實 Bearer Token',
+    '已复制完整真实 Bearer Token 到剪贴板': '已複製完整真實 Bearer Token 到剪貼簿',
+    '已轮换新 Token 并复制到剪贴板': '已輪替新 Token 並複製到剪貼簿',
+    '已复制 MCP JSON 配置 (含真实 Token)': '已複製 MCP JSON 設定 (含真實 Token)',
+    '已复制无密钥 SKILL.md 配对说明': '已複製無金鑰 SKILL.md 配對說明',
+    '已请求重新拉起临时隧道': '已請求重新啟動臨時通道',
+    '临时公网隧道已停止': '臨時公網通道已停止',
+    '已触发全局急停': '已觸發全域急停',
+    '已回滚至快照 {0}': '已還原至快照 {0}',
+    '回滚中...': '還原中...',
+    '回滚失败: {0}': '還原失敗: {0}',
+    '保存失败: {0}': '儲存失敗: {0}',
+    '删除失败: {0}': '刪除失敗: {0}',
+    '切换驱动失败: {0}': '切換驅動失敗: {0}',
+    '加载审计与快照失败: {0}': '載入稽核與快照失敗: {0}',
+    '扫描失败: {0}': '掃描失敗: {0}',
+    '扫描完成：发现 {0} 项，添加 {1} 项': '掃描完成：發現 {0} 項，新增 {1} 項',
+    'ACP 代理已保存并热更新': 'ACP 代理已儲存並熱更新',
+    '已删除资源 {0}': '已刪除資源 {0}',
+    '已添加工作区: {0}': '已新增工作區: {0}',
+    '已移除工作区: {0}': '已移除工作區: {0}',
+    '该工作区已在白名单中': '該工作區已在白名單中',
+    '探测失败': '探測失敗',
+    '保存失败': '儲存失敗',
+    '删除失败': '刪除失敗',
+  },
+  'zh-CN': {
+    '打开即对 Muse 生效，默认全部关闭。': '打开即对 Muse 生效，默认全部关闭。',
+    'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。': 'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。',
+    'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。':
+      'MCP 在你的 Windows 用户权限下运行，没有额外沙箱。退出或急停时会一并结束已拉起的子进程。',
+  },
+};
+
+/* Supplemental entries shared by every non-source locale. */
+Object.assign(MWH_I18N.en, {
+  '本地宿主 (MWH)': 'MWH local host',
+  '本地宿主 (MWH) · 已连接 PC': 'MWH local host · PC connected',
+  '本地宿主 (MWH) · 未连接 PC': 'MWH local host · PC not connected',
+  '2h 自动降级 · {0}': 'Auto-downgrade · {0}',
+  '此操作将立即生效。': 'It takes effect immediately.',
+  '高级配置中心': 'Advanced settings',
+  '拖拽调整宽度': 'Drag to resize',
+  '关闭高级配置': 'Close advanced settings',
+  '连接器': 'Connectors',
+  '权限': 'Permissions',
+  '代理': 'Agents',
+  '耗时': 'elapsed',
+  '步骤': 'step',
+  '删除 {0} 条': 'Delete {0}',
+  '{0} 工作区 · {1} 代理':   '{0} workspace(s) · {1} agent(s)',
+  '{0} 个已启用': '{0} enabled',
+  '{0} 快照': '{0} snapshots',
+  'MWH 本地宿主': 'MWH local host',
+  '运行正常': 'Running',
+  '暂无输出': 'No output yet',
+  '探测路径': 'Probe path',
+  '可执行文件路径 (Command)': 'Executable path (Command)',
+  '显示名称不能为空': 'Display name is required',
+  '请先填写可执行文件路径': 'Enter the executable path first',
+  '请先输入本地绝对路径': 'Enter an absolute local path first',
+  '获取 Token 失败': 'Could not get the token',
+  '触发全局急停': 'Trigger emergency stop',
+  '连接失败': 'Connection failed',
+  '轮换失败: {0}': 'Rotation failed: {0}',
+  '输出流分页 {0}/{1}': 'Output pages {0}/{1}',
+  '· 参数: {0}': '· args: {0}',
+  '· 代理: {0}': '· agent: {0}',
+  '当前父级档位：{0}': 'Parent mode: {0}',
+  '自定义 TLS 反代': 'Custom TLS proxy',
+  '轮换 Token 将生成全新密钥并使旧密钥立即失效，已连接的 Muse 客户端需更新。是否确认？':
+    'Rotating the token creates a new key and invalidates the old one immediately; connected Muse clients must be updated. Continue?',
+  '计划模式 / 变更前确认 / 自主模式下仅允许写访问以下物理路径；完全访问下跨目录普通读写不额外标为高危':
+    'Plan, confirm and autonomous modes can only write inside these physical paths; full access no longer flags ordinary cross-directory reads and writes as high risk.',
+});
+Object.assign(MWH_I18N.ja, {
+  '本地宿主 (MWH)': 'ローカルホスト (MWH)',
+  '本地宿主 (MWH) · 已连接 PC': 'ローカルホスト (MWH) · PC 接続済み',
+  '本地宿主 (MWH) · 未连接 PC': 'ローカルホスト (MWH) · PC 未接続',
+  '2h 自动降级 · {0}': '自動ダウングレード · {0}',
+  '此操作将立即生效。': 'すぐに反映されます。',
+  '高级配置中心': '詳細設定',
+  '拖拽调整宽度': 'ドラッグで幅を調整',
+  '关闭高级配置': '詳細設定を閉じる',
+  '连接器': '接続',
+  '权限': '権限',
+  '代理': 'エージェント',
+  '耗时': '経過',
+  '步骤': 'ステップ',
+  '删除 {0} 条': '{0} 件を削除',
+  '{0} 工作区 · {1} 代理': 'ワークスペース {0} 件 · エージェント {1} 件',
+  '{0} 个已启用': '{0} 件有効',
+  '{0} 快照': 'スナップショット {0} 件',
+  'MWH 本地宿主': 'MWH ローカルホスト',
+  '运行正常': '正常稼働',
+  '暂无输出': '出力はまだありません',
+  '探测路径': 'パスをプローブ',
+  '可执行文件路径 (Command)': '実行ファイルのパス (Command)',
+  '显示名称不能为空': '表示名を入力してください',
+  '请先填写可执行文件路径': '先に実行ファイルのパスを入力してください',
+  '请先输入本地绝对路径': '先にローカルの絶対パスを入力してください',
+  '获取 Token 失败': 'トークンを取得できません',
+  '触发全局急停': '緊急停止を実行',
+  '连接失败': '接続に失敗しました',
+  '轮换失败: {0}': 'ローテートに失敗しました: {0}',
+  '输出流分页 {0}/{1}': '出力ページ {0}/{1}',
+  '· 参数: {0}': '· 引数: {0}',
+  '· 代理: {0}': '· エージェント: {0}',
+  '当前父级档位：{0}': '親モード: {0}',
+  '自定义 TLS 反代': 'カスタム TLS プロキシ',
+  '轮换 Token 将生成全新密钥并使旧密钥立即失效，已连接的 Muse 客户端需更新。是否确认？':
+    'トークンをローテートすると新しい鍵が生成され、旧鍵は即座に無効になります。接続中の Muse クライアントの更新が必要です。続行しますか？',
+  '计划模式 / 变更前确认 / 自主模式下仅允许写访问以下物理路径；完全访问下跨目录普通读写不额外标为高危':
+    '計画・変更前に確認・自律モードでは、次の物理パス内にのみ書き込めます。フルアクセスでは通常のディレクトリ横断の読み書きを高リスクとして扱いません。',
+});
+Object.assign(MWH_I18N['zh-TW'], {
+  '本地宿主 (MWH)': '本機宿主 (MWH)',
+  '本地宿主 (MWH) · 已连接 PC': '本機宿主 (MWH) · 已連線 PC',
+  '本地宿主 (MWH) · 未连接 PC': '本機宿主 (MWH) · 未連線 PC',
+  '2h 自动降级 · {0}': '2h 自動降級 · {0}',
+  '此操作将立即生效。': '此操作將立即生效。',
+  '高级配置中心': '進階設定中心',
+  '拖拽调整宽度': '拖曳調整寬度',
+  '关闭高级配置': '關閉進階設定',
+  '连接器': '連接器',
+  '权限': '權限',
+  '代理': '代理',
+  '耗时': '耗時',
+  '步骤': '步驟',
+  '删除 {0} 条': '刪除 {0} 筆',
+  '{0} 工作区 · {1} 代理': '{0} 個工作區 · {1} 個代理',
+  '{0} 个已启用': '{0} 個已啟用',
+  '{0} 快照': '{0} 筆快照',
+  'MWH 本地宿主': 'MWH 本機宿主',
+  '运行正常': '運作正常',
+  '暂无输出': '尚無輸出',
+  '探测路径': '探測路徑',
+  '可执行文件路径 (Command)': '執行檔路徑 (Command)',
+  '显示名称不能为空': '顯示名稱不能為空',
+  '请先填写可执行文件路径': '請先填寫執行檔路徑',
+  '请先输入本地绝对路径': '請先輸入本機絕對路徑',
+  '获取 Token 失败': '取得 Token 失敗',
+  '触发全局急停': '觸發全域急停',
+  '连接失败': '連線失敗',
+  '轮换失败: {0}': '輪替失敗: {0}',
+  '输出流分页 {0}/{1}': '輸出串流分頁 {0}/{1}',
+  '· 参数: {0}': '· 參數: {0}',
+  '· 代理: {0}': '· 代理: {0}',
+  '当前父级档位：{0}': '目前父層等級：{0}',
+  '自定义 TLS 反代': '自訂 TLS 反向代理',
+  '轮换 Token 将生成全新密钥并使旧密钥立即失效，已连接的 Muse 客户端需更新。是否确认？':
+    '輪替 Token 將產生全新金鑰並使舊金鑰立即失效，已連線的 Muse 用戶端需更新。是否確認？',
+  '计划模式 / 变更前确认 / 自主模式下仅允许写访问以下物理路径；完全访问下跨目录普通读写不额外标为高危':
+    '計畫模式 / 變更前確認 / 自主模式下僅允許寫入以下實體路徑；完整存取下跨目錄一般讀寫不額外標為高風險。',
+});
+
+const MWH_I18N_FIELD_COPY = {
+  en: {
+    '检查路径拼写': 'check the path spelling',
+    '轮换重生成 Token': 'Rotate and regenerate token',
+    '删除资源': 'Delete resource',
+    '停止失败: {0}': 'Stop failed: {0}',
+    '以空格分隔，例如: C:\\path\\to\\agent.js --acp':
+      'Space separated, e.g. C:\\path\\to\\agent.js --acp',
+    '例如: D:\\tools\\node.exe 或 node': 'e.g. C:\\path\\to\\node.exe or node',
+    '例如: codebuddy': 'e.g. my-agent',
+    '例如: CodeBuddy 助手': 'e.g. My Agent',
+  },
+  ja: {
+    '检查路径拼写': 'パスの綴りを確認してください',
+    '轮换重生成 Token': 'トークンを再生成',
+    '删除资源': 'リソースを削除',
+    '停止失败: {0}': '停止に失敗しました: {0}',
+    '以空格分隔，例如: C:\\path\\to\\agent.js --acp':
+      'スペース区切り、例: C:\\path\\to\\agent.js --acp',
+    '例如: D:\\tools\\node.exe 或 node': '例: C:\\path\\to\\node.exe または node',
+    '例如: codebuddy': '例: my-agent',
+    '例如: CodeBuddy 助手': '例: マイエージェント',
+  },
+  'zh-TW': {
+    '检查路径拼写': '檢查路徑拼寫',
+    '轮换重生成 Token': '輪替重新產生 Token',
+    '删除资源': '刪除資源',
+    '停止失败: {0}': '停止失敗: {0}',
+    '以空格分隔，例如: C:\\path\\to\\agent.js --acp':
+      '以空格分隔，例如: C:\\path\\to\\agent.js --acp',
+    '例如: D:\\tools\\node.exe 或 node': '例如: C:\\path\\to\\node.exe 或 node',
+    '例如: codebuddy': '例如: my-agent',
+    '例如: CodeBuddy 助手': '例如: 我的代理助理',
+  },
+};
+for (const locale of Object.keys(MWH_I18N_FIELD_COPY)) {
+  Object.assign(MWH_I18N[locale], MWH_I18N_FIELD_COPY[locale]);
+}
+
+/* zh-CN is the source text itself: identity dictionary. */
+for (const key of Object.keys(MWH_I18N.en)) {
+  MWH_I18N['zh-CN'][key] = key;
+}
+
+/**
+ * Detects the host language from public page attributes only. The settings
+ * scope is deliberately narrow so chat transcripts are never inspected.
+ */
+function detectLanguage() {
+  const html = document.documentElement;
+  const body = document.body;
+  const attributeCandidates = [
+    html && html.lang,
+    html && html.dataset ? html.dataset.lang : '',
+    html && html.dataset ? html.dataset.locale : '',
+    body && body.dataset ? body.dataset.lang : '',
+    body && body.dataset ? body.dataset.locale : '',
+  ];
+  for (const candidate of attributeCandidates) {
+    const locale = localeFromRaw(candidate);
+    if (locale) return locale;
+  }
+
+  if (html && typeof html.querySelectorAll === 'function') {
+    const metas = html.querySelectorAll('meta[http-equiv], meta[name]');
+    for (const meta of metas) {
+      const key = String(meta.getAttribute('http-equiv') || meta.getAttribute('name') || '').toLowerCase();
+      if (key !== 'content-language' && key !== 'language') continue;
+      const locale = localeFromRaw(meta.getAttribute('content') || meta.getAttribute('value'));
+      if (locale) return locale;
+    }
+  }
+
+  const languageLabel = /简体中文|中文（简体）|chinese\s*\(simplified\)|^zh[-_]?(?:cn|hans)$/i;
+  const traditionalLabel = /繁體中文|繁体中文|中文（繁體）|chinese\s*\(traditional\)|^zh[-_]?(?:tw|hk|mo|hant)/i;
+  const japaneseLabel = /日本語|japanese|^ja(?:[-_]|$)/i;
+  const englishLabel = /^english$|^en(?:[-_]|$)/i;
+  const scopes = document.querySelectorAll(
+    '[role="dialog"], dialog, [class*="settings"], [class*="Settings"], [data-testid*="settings"]'
+  );
+  for (const scope of scopes) {
+    const controls = scope.querySelectorAll(
+      '[aria-selected="true"], [aria-checked="true"], [data-state="checked"], [data-state="selected"], select, [role="combobox"]'
+    );
+    for (const control of controls) {
+      const raw = String(
+        control.getAttribute('aria-label') ||
+          (control.value !== undefined ? control.value : '') ||
+          control.textContent ||
+          ''
+      ).trim();
+      if (!raw || raw.length > 48) continue;
+      if (languageLabel.test(raw)) return 'zh-CN';
+      if (traditionalLabel.test(raw)) return 'zh-TW';
+      if (japaneseLabel.test(raw)) return 'ja';
+      if (englishLabel.test(raw)) return 'en';
+    }
+  }
+
+  if (typeof navigator !== 'undefined') {
+    const tags = [navigator.language].concat(navigator.languages || []);
+    for (const tag of tags) {
+      const locale = localeFromRaw(tag);
+      if (locale) return locale;
+    }
+  }
+  return 'en';
+}
+
+function t(key, params) {
+  const active = MWH_I18N[state.lang] || MWH_I18N.en;
+  const source = Object.prototype.hasOwnProperty.call(active, key)
+    ? active[key]
+    : (Object.prototype.hasOwnProperty.call(MWH_I18N.en, key) ? MWH_I18N.en[key] : key);
+  if (!params) return source;
+  return source.replace(/\{(\w+)\}/g, function (match, name) {
+    return params[name] !== undefined ? String(params[name]) : match;
+  });
+}
+
+let compiledLocale = null;
+let compiledPhrases = [];
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function compiledDictionary() {
+  if (compiledLocale === state.lang) return compiledPhrases;
+  const table = Object.assign({}, MWH_I18N.en, MWH_I18N[state.lang] || {});
+  const entries = Object.keys(table)
+    .sort(function (a, b) {
+      return b.length - a.length;
+    })
+    .map(function (key) {
+      const value = table[key];
+      if (!/\{\d+\}/.test(key)) return { key: key, value: value, re: null };
+      const body = key
+        .split(/\{\d+\}/)
+        .map(escapeRegExp)
+        .join('([\\s\\S]+?)');
+      return { key: key, value: value, re: new RegExp('^' + body + '$') };
+    });
+  compiledLocale = state.lang;
+  compiledPhrases = entries;
+  return entries;
+}
+
+/** Translates one line without touching its surrounding whitespace. */
+function translateLine(line) {
+  const parts = /^(\s*)([\s\S]*?)(\s*)$/.exec(line);
+  if (!parts || !parts[2]) return line;
+  const core = parts[2];
+  const entries = compiledDictionary();
+
+  // Pass 1: exact phrase or a full sentence with dynamic slots. These are
+  // authoritative, so word order can be rearranged per locale.
+  for (const entry of entries) {
+    if (entry.re) {
+      const m = entry.re.exec(core);
+      if (m) {
+        const out = entry.value.replace(/\{(\d+)\}/g, function (_all, idx) {
+          const captured = m[Number(idx) + 1];
+          return captured === undefined ? '' : translateText(captured);
+        });
+        return parts[1] + out + parts[3];
+      }
+      continue;
+    }
+    if (core === entry.key) return parts[1] + entry.value + parts[3];
+  }
+
+  // Pass 2: fragments inside short labels split by markup (island meta,
+  // section badges). Long untranslated sentences are left untouched so a
+  // partial match can never produce mixed-language garbage.
+  if (core.length <= 28) {
+    let out = core;
+    let replaced = false;
+    for (const entry of entries) {
+      if (entry.re) continue;
+      if (out.indexOf(entry.key) !== -1) {
+        out = out.split(entry.key).join(entry.value);
+        replaced = true;
+      }
+    }
+    if (replaced) return parts[1] + out + parts[3];
+  }
+  return line;
+}
+
+/** Translates a plain string (including multi-line titles) line by line. */
+function translateText(raw) {
+  let text = String(raw == null ? '' : raw);
+  if (!text || state.lang === 'zh-CN') return text;
+  if (text.indexOf('\n') === -1) return translateLine(text);
+  return text
+    .split('\n')
+    .map(translateLine)
+    .join('\n');
+}
+
+const MWH_TEXT_ATTRS = ['title', 'aria-label', 'placeholder'];
+
+/** Localises only MWH-owned injected nodes; the host page is never touched. */
+function localizeMwhNode(root) {
+  if (!root || state.lang === 'zh-CN' || typeof document === 'undefined') return;
+  if (root.nodeType === 3) {
+    const next = translateText(root.nodeValue);
+    if (next !== root.nodeValue) root.nodeValue = next;
+    return;
+  }
+  if (typeof root.querySelectorAll !== 'function') return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (!node.nodeValue || !/[\u4e00-\u9fa5]/.test(node.nodeValue)) continue;
+    const next = translateText(node.nodeValue);
+    if (next !== node.nodeValue) node.nodeValue = next;
+  }
+  MWH_TEXT_ATTRS.forEach(function (attr) {
+    if (root.hasAttribute && root.hasAttribute(attr)) {
+      const value = root.getAttribute(attr);
+      const next = translateText(value);
+      if (next !== value) root.setAttribute(attr, next);
+    }
+    const nodesWithAttr = root.querySelectorAll('[' + attr + ']');
+    for (const el of nodesWithAttr) {
+      const value = el.getAttribute(attr);
+      const next = translateText(value);
+      if (next !== value) el.setAttribute(attr, next);
+    }
+  });
+}
+
+function localizeMwhSurfaces() {
+  if (state.lang === 'zh-CN') return;
+  [
+    'mwh-drawer',
+    'mwh-subpanel',
+    'mwh-approval-island',
+    'mwh-toast',
+    'mwh-confirm-dialog',
+    'mwh-tour-overlay',
+    'mwh-activity-btn',
+  ].forEach(function (id) {
+    localizeMwhNode(document.getElementById(id));
+  });
+}
+
+/* ------------------------------------------------------------------ *
  * Permission profile metadata (mirrors frontend/src/services/mwhRules.ts)
  * ------------------------------------------------------------------ */
 
@@ -264,15 +1978,115 @@ function formatCompactTime(ts) {
  * Pairing artifacts (no live secret) — port of generatePairingArtifacts
  * ------------------------------------------------------------------ */
 
+function buildPairingPrompt(locale, mcpEndpoint, restEndpoint, profileLabel, profileTitle, workspaceDisplay) {
+  if (locale === 'en') {
+    return `[MWH pairing guide (no secret)]
+The local MWH host daemon exposes the following. Verify the connection is real once the connector is configured:
+- Streamable HTTP MCP endpoint: ${mcpEndpoint}
+- REST API endpoint: ${restEndpoint}
+- Permission profile: ${profileLabel} (${profileTitle})
+- Authorized workspaces: ${workspaceDisplay}
+
+Calling conventions:
+1. Call pc_status first to read non-secret fields such as tunnel state, permission profile, workspace paths and the latest approval receipt (never read .env, cookies or local key files). Only a successful response counts as connected.
+2. This guide is a template; pasting it does not connect anything. If pc_status returns 401/403, ask the user to copy the current Bearer token from Connectors & credentials in the settings drawer and update the Muse connector instead of resending this text.
+3. When a tool returns CONFIRMATION_REQUIRED (with an approvalId), wait for the user to approve in the desktop island, then call job_control(action="poll", approvalId="<approvalId>") until CONSUMED for the receipt and output.
+4. To review or change local settings, point the user to the MWH icon in Muse's left navigation:
+   - View or copy the connector token: Connectors & credentials
+   - Switch permission modes: Permission modes
+   - Add or remove authorized workspaces: Local PC engine
+   - Inspect snapshots, roll back one, or prune history: Snapshots & audit log`;
+  }
+  if (locale === 'ja') {
+    return `[MWH ペアリング手順（鍵を含みません）]
+ローカル MWH ホストデーモンの接続情報は次のとおりです。コネクタ設定後に実際に接続できたか確認してください：
+- Streamable HTTP MCP エンドポイント: ${mcpEndpoint}
+- REST API エンドポイント: ${restEndpoint}
+- 権限モード: ${profileLabel}（${profileTitle}）
+- 許可ワークスペース: ${workspaceDisplay}
+
+呼び出しと連携のルール：
+1. まず pc_status を呼び、トンネル状態・権限モード・ワークスペースパス・直近の承認記録などの非機密項目を確認してください（.env、Cookie、ローカルの鍵ファイルは読まないでください）。権限モード / ワークスペース / トンネル状態が返って初めて接続成立とみなします。
+2. この手順はテンプレートです。貼り付けだけでは接続されません。pc_status が 401/403 を返した場合は、ユーザーに設定ドロワーの「接続と権限」で現在の Bearer トークンをコピーして Muse コネクタに再入力してもらい、この文面を再送しないでください。
+3. ツールが CONFIRMATION_REQUIRED（approvalId 付き）を返したら、ユーザーがデスクトップアイランドで許可した後に job_control(action="poll", approvalId="<approvalId>") を呼び、CONSUMED になるまでポーリングして記録と出力を取得してください。
+4. ローカル設定の確認や変更が必要な場合は、Muse 左側ナビゲーションの MWH アイコンからドロワーを開くよう案内してください：
+   - コネクタトークンの確認・コピー：接続と権限
+   - 4 段階の権限モード切替：権限モード
+   - 許可ワークスペースの追加・削除：ローカル PC エンジン
+   - スナップショットの確認・1 件復元・履歴整理：スナップショットと監査ログ`;
+  }
+  if (locale === 'zh-TW') {
+    return `[MWH 配對指令（不含金鑰）]
+以下為本機 MWH 宿主守護行程的接入資訊。請在完成連接器設定後驗證是否真正接通：
+- Streamable HTTP MCP 端點: ${mcpEndpoint}
+- REST API 端點: ${restEndpoint}
+- 目前權限等級: ${profileLabel}（${profileTitle}）
+- 授權工作區: ${workspaceDisplay}
+
+呼叫與協同規範：
+1. 請先呼叫 pc_status 探測目前通道狀態、權限等級、工作區路徑與最近一次審批回執等非機密欄位（切勿讀取 .env、Cookie 或任何本機金鑰檔案）；只有成功傳回權限等級 / 工作區 / 通道狀態，才算真正接通。
+2. 本指令是範本文字，貼上它本身不代表已連線。若 pc_status 傳回驗證失敗（401/403），請讓使用者在設定抽屜的「連線與權限」複製目前 Bearer Token 並重新填入 Muse 連接器，而不是反覆重送本指令。
+3. 當工具傳回 CONFIRMATION_REQUIRED（含 approvalId）時，請在使用者於桌面浮島點擊允許後直接呼叫 job_control(action="poll", approvalId="<approvalId>") 輪詢 CONSUMED 完成回執與輸出。
+4. 如需使用者檢視或修改本機設定，請指引使用者點擊 Muse 左側導覽列 MWH 圖示開啟抽屜面板：
+   - 檢視或複製連接器金鑰：連線與權限
+   - 切換四段權限模式：權限模式
+   - 新增或移除授權工作區目錄：本機電腦引擎
+   - 依工作區檢視快照、單筆還原或清理歷史記錄：快照與稽核日誌`;
+  }
+  return `[MWH 配对指令（不含密钥）]
+以下为本机 MWH 宿主守护进程的接入信息。请在完成连接器配置后验证是否真正接通：
+- Streamable HTTP MCP 端点: ${mcpEndpoint}
+- REST API 端点: ${restEndpoint}
+- 当前权限档位: ${profileLabel}（${profileTitle}）
+- 授权工作区: ${workspaceDisplay}
+
+调用与协同规范：
+1. 请先调用 pc_status 探测当前隧道状态、权限档位、工作区路径与最近一次审批回执等非秘密字段（切勿读取 .env、Cookie 或任何本地密钥文件）；只有成功返回权限档位 / 工作区 / 隧道状态，才算真正接通。
+2. 本指令是模板文本，粘贴它本身不代表已连接。若 pc_status 返回鉴权失败（401/403），请让用户在设置抽屉的「连接与权限」复制当前 Bearer Token 并重新填入 Muse 连接器，而不是反复重发本指令。
+3. 当工具返回 CONFIRMATION_REQUIRED（含 approvalId）时，请在用户于桌面浮岛点击允许后直接调用 job_control(action="poll", approvalId="<approvalId>") 轮询 CONSUMED 完成回执与输出。
+4. 如需用户查看或修改本地配置，请指引用户点击 Muse 左侧导航栏 MWH 图标打开抽屉面板：
+   - 查看或复制连接器密钥：连接与权限
+   - 切换四档权限模式：权限模式
+   - 添加或移除授权工作区目录：本地电脑引擎
+   - 按工作区查看快照、单条回滚或清理历史记录：快照与审计日志`;
+}
+
+function pairingDefaults(locale) {
+  if (locale === 'en') {
+    return {
+      workspace: 'current default workspace',
+      tokenHint: 'Bearer <copy the Bearer token from the connectors page>',
+    };
+  }
+  if (locale === 'ja') {
+    return {
+      workspace: '現在の既定ワークスペース',
+      tokenHint: 'Bearer <接続と権限ページで Bearer トークンをコピー>',
+    };
+  }
+  if (locale === 'zh-TW') {
+    return {
+      workspace: '目前預設工作區',
+      tokenHint: 'Bearer <在連線與權限頁複製 Bearer Token>',
+    };
+  }
+  return {
+    workspace: '当前默认工作区',
+    tokenHint: 'Bearer <在连接器页复制 Bearer Token>',
+  };
+}
+
 function generatePairingArtifacts(baseUrl, mode, workspaceRoots, policy, tokenOverride) {
   const cleanUrl = String(baseUrl || '').trim().replace(/\/+$/, '');
   const mcpEndpoint = cleanUrl + '/mcp';
   const restEndpoint = cleanUrl + '/api/v1';
   const profileMeta = getPermissionProfileMeta(mode, policy || 'smart-risk');
+  const locale = state.lang || 'zh-CN';
+  const defaults = pairingDefaults(locale);
   const workspaceDisplay =
-    workspaceRoots && workspaceRoots.length > 0 ? workspaceRoots.join(', ') : '当前默认工作区';
+    workspaceRoots && workspaceRoots.length > 0 ? workspaceRoots.join(', ') : defaults.workspace;
 
-  const authHeaderValue = tokenOverride ? `Bearer ${tokenOverride}` : 'Bearer <在连接器页复制 Bearer Token>';
+  const authHeaderValue = tokenOverride ? `Bearer ${tokenOverride}` : defaults.tokenHint;
 
   const mcpJsonConfig = JSON.stringify(
     {
@@ -293,22 +2107,14 @@ function generatePairingArtifacts(baseUrl, mode, workspaceRoots, policy, tokenOv
     2
   );
 
-  const skillMarkdownPrompt = `[MWH 配对指令（不含密钥）]
-以下为本机 MWH 宿主守护进程的接入信息。请在完成连接器配置后验证是否真正接通：
-- Streamable HTTP MCP 端点: ${mcpEndpoint}
-- REST API 端点: ${restEndpoint}
-- 当前权限档位: ${profileMeta.shortLabel}（${profileMeta.title}）
-- 授权工作区: ${workspaceDisplay}
-
-调用与协同规范：
-1. 请先调用 pc_status 探测当前隧道状态、权限档位、工作区路径与最近一次审批回执等非秘密字段（切勿读取 .env、Cookie 或任何本地密钥文件）；只有成功返回权限档位 / 工作区 / 隧道状态，才算真正接通。
-2. 本指令是模板文本，粘贴它本身不代表已连接。若 pc_status 返回鉴权失败（401/403），请让用户在设置抽屉的「连接器与隧道」复制当前 Bearer Token 并重新填入 Muse 连接器，而不是反复重发本指令。
-3. 当工具返回 CONFIRMATION_REQUIRED（含 approvalId）时，请在用户于桌面浮岛点击允许后直接调用 job_control(action="poll", approvalId="<approvalId>") 轮询 CONSUMED 完成回执与输出。
-4. 如需用户查看或修改本地配置，请指引用户点击 Muse 左侧导航栏 MWH 图标打开抽屉面板：
-   - 查看或复制连接器密钥：连接器与隧道
-   - 切换四档权限模式：权限与安全模式
-   - 添加或移除授权工作区目录：本地电脑引擎
-   - 按工作区查看快照、单条回滚或清理历史记录：快照回滚与审计日志`;
+  const skillMarkdownPrompt = buildPairingPrompt(
+    locale,
+    mcpEndpoint,
+    restEndpoint,
+    t(profileMeta.shortLabel),
+    t(profileMeta.title),
+    workspaceDisplay
+  );
 
   return { mcpEndpoint, restEndpoint, skillMarkdownPrompt, mcpJsonConfig };
 }
@@ -1904,6 +3710,10 @@ const state = {
   tourStepIndex: 0,
   themeDark: true,
   lastThemeSent: null,
+  lang: detectLanguage(),
+  lastLangSent: null,
+  lastToast: '',
+  lastPcStatus: null,
   islandAutoExpandedTaskId: null,
   settingsLive: false,
   settingsError: '',
@@ -2118,7 +3928,8 @@ function copyText(text, message) {
 function showToast(message) {
   const node = document.getElementById('mwh-toast');
   if (!node) return;
-  node.textContent = String(message || '');
+  state.lastToast = String(message || '');
+  node.textContent = translateText(state.lastToast);
   node.classList.add('open');
   if (state.toastTimer) clearTimeout(state.toastTimer);
   state.toastTimer = setTimeout(function () {
@@ -2260,6 +4071,50 @@ function applyThemeClass() {
   }
 }
 
+/**
+ * Mirrors detectAndSyncTheme. Language is never user-selectable in the
+ * injected UI: it follows Muse.ai and falls back to navigator.language.
+ */
+let lastLanguageProbeAt = 0;
+
+function detectAndSyncLanguage(forceSend) {
+  const now = Date.now();
+  if (!forceSend && now - lastLanguageProbeAt < 400) return;
+  lastLanguageProbeAt = now;
+  const next = detectLanguage();
+  const changed = next !== state.lang;
+  state.lang = next;
+  if (forceSend || changed || state.lastLangSent !== next) {
+    state.lastLangSent = next;
+    ipcRenderer.send('mwh:language-sync', { lang: next });
+  }
+  if (changed || forceSend) applyLanguage();
+}
+
+/** Re-paints every mounted surface from the zh-CN source, then localises it. */
+function applyLanguage() {
+  if (typeof document === 'undefined') return;
+  try {
+    if (state.settings) {
+      renderAll(true);
+    } else {
+      localizeMwhSurfaces();
+    }
+    repaintConfirmDialog();
+    if (state.lastPcStatus) {
+      updatePcStatusDot(state.lastPcStatus.connected, state.lastPcStatus.statusText);
+    }
+    if (state.lastToast) {
+      const toast = document.getElementById('mwh-toast');
+      if (toast && toast.classList.contains('open')) {
+        toast.textContent = translateText(state.lastToast);
+      }
+    }
+  } catch (_e) {
+    // A partial DOM during boot must never break language sync
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * Rendering: drawer
  * ------------------------------------------------------------------ */
@@ -2333,14 +4188,17 @@ function evaluateMuseConnection(settings) {
 
 function updatePcStatusDot(connected, statusText) {
   const isConnected = Boolean(connected);
+  state.lastPcStatus = { connected: isConnected, statusText: statusText || '' };
   if (activityBtnEl) {
     activityBtnEl.classList.toggle('mwh-connected', isConnected);
     activityBtnEl.classList.toggle('mwh-disconnected', !isConnected);
     const tooltip = activityBtnEl.querySelector('.mwh-tooltip');
     if (tooltip) {
-      tooltip.textContent = isConnected
-        ? ('本地宿主 (MWH) · 已连接 PC' + (statusText ? ' · ' + statusText : ''))
-        : ('本地宿主 (MWH) · 未连接 PC' + (statusText ? ' · ' + statusText : ''));
+      tooltip.textContent = translateText(
+        isConnected
+          ? ('本地宿主 (MWH) · 已连接 PC' + (statusText ? ' · ' + statusText : ''))
+          : ('本地宿主 (MWH) · 未连接 PC' + (statusText ? ' · ' + statusText : ''))
+      );
     }
   }
 }
@@ -2586,6 +4444,7 @@ function renderDrawer() {
     '<span class="mwh-mono">' + esc(conn.connected ? 'ONLINE' : 'OFFLINE') + '</span>' +
     '</div>' +
     '</div>';
+  localizeMwhNode(root);
 }
 
 /* ------------------------------------------------------------------ *
@@ -4166,6 +6025,7 @@ function renderSubpanel(force) {
     '</div>';
   root.classList.add('open');
   state.subpanelDirty = false;
+  localizeMwhNode(root);
   const nextBody = document.getElementById('mwh-subpanel-body');
   if (nextBody) nextBody.scrollTop = scrollTop;
   attachPanelResize(root, '.mwh-resize-handle', 'mwh_subpanel_width', 280, function () {
@@ -4841,6 +6701,7 @@ function renderApprovalIsland() {
   root.classList.add('open');
   applyIslandLayout();
   scrollIslandLogToBottom(root);
+  localizeMwhNode(root);
 }
 
 /* ------------------------------------------------------------------ *
@@ -4868,6 +6729,7 @@ function scheduleRender(force) {
     renderApprovalIsland();
     if (state.tourOpen) renderTour();
     applyThemeClass();
+    localizeMwhSurfaces();
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
   else setTimeout(run, 16);
@@ -4880,6 +6742,7 @@ function renderAll(force) {
   renderApprovalIsland();
   if (state.tourOpen) renderTour();
   applyThemeClass();
+  localizeMwhSurfaces();
 }
 
 /* ------------------------------------------------------------------ *
@@ -5033,6 +6896,7 @@ function renderTour() {
     '</div>' +
     '</div>';
   overlay.classList.add('open');
+  localizeMwhNode(overlay);
 }
 
 function setLoading(actionName) {
@@ -5046,41 +6910,68 @@ function clearLoading() {
 }
 
 let confirmResolver = null;
+let lastConfirmOptions = null;
 
-function showConfirmDialog(options) {
-  return new Promise(function (resolve) {
-    confirmResolver = resolve;
-    let modalEl = document.getElementById('mwh-confirm-dialog');
-    if (!modalEl) {
-      modalEl = document.createElement('div');
-      modalEl.id = 'mwh-confirm-dialog';
-      modalEl.className = 'mwh-confirm-dialog-backdrop';
-      document.body.appendChild(modalEl);
-    }
-    const danger = Boolean(options.danger);
-    modalEl.innerHTML =
-      '<div class="mwh-confirm-card">' +
-      '<div class="mwh-confirm-icon' + (danger ? ' danger' : '') + '">' +
-      (danger ? ICON.alert : ICON.shield) +
-      '</div>' +
-      '<div class="mwh-confirm-title">' + esc(options.title || '安全确认') + '</div>' +
-      '<div class="mwh-confirm-message">' + esc(options.message || '') + '</div>' +
-      '<div class="mwh-confirm-actions">' +
-      '<button type="button" class="mwh-btn mwh-btn-ghost" id="mwh-confirm-cancel">' + esc(options.cancelText || '取消') + '</button>' +
-      '<button type="button" class="mwh-btn ' + (danger ? 'mwh-btn-danger' : 'mwh-btn-primary') + '" id="mwh-confirm-ok">' + esc(options.confirmText || '确定') + '</button>' +
-      '</div>' +
-      '</div>';
-    modalEl.classList.add('open');
-    modalEl.querySelector('#mwh-confirm-cancel').onclick = function () {
+function paintConfirmDialog(options) {
+  let modalEl = document.getElementById('mwh-confirm-dialog');
+  if (!modalEl) {
+    modalEl = document.createElement('div');
+    modalEl.id = 'mwh-confirm-dialog';
+    modalEl.className = 'mwh-confirm-dialog-backdrop';
+    document.body.appendChild(modalEl);
+  }
+  const danger = Boolean(options.danger);
+  modalEl.innerHTML =
+    '<div class="mwh-confirm-card">' +
+    '<div class="mwh-confirm-icon' + (danger ? ' danger' : '') + '">' +
+    (danger ? ICON.alert : ICON.shield) +
+    '</div>' +
+    '<div class="mwh-confirm-title">' + esc(options.title || '安全确认') + '</div>' +
+    '<div class="mwh-confirm-message">' + esc(options.message || '') + '</div>' +
+    '<div class="mwh-confirm-actions">' +
+    '<button type="button" class="mwh-btn mwh-btn-ghost" id="mwh-confirm-cancel">' + esc(options.cancelText || '取消') + '</button>' +
+    '<button type="button" class="mwh-btn ' + (danger ? 'mwh-btn-danger' : 'mwh-btn-primary') + '" id="mwh-confirm-ok">' + esc(options.confirmText || '确定') + '</button>' +
+    '</div>' +
+    '</div>';
+  modalEl.classList.add('open');
+  localizeMwhNode(modalEl);
+  return modalEl;
+}
+
+function bindConfirmActions(modalEl) {
+  const cancelBtn = modalEl.querySelector('#mwh-confirm-cancel');
+  const okBtn = modalEl.querySelector('#mwh-confirm-ok');
+  if (cancelBtn) {
+    cancelBtn.onclick = function () {
       modalEl.classList.remove('open');
       if (confirmResolver) confirmResolver(false);
       confirmResolver = null;
     };
-    modalEl.querySelector('#mwh-confirm-ok').onclick = function () {
+  }
+  if (okBtn) {
+    okBtn.onclick = function () {
       modalEl.classList.remove('open');
       if (confirmResolver) confirmResolver(true);
       confirmResolver = null;
     };
+  }
+}
+
+/** Re-paints an open confirmation dialog after a host language change. */
+function repaintConfirmDialog() {
+  if (!lastConfirmOptions) return;
+  const modalEl = document.getElementById('mwh-confirm-dialog');
+  if (!modalEl || !modalEl.classList.contains('open')) return;
+  paintConfirmDialog(lastConfirmOptions);
+  bindConfirmActions(modalEl);
+}
+
+function showConfirmDialog(options) {
+  return new Promise(function (resolve) {
+    confirmResolver = resolve;
+    lastConfirmOptions = options;
+    const modalEl = paintConfirmDialog(options);
+    bindConfirmActions(modalEl);
   });
 }
 
@@ -6466,6 +8357,7 @@ function tickCountdown() {
       } else {
         node.textContent = '剩余计时: ' + remainingText(settings.autoDowngradeRemainingSec);
       }
+      localizeMwhNode(node);
     });
   }
 }
@@ -6474,27 +8366,30 @@ function initObservers() {
   injectStyles();
   ensureShell();
   tryAttachToActivityBar();
+  detectAndSyncLanguage(true);
 
   const observer = new MutationObserver(function () {
     tryAttachToActivityBar();
     const existingModal = document.querySelector('[role="dialog"], dialog, [class*="settings"]');
     if (existingModal) tryAttachToModal(existingModal);
+    detectAndSyncLanguage(false);
   });
   observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
 
   const themeObserver = new MutationObserver(function () {
     detectAndSyncTheme(false);
+    detectAndSyncLanguage(false);
   });
   if (document.documentElement) {
     themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class', 'data-theme', 'data-color-scheme'],
+      attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'lang', 'data-lang', 'data-locale'],
     });
   }
   if (document.body) {
     themeObserver.observe(document.body, {
       attributes: true,
-      attributeFilter: ['class', 'data-theme', 'data-color-scheme'],
+      attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'lang', 'data-lang', 'data-locale'],
     });
   }
 
@@ -6520,7 +8415,14 @@ function initObservers() {
   });
 
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) detectAndSyncTheme(false);
+    if (!document.hidden) {
+      detectAndSyncTheme(false);
+      detectAndSyncLanguage(false);
+    }
+  });
+
+  window.addEventListener('languagechange', function () {
+    detectAndSyncLanguage(false);
   });
 
   ipcRenderer.on('mwh:open-drawer', function () {

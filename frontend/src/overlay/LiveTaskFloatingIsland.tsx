@@ -271,6 +271,8 @@ export const LiveTaskFloatingIsland: React.FC = () => {
           {!capsule && liveTask.status === 'WAITING_APPROVAL' && (() => {
             const queueCount = state.pendingApprovals?.length || 0;
             const currentPending = state.pendingApprovals?.find((p) => p.id === liveTask.id);
+            const currentIndex = state.pendingApprovals?.findIndex((p) => p.id === liveTask.id) ?? -1;
+            const queuePos = currentIndex >= 0 ? currentIndex + 1 : 1;
             const isCriticalHmac = Boolean(currentPending?.requiresMobileHmac);
             return (
               <span className="text-[11px] font-mono opacity-75 whitespace-nowrap min-w-0 truncate flex items-center gap-1.5">
@@ -281,7 +283,7 @@ export const LiveTaskFloatingIsland: React.FC = () => {
                 )}
                 {queueCount > 1 && (
                   <span className="px-1.5 py-0.5 rounded bg-[#6366F1]/25 text-[#A5B4FC] text-[10px] font-semibold">
-                    队列 1/{queueCount}
+                    队列 {queuePos}/{queueCount}
                   </span>
                 )}
                 <span>

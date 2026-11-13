@@ -5,7 +5,7 @@
  * to render the local MWH settings drawer and floating approval island.
  */
 
-const { app, BrowserWindow, BrowserView, ipcMain, Tray, Menu, nativeImage, session, screen, shell } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, Notification, Tray, Menu, nativeImage, session, screen, shell } = require('electron');
 const { spawn, execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -343,6 +343,7 @@ const ALLOWED_PERMISSIONS = [
 
 let mainWindow = null;
 let tray = null;
+let lastNotifiedApprovalId = '';
 let token = process.env.TUNNEL_RUNTIME_TOKEN || '';
 let signingKey = process.env.MWH_HMAC_SECRET || '';
 let persistedExtra = {};
@@ -1205,6 +1206,52 @@ function connectDaemonSse() {
           }
           if (patch && museView && !museView.webContents.isDestroyed()) {
             museView.webContents.send('mwh:state-patch', patch);
+          }
+          if (patch && patch.liveTask) {
+            const pendingCount = Array.isArray(patch.pendingApprovals) ? patch.pendingApprovals.length : 0;
+            if (tray && !tray.isDestroyed()) {
+              tray.setToolTip(
+                pendingCount > 0
+                  ? `Muse-Win-Harness · ${pendingCount} 条待审批`
+                  : 'Muse-Win-Harness'
+              );
+            }
+            if (
+              patch.liveTask.status === 'WAITING_APPROVAL' &&
+              patch.liveTask.id &&
+              patch.liveTask.id !== lastNotifiedApprovalId
+            ) {
+              lastNotifiedApprovalId = patch.liveTask.id;
+              try {
+                if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFocused()) {
+                  mainWindow.flashFrame(true);
+                }
+                if (Notification.isSupported()) {
+                  const n = new Notification({
+                    title: 'MWH 安全审批请求',
+                    body: patch.liveTask.summary || patch.liveTask.command || '有新的本机操作等待确认',
+                    silent: false,
+                  });
+                  n.on('click', () => {
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                      if (mainWindow.isMinimized()) mainWindow.restore();
+                      mainWindow.show();
+                      mainWindow.focus();
+                    }
+                  });
+                  n.show();
+                }
+              } catch {
+                // Native notification is best-effort and must never crash SSE bridge.
+              }
+            } else if (patch.liveTask.status !== 'WAITING_APPROVAL') {
+              lastNotifiedApprovalId = '';
+              try {
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(false);
+              } catch {
+                // ignore
+              }
+            }
           }
         }
       });

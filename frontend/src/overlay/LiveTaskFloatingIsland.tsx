@@ -268,12 +268,29 @@ export const LiveTaskFloatingIsland: React.FC = () => {
               {liveTask.totalSteps}
             </span>
           )}
-          {!capsule && liveTask.status === 'WAITING_APPROVAL' && (
-            <span className="text-[11px] font-mono opacity-65 whitespace-nowrap min-w-0 truncate">
-              风险 {liveTask.riskScore}
-              {liveTask.worktreeId ? ` · Worktree: ${liveTask.worktreeId}` : ''}
-            </span>
-          )}
+          {!capsule && liveTask.status === 'WAITING_APPROVAL' && (() => {
+            const queueCount = state.pendingApprovals?.length || 0;
+            const currentPending = state.pendingApprovals?.find((p) => p.id === liveTask.id);
+            const isCriticalHmac = Boolean(currentPending?.requiresMobileHmac);
+            return (
+              <span className="text-[11px] font-mono opacity-75 whitespace-nowrap min-w-0 truncate flex items-center gap-1.5">
+                {isCriticalHmac && (
+                  <span className="px-1.5 py-0.5 rounded bg-[#E06C60]/20 text-[#E06C60] text-[10px] font-semibold">
+                    高危 · 需签名
+                  </span>
+                )}
+                {queueCount > 1 && (
+                  <span className="px-1.5 py-0.5 rounded bg-[#6366F1]/25 text-[#A5B4FC] text-[10px] font-semibold">
+                    队列 1/{queueCount}
+                  </span>
+                )}
+                <span>
+                  风险 {liveTask.riskScore}
+                  {liveTask.worktreeId ? ` · Worktree: ${liveTask.worktreeId}` : ''}
+                </span>
+              </span>
+            );
+          })()}
           {!capsule && liveTask.status === 'COMPLETED' && liveTask.testResultSummary && (
             <span className="text-[11px] font-mono opacity-70 whitespace-nowrap min-w-0 truncate">
               {liveTask.testResultSummary}

@@ -478,6 +478,10 @@ export class MwhServer {
           }
         };
       } else if (pipeRes.status === 'CONFIRMATION_REQUIRED') {
+        const isCriticalHmac = Boolean(pipeRes.requiresMobileHmac);
+        const message = isCriticalHmac
+          ? 'Critical action requires one-time human confirmation via the mobile/browser HMAC approval link (approvalUrl) or the local desktop floating island. Share the approvalUrl with the user if they are away from the PC, and poll job_control(action="poll", approvalId) or job_control(action="status", approvalId) to observe CONSUMED status and retrieve the execution output.'
+          : 'Local confirmation is pending on the desktop floating island (or via approvalUrl). Do NOT ask the user to type "approved" in chat; immediately poll job_control(action="poll", approvalId) or job_control(action="status", approvalId) to observe CONSUMED status and retrieve the execution output.';
         return {
           jsonrpc: '2.0',
           id,
@@ -489,10 +493,11 @@ export class MwhServer {
                   {
                     status: 'CONFIRMATION_REQUIRED',
                     approvalId: pipeRes.approvalId,
+                    approvalUrl: pipeRes.approvalUrl,
+                    requiresMobileHmac: isCriticalHmac,
                     summary: pipeRes.summary,
                     riskLevel: pipeRes.riskLevel,
-                    message:
-                      'Local confirmation is pending on the desktop floating island. Do NOT ask the user to type "approved" in chat; immediately poll job_control(action="poll", approvalId) or job_control(action="status", approvalId) to observe CONSUMED status and retrieve the execution output.'
+                    message
                   },
                   null,
                   2
@@ -585,30 +590,75 @@ export class MwhServer {
     }
 
     if (method === 'GET') {
+      const riskUpper = String(record.riskLevel || 'medium').toUpperCase();
+      const riskColor =
+        record.riskLevel === 'critical'
+          ? '#F87171'
+          : record.riskLevel === 'high'
+            ? '#FBBF24'
+            : '#60A5FA';
+      const riskBg =
+        record.riskLevel === 'critical'
+          ? 'rgba(248,113,113,0.14)'
+          : record.riskLevel === 'high'
+            ? 'rgba(251,191,36,0.14)'
+            : 'rgba(96,165,250,0.14)';
+      const paramsDetail = this.escapeHtml(JSON.stringify(record.params || {}, null, 2));
+      const remainingSec = Math.max(0, Math.floor((record.expiresAt - Date.now()) / 1000));
+
       // Render approval UI (all model-controlled interpolations are escaped)
       const body = `
-      <div style="background:#fff; border-radius:12px; padding:24px; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-width:480px; margin:auto;">
-        <h2 style="margin-top:0; color:#1a1a1a;">Security Confirmation</h2>
-        <div style="padding:10px 14px; background:#fff3cd; color:#856404; border-radius:6px; margin-bottom:16px; font-size:14px;">
-          <strong>Risk Level:</strong> <span style="text-transform:uppercase; font-weight:bold;">${this.escapeHtml(record.riskLevel)}</span>
+      <div class="card">
+        <div class="header">
+          <div class="badge" style="background:${riskBg}; color:${riskColor}; border:1px solid ${riskColor}44;">
+            风险等级 / Risk Level: <strong>${this.escapeHtml(riskUpper)}</strong>
+          </div>
+          <span class="countdown" id="mwh-countdown" data-expires="${record.expiresAt}">剩余 ${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s</span>
         </div>
-        <p><strong>Action Summary:</strong><br/>${this.escapeHtml(record.summary)}</p>
-        <p><strong>Tool Name:</strong> <code>${this.escapeHtml(record.toolName)}</code></p>
-        <p><strong>Security Notice:</strong><br/><small style="color:#666;">无 OS 级真沙箱，依赖路径围栏+进程树管控+审批流</small></p>
+        <h2 style="margin:12px 0 6px; font-size:20px;">安全确认 · Security Confirmation</h2>
+        <p class="muted" style="margin:0 0 16px; font-size:13px;">一次性参数绑定签名链接 · 执行前自动创建影子快照</p>
 
-        <form method="POST" action="/approve/${safeApprovalId}?sig=${safeSig}" style="margin-top:24px; display:flex; gap:12px;">
+        <div class="section">
+          <div class="label">操作摘要 / Action Summary</div>
+          <div class="value">${this.escapeHtml(record.summary)}</div>
+        </div>
+
+        <div class="section">
+          <div class="label">工具与参数明细 / Tool & Parameters</div>
+          <div style="margin-bottom:6px;"><code>${this.escapeHtml(record.toolName)}</code></div>
+          <pre class="codeblock">${paramsDetail}</pre>
+        </div>
+
+        <div class="notice">
+          <strong>Security Notice:</strong> 无 OS 级真沙箱，依赖路径围栏+进程树管控+审批流
+        </div>
+
+        <form method="POST" action="/approve/${safeApprovalId}?sig=${safeSig}" style="margin-top:20px;">
           <input type="hidden" name="action" value="approve" />
-          <button type="submit" style="flex:1; padding:12px; background:#28a745; color:#fff; border:none; border-radius:6px; font-size:16px; font-weight:bold; cursor:pointer;">
-            Approve Action
+          <button type="submit" class="btn btn-approve">
+            批准执行 / Approve Action
           </button>
         </form>
-        <form method="POST" action="/approve/${safeApprovalId}?sig=${safeSig}" style="margin-top:12px;">
+        <form method="POST" action="/approve/${safeApprovalId}?sig=${safeSig}" style="margin-top:10px;">
           <input type="hidden" name="action" value="reject" />
-          <button type="submit" style="width:100%; padding:10px; background:#dc3545; color:#fff; border:none; border-radius:6px; font-size:14px; cursor:pointer;">
-            Reject
+          <button type="submit" class="btn btn-reject">
+            拒绝 / Reject
           </button>
         </form>
-      </div>`;
+      </div>
+      <script>
+        (function() {
+          var el = document.getElementById('mwh-countdown');
+          if (!el) return;
+          var exp = Number(el.getAttribute('data-expires') || 0);
+          function tick() {
+            var sec = Math.max(0, Math.floor((exp - Date.now()) / 1000));
+            if (sec <= 0) { el.textContent = '已过期 / Expired'; return; }
+            el.textContent = '剩余 ' + Math.floor(sec / 60) + 'm ' + (sec % 60) + 's';
+          }
+          setInterval(tick, 1000);
+        })();
+      </script>`;
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.renderHtmlPage('Action Confirmation', body));
       return;
@@ -686,22 +736,28 @@ export class MwhServer {
       }
 
       try {
-        // Human mobile-link channel: required for records with requiresMobileHmac.
-        approvalEngine.resolveApproval(
-          approvalId,
-          action,
-          sig,
-          'once',
-          this.kernel.getContext(),
-          'mobile_link'
-        );
+        // Human mobile-link channel: resolves, creates pre-approved snapshot, executes, and syncs desktop SSE.
+        const outcome = await this.controlPlane.resolveFromMobileLink(approvalId, action, sig);
         const resultText = action === 'approve' ? 'Action Approved Successfully' : 'Action Rejected';
-        const color = action === 'approve' ? '#28a745' : '#dc3545';
+        const resultTitleZh = action === 'approve' ? '已批准并触发执行' : '已拒绝该操作';
+        const color = action === 'approve' ? '#34D399' : '#F87171';
+        const extraLines: string[] = [];
+        if (outcome.executionStatus) {
+          extraLines.push(`<div>执行状态 / Status: <code>${this.escapeHtml(outcome.executionStatus)}</code></div>`);
+        }
+        if (outcome.checkpointId) {
+          extraLines.push(`<div>写前影子快照 / Snapshot: <code>${this.escapeHtml(outcome.checkpointId)}</code></div>`);
+        }
+        if (outcome.jobId) {
+          extraLines.push(`<div>后台任务 / Job ID: <code>${this.escapeHtml(outcome.jobId)}</code></div>`);
+        }
         const body = `
-        <div style="background:#fff; border-radius:12px; padding:24px; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-width:480px; margin:auto; text-align:center;">
-          <h2 style="color:${color};">${resultText}</h2>
-          <p>Approval <code>${safeApprovalId}</code> has been marked as <strong>${this.escapeHtml(action.toUpperCase())}</strong>.</p>
-          <p style="color:#666;">You may now return to your Muse session.</p>
+        <div class="card" style="text-align:center;">
+          <h2 style="color:${color}; margin:0 0 6px;">${resultTitleZh}</h2>
+          <div class="muted" style="font-size:13px; margin-bottom:14px;">${resultText}</div>
+          <p style="font-size:14px;">Approval <code>${safeApprovalId}</code> has been marked as <strong>${this.escapeHtml(outcome.status)}</strong>.</p>
+          ${extraLines.length > 0 ? `<div class="section" style="text-align:left; font-size:13px; line-height:1.8;">${extraLines.join('')}</div>` : ''}
+          <p class="muted" style="font-size:13px; margin-top:16px;">桌面端已同步更新，你可以返回 Muse 会话继续查看结果。</p>
         </div>`;
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(this.renderHtmlPage(resultText, body));
@@ -710,7 +766,7 @@ export class MwhServer {
         res.end(
           this.renderHtmlPage(
             'Resolution Failed',
-            `<p style="color:red;">Error: ${this.escapeHtml(err?.message || String(err))}</p>`
+            `<div class="card"><p style="color:#F87171;">Error: ${this.escapeHtml(err?.message || String(err))}</p></div>`
           )
         );
       }
@@ -725,8 +781,24 @@ export class MwhServer {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${title} - Muse-Win-Harness</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; margin: 0; padding: 24px; color: #333; }
-    code { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #111216; margin: 0; padding: 20px 14px; color: #ECECEE; }
+    .card { background: #1C1D22; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 20px; box-shadow: 0 16px 40px rgba(0,0,0,0.45); max-width: 500px; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .badge { padding: 5px 10px; border-radius: 999px; font-size: 12px; }
+    .countdown { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #9E9FA6; }
+    .muted { color: #9E9FA6; }
+    .section { background: #141519; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .label { font-size: 11px; color: #9E9FA6; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .value { font-size: 14px; line-height: 1.5; word-break: break-word; }
+    .codeblock { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #C7D2FE; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
+    .notice { font-size: 12px; color: #D4D5DC; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25); border-radius: 10px; padding: 10px 12px; line-height: 1.5; }
+    code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 5px; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .btn { width: 100%; border: none; border-radius: 999px; font-size: 15px; font-weight: 600; cursor: pointer; padding: 12px 16px; transition: opacity 0.15s; }
+    .btn:active { opacity: 0.85; }
+    .btn-approve { background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #3B82F6 100%); color: #fff; }
+    .btn-reject { background: rgba(248,113,113,0.14); border: 1px solid rgba(248,113,113,0.35); color: #FCA5A5; font-size: 14px; padding: 10px 16px; }
   </style>
 </head>
 <body>

@@ -135,6 +135,18 @@ export interface WorktreeInstance {
   createdAt: string;
 }
 
+export interface PendingApprovalItem {
+  id: string;
+  toolName: string;
+  riskLevel: RiskLevel;
+  summary: string;
+  command: string;
+  targetPath: string;
+  requiresMobileHmac: boolean;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface MwhState {
   isDesktopRuntime: boolean;
   settingsModalOpen: boolean;
@@ -144,6 +156,7 @@ export interface MwhState {
   autoDowngradeTwoHours: boolean;
   autoDowngradeRemainingSec: number;
   multiDeviceApproval: boolean;
+  pendingApprovals?: PendingApprovalItem[];
   workspaceRoots: string[];
   alwaysAllowedWorkspaces: string[];
   tunnel: {
@@ -314,6 +327,7 @@ export class MwhControlPlane {
   private worktrees: WorktreeInstance[] = [];
   private liveTask: LiveTaskState = idleTask();
   private pendingTask: PendingUiTask | null = null;
+  private pendingTasks: Map<string, PipelineRequest> = new Map();
   private boundJobId: string | null = null;
   private armJobCapture = false;
   private autoDowngradeTwoHours = true;
@@ -540,6 +554,7 @@ export class MwhControlPlane {
       autoDowngradeTwoHours: this.autoDowngradeTwoHours,
       autoDowngradeRemainingSec: this.remainingSec(),
       multiDeviceApproval: ctx.multiDeviceApproval === true,
+      pendingApprovals: this.getSanitizedPendingApprovals(),
       workspaceRoots: [...this.workspaceRoots],
       alwaysAllowedWorkspaces: [...this.alwaysAllowedWorkspaces],
       tunnel: {
@@ -617,6 +632,228 @@ export class MwhControlPlane {
       resources: this.resourceState()
     };
     return state;
+  }
+
+  private getSanitizedPendingApprovals(): PendingApprovalItem[] {
+    const ctx = this.kernel.getContext();
+    return this.kernel
+      .getApprovalEngine()
+      .listPendingApprovals()
+      .filter((r) => Date.now() <= r.expiresAt)
+      .map((r) => ({
+        id: r.id,
+        toolName: r.toolName,
+        riskLevel: r.riskLevel,
+        summary: this.scrubSecretText(r.summary || ''),
+        command: this.scrubSecretText(commandPreview(r.toolName, r.params || {})),
+        targetPath: String(r.params?.path || r.params?.cwd || ctx.workspaceRoot),
+        requiresMobileHmac: Boolean(r.requiresMobileHmac),
+        createdAt: r.createdAt,
+        expiresAt: r.expiresAt
+      }));
+  }
+
+  private promoteNextPendingTask(): boolean {
+    const ctx = this.kernel.getContext();
+    const remaining = this.kernel
+      .getApprovalEngine()
+      .listPendingApprovals()
+      .filter((r) => Date.now() <= r.expiresAt);
+    if (remaining.length === 0) return false;
+    const next = remaining[0];
+    const req = this.pendingTasks.get(next.id) || {
+      id: `reexec_${next.id}`,
+      toolName: next.toolName,
+      category: next.category,
+      params: next.params
+    };
+    this.pendingTask = { approvalId: next.id, request: req };
+    this.liveTask = this.sanitizeLiveTaskFrame({
+      id: next.id,
+      status: 'WAITING_APPROVAL',
+      sourceAgent:
+        next.toolName === 'subagent_dispatch'
+          ? subagentDisplayLabel(next.params || {})
+          : 'Muse Cloud MCP',
+      command: commandPreview(next.toolName, next.params || {}),
+      targetPath: next.params?.path || next.params?.cwd || ctx.workspaceRoot,
+      summary: next.summary || '',
+      riskScore: riskScoreOf(next.riskLevel),
+      stepLabel: '等待本地执行确认...',
+      stepIndex: 1,
+      totalSteps: 3,
+      stdoutLines: [],
+      modifiedFilesCount: 0,
+      testResultSummary: '',
+      changeTracking: 'git-delta',
+      startedAt: nowClock()
+    });
+    return true;
+  }
+
+  public async resolveFromMobileLink(
+    id: string,
+    action: 'approve' | 'reject',
+    sig: string
+  ): Promise<{
+    action: 'approve' | 'reject';
+    status: string;
+    executed: boolean;
+    executionStatus?: string;
+    checkpointId?: string;
+    jobId?: string;
+    resultSummary?: string;
+  }> {
+    const engine = this.kernel.getApprovalEngine();
+    const ctx = this.kernel.getContext();
+    const record = engine.getApproval(id);
+    if (!record) {
+      throw new Error(`APPROVAL_NOT_FOUND: No pending approval for ${id}`);
+    }
+
+    const pendingReq: PipelineRequest = this.pendingTasks.get(id) ||
+      (this.pendingTask?.approvalId === id
+        ? this.pendingTask.request
+        : {
+            id: `reexec_${id}`,
+            toolName: record.toolName,
+            category: record.category,
+            params: record.params
+          });
+
+    const resolved = engine.resolveApproval(id, action, sig, 'once', ctx, 'mobile_link');
+    this.pendingTasks.delete(id);
+    if (this.pendingTask?.approvalId === id) {
+      this.pendingTask = null;
+    }
+
+    if (action === 'reject') {
+      engine.recordExecutionReceipt(id, {
+        executionStatus: 'DENIED',
+        resultSummary: 'Rejected by user via mobile HMAC link'
+      });
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor: 'connector',
+        toolName: record.toolName,
+        commandOrPath: commandPreview(record.toolName, record.params),
+        reason: 'USER_REJECTED_VIA_MOBILE',
+        status: 'DENIED'
+      });
+      this.armJobCapture = false;
+      if (!this.promoteNextPendingTask()) {
+        this.liveTask = this.sanitizeLiveTaskFrame({
+          ...this.liveTask,
+          status: 'IDLE',
+          stepLabel: '手机端已拒绝'
+        });
+      }
+      this.broadcastSse({
+        liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+        pendingApprovals: this.getSanitizedPendingApprovals(),
+        auditLogs: this.readAuditTail(ctx.workspaceRoot, 50)
+      });
+      return {
+        action,
+        status: resolved.record.status,
+        executed: false,
+        executionStatus: 'DENIED',
+        resultSummary: 'Rejected by user via mobile HMAC link'
+      };
+    }
+
+    const isReadOnlyShortCircuit =
+      pendingReq.category === 'read' || record.riskLevel === 'low';
+    this.preTaskDirtyFiles = this.getWorkspaceDirtySet(ctx.workspaceRoot);
+    let snapId = '';
+    if (!isReadOnlyShortCircuit && ctx.confinementMode !== 'read-only') {
+      try {
+        snapId = GitCheckpointManager.create('pre-approved-task', ctx.workspaceRoot);
+      } catch {
+        snapId = '';
+      }
+    }
+    if (pendingReq.toolName === 'exec_command' || pendingReq.toolName === 'subagent_dispatch') {
+      this.armJobCapture = true;
+      this.boundJobId = null;
+    }
+    const execRes = await this.kernel.handleRequest({ ...pendingReq, approvalId: id });
+    if (execRes.data && typeof execRes.data.jobId === 'string') {
+      record.jobId = execRes.data.jobId;
+    }
+    const targetBaseName =
+      typeof record.params?.path === 'string' && record.params.path
+        ? path.basename(record.params.path)
+        : '';
+    const receiptSummary =
+      record.toolName === 'fs_mutate'
+        ? `fs_mutate(${record.params?.action || 'write'})${targetBaseName ? ` on '${targetBaseName}'` : ''} -> ${execRes.status}`
+        : `${record.toolName} -> ${execRes.status}${record.jobId ? ` (jobId=${record.jobId})` : ''}`;
+    const executionStatus =
+      execRes.status === 'SUCCESS'
+        ? 'SUCCESS'
+        : execRes.status === 'DENIED'
+          ? 'DENIED'
+          : 'ERROR';
+    engine.recordExecutionReceipt(id, {
+      executionStatus,
+      jobId: record.jobId,
+      checkpointId: snapId || execRes.data?.checkpointId,
+      resultSummary: this.scrubSecretText(receiptSummary)
+    });
+    this.absorbPipelineResult({ ...pendingReq, approvalId: id }, execRes);
+    const changeReport =
+      execRes.status === 'SUCCESS'
+        ? this.detectExecutionChanges(ctx.workspaceRoot, pendingReq.toolName, execRes.status)
+        : {
+            count: this.liveTask.modifiedFilesCount,
+            tracking: this.liveTask.changeTracking || ('git-delta' as const)
+          };
+    const modifiedFilesCount = changeReport.count;
+    const isCleanAfterExec = modifiedFilesCount === 0;
+    if (this.liveTask.status === 'WAITING_APPROVAL') {
+      this.liveTask = {
+        ...this.liveTask,
+        status: execRes.status === 'SUCCESS' ? 'COMPLETED' : 'IDLE',
+        modifiedFilesCount,
+        changeTracking: changeReport.tracking,
+        testResultSummary: this.completionSummary(
+          changeReport.tracking,
+          modifiedFilesCount,
+          execRes.data?.exitCode
+        ),
+        snapshotId: isCleanAfterExec ? undefined : snapId || this.liveTask.snapshotId,
+        worktreeId: isCleanAfterExec ? undefined : this.liveTask.worktreeId
+      };
+    } else if (snapId && !isCleanAfterExec) {
+      this.liveTask = { ...this.liveTask, snapshotId: snapId };
+    }
+    if (this.liveTask.status === 'IDLE') {
+      this.promoteNextPendingTask();
+    }
+    this.appendAudit({
+      decision: 'ALLOW',
+      actor: 'connector',
+      toolName: record.toolName,
+      commandOrPath: commandPreview(record.toolName, record.params),
+      reason: 'USER_APPROVED_VIA_MOBILE (once)',
+      status: execRes.status
+    });
+    this.broadcastSse({
+      liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+      pendingApprovals: this.getSanitizedPendingApprovals(),
+      snapshots: this.getSanitizedState().snapshots,
+      auditLogs: this.readAuditTail(ctx.workspaceRoot, 50)
+    });
+    return {
+      action,
+      status: record.status,
+      executed: true,
+      executionStatus,
+      checkpointId: snapId || execRes.data?.checkpointId,
+      jobId: record.jobId,
+      resultSummary: this.scrubSecretText(receiptSummary)
+    };
   }
 
   /** Public (sanitized) resource-library snapshot used by state + SSE patches. */
@@ -1182,6 +1419,7 @@ export class MwhControlPlane {
     if (res.status === 'CONFIRMATION_REQUIRED' && res.approvalId) {
       this.armJobCapture = false;
       this.pendingTask = { approvalId: res.approvalId, request };
+      this.pendingTasks.set(res.approvalId, request);
       const params = request.params || {};
       this.liveTask = this.sanitizeLiveTaskFrame({
         id: res.approvalId,
@@ -1203,7 +1441,10 @@ export class MwhControlPlane {
         changeTracking: 'git-delta',
         startedAt: nowClock()
       });
-      this.broadcastSse({ liveTask: this.sanitizeLiveTaskFrame(this.liveTask) });
+      this.broadcastSse({
+        liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+        pendingApprovals: this.getSanitizedPendingApprovals()
+      });
       return;
     }
     if (res.status === 'SUCCESS' && res.data && typeof res.data.jobId === 'string') {
@@ -1811,14 +2052,16 @@ export class MwhControlPlane {
       this.send(res, 400, { error: 'APPROVAL_EXPIRED', approvalId: id });
       return;
     }
-    const pendingReq: PipelineRequest = this.pendingTask?.approvalId === id
-      ? this.pendingTask.request
-      : {
-          id: `reexec_${id}`,
-          toolName: record.toolName,
-          category: record.category,
-          params: record.params
-        };
+    const pendingReq: PipelineRequest =
+      this.pendingTasks.get(id) ||
+      (this.pendingTask?.approvalId === id
+        ? this.pendingTask.request
+        : {
+            id: `reexec_${id}`,
+            toolName: record.toolName,
+            category: record.category,
+            params: record.params
+          });
     if (hashClientParams(pendingReq.params) !== record.paramsHash) {
       this.send(res, 400, { error: 'PARAMS_HASH_MISMATCH', approvalId: id });
       return;
@@ -1931,7 +2174,10 @@ export class MwhControlPlane {
       checkpointId: snapId || execRes.data?.checkpointId,
       resultSummary: this.scrubSecretText(receiptSummary)
     });
-    this.pendingTask = null;
+    this.pendingTasks.delete(id);
+    if (this.pendingTask?.approvalId === id) {
+      this.pendingTask = null;
+    }
     this.absorbPipelineResult({ ...pendingReq, approvalId: id }, execRes);
     const changeReport =
       execRes.status === 'SUCCESS'
@@ -1959,6 +2205,9 @@ export class MwhControlPlane {
     } else if (snapId && !isCleanAfterExec) {
       this.liveTask = { ...this.liveTask, snapshotId: snapId };
     }
+    if (this.liveTask.status === 'IDLE') {
+      this.promoteNextPendingTask();
+    }
     this.appendAudit({
       decision: 'ALLOW',
       actor,
@@ -1969,6 +2218,7 @@ export class MwhControlPlane {
     });
     this.broadcastSse({
       liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+      pendingApprovals: this.getSanitizedPendingApprovals(),
       alwaysAllowedWorkspaces: this.alwaysAllowedWorkspaces,
       snapshots: this.getSanitizedState().snapshots,
       auditLogs: this.readAuditTail(ctx.workspaceRoot, 50)
@@ -2012,11 +2262,17 @@ export class MwhControlPlane {
       reason: 'USER_REJECTED_VIA_UI',
       status: 'DENIED'
     });
-    this.pendingTask = null;
+    this.pendingTasks.delete(id);
+    if (this.pendingTask?.approvalId === id) {
+      this.pendingTask = null;
+    }
     this.armJobCapture = false;
-    this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已拒绝' });
+    if (!this.promoteNextPendingTask()) {
+      this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已拒绝' });
+    }
     this.broadcastSse({
       liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+      pendingApprovals: this.getSanitizedPendingApprovals(),
       auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50)
     });
     this.send(res, 200, { ok: true, approvalId: id, status: 'REJECTED' });
@@ -2076,6 +2332,7 @@ export class MwhControlPlane {
       .getApprovalEngine()
       .rejectAllPending('EMERGENCY_KILL');
     this.pendingTask = null;
+    this.pendingTasks.clear();
     this.worktrees = this.worktrees.map((wt) =>
       wt.status === 'RUNNING' ? { ...wt, status: 'STOPPED' } : wt
     );

@@ -217,6 +217,18 @@ export interface DaemonTelemetry {
   lastWindowAction: string | null;
 }
 
+export interface PendingApprovalItem {
+  id: string;
+  toolName: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  summary: string;
+  command: string;
+  targetPath: string;
+  requiresMobileHmac: boolean;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface MwhState {
   isDesktopRuntime: boolean;
   settingsModalOpen: boolean;
@@ -232,6 +244,7 @@ export interface MwhState {
   autoDowngradeTwoHours: boolean;
   autoDowngradeRemainingSec: number;
   multiDeviceApproval: boolean;
+  pendingApprovals?: PendingApprovalItem[];
   workspaceRoots: string[];
   alwaysAllowedWorkspaces: string[];
   tunnel: TunnelDriverConfig;
@@ -299,6 +312,7 @@ function createInitialState(): MwhState {
     autoDowngradeTwoHours: true,
     autoDowngradeRemainingSec: 7200,
     multiDeviceApproval: false,
+    pendingApprovals: [],
     workspaceRoots: [],
     alwaysAllowedWorkspaces: [],
     tunnel: {

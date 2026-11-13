@@ -91,6 +91,7 @@ export interface ExecutionContext {
   hmacSecret?: string;
   tunnelUrl?: string;
   desktopHandsEnabled?: boolean;
+  desktopHandsForegroundFallback?: boolean;
   /**
    * When true, non-HMAC approvals (medium everyday writes and high-risk
    * tools such as subagent dispatch) execute once Muse's official HITL
@@ -427,5 +428,6 @@ export interface MwhConfig {
   };
   desktopHands: {
     enabled: boolean;
+    foregroundFallback?: boolean;
   };
 }

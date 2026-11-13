@@ -21,6 +21,8 @@ import { validateOutboundHostSync } from '../security/outboundGuard.js';
 import { SubagentDispatcher } from '../subagents/dispatcher.js';
 import { getExposedMuseTools, type ToolDefinition } from '../tools/definitions.js';
 import { getResourcesManager } from '../resources/manager.js';
+import { UiaBridge } from '../desktop/uiaBridge.js';
+import { WinGuard } from '../desktop/winGuard.js';
 import type { PublicResourceEntry, ResourceStatusSummary } from '../resources/types.js';
 import { AcpConfigManager } from '../config/acpConfig.js';
 import {
@@ -156,6 +158,8 @@ export interface MwhState {
   autoDowngradeTwoHours: boolean;
   autoDowngradeRemainingSec: number;
   multiDeviceApproval: boolean;
+  desktopHandsEnabled: boolean;
+  desktopHandsForegroundFallback: boolean;
   pendingApprovals?: PendingApprovalItem[];
   workspaceRoots: string[];
   alwaysAllowedWorkspaces: string[];
@@ -554,6 +558,8 @@ export class MwhControlPlane {
       autoDowngradeTwoHours: this.autoDowngradeTwoHours,
       autoDowngradeRemainingSec: this.remainingSec(),
       multiDeviceApproval: ctx.multiDeviceApproval === true,
+      desktopHandsEnabled: ctx.desktopHandsEnabled === true,
+      desktopHandsForegroundFallback: ctx.desktopHandsForegroundFallback === true,
       pendingApprovals: this.getSanitizedPendingApprovals(),
       workspaceRoots: [...this.workspaceRoots],
       alwaysAllowedWorkspaces: [...this.alwaysAllowedWorkspaces],
@@ -1055,6 +1061,16 @@ export class MwhControlPlane {
       if (pathname === '/api/v1/security/multi-device-approval' && method === 'POST') {
         const body = await this.readJson(req);
         await this.postMultiDeviceApproval(res, body, this.resolveRequestActor(req, body));
+        return true;
+      }
+      if (pathname === '/api/v1/security/desktop-hands' && method === 'POST') {
+        const body = await this.readJson(req);
+        await this.postDesktopHands(res, body, this.resolveRequestActor(req, body));
+        return true;
+      }
+      if (pathname === '/api/v1/desktop-hands/protect-hwnd' && method === 'POST') {
+        const body = await this.readJson(req);
+        await this.postProtectHwnd(res, body);
         return true;
       }
       if (pathname === '/api/v1/tunnel/driver' && method === 'POST') {
@@ -1780,6 +1796,75 @@ export class MwhControlPlane {
     this.send(res, 200, { ok: true, multiDeviceApproval: enabled, persisted });
   }
 
+  private async postDesktopHands(
+    res: http.ServerResponse,
+    body: any,
+    actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
+  ): Promise<void> {
+    const ctx = this.kernel.getContext();
+    const nextEnabled =
+      typeof body?.enabled === 'boolean' ? body.enabled === true : ctx.desktopHandsEnabled === true;
+    const nextForeground =
+      typeof body?.foregroundFallback === 'boolean'
+        ? body.foregroundFallback === true
+        : ctx.desktopHandsForegroundFallback === true;
+
+    this.kernel.updateContext({
+      desktopHandsEnabled: nextEnabled,
+      desktopHandsForegroundFallback: nextForeground
+    });
+    if (!nextEnabled) {
+      try {
+        UiaBridge.dispose();
+      } catch {
+        // ignore
+      }
+    }
+
+    let persisted = true;
+    let persistNote = '';
+    try {
+      saveUserSettings(ctx.workspaceRoot, {
+        desktopHandsEnabled: nextEnabled,
+        desktopHandsForegroundFallback: nextForeground
+      });
+    } catch (err: any) {
+      persisted = false;
+      persistNote = ' (in-memory; persist failed: ' + String(err?.message || err).slice(0, 160) + ')';
+    }
+    this.appendAudit({
+      decision: 'ALLOW',
+      actor,
+      toolName: 'desktop_hands_config',
+      commandOrPath: `enabled=${nextEnabled},foreground=${nextForeground}`,
+      reason: `[${actor}] set desktopHandsEnabled=${nextEnabled}, foregroundFallback=${nextForeground}${persistNote}`,
+      status: 'SUCCESS'
+    });
+    this.broadcastSse({
+      desktopHandsEnabled: nextEnabled,
+      desktopHandsForegroundFallback: nextForeground,
+      auditLogs: this.readAuditTail(ctx.workspaceRoot, 50)
+    });
+    this.send(res, 200, {
+      ok: true,
+      desktopHandsEnabled: nextEnabled,
+      desktopHandsForegroundFallback: nextForeground,
+      persisted
+    });
+  }
+
+  private async postProtectHwnd(res: http.ServerResponse, body: any): Promise<void> {
+    const hwnd = Number(body?.hwnd);
+    if (Number.isFinite(hwnd) && hwnd > 0) {
+      WinGuard.registerProtectedHwnd(Math.trunc(hwnd));
+    }
+    const pid = Number(body?.pid);
+    if (Number.isFinite(pid) && pid > 0) {
+      WinGuard.registerProtectedPid(Math.trunc(pid));
+    }
+    this.send(res, 200, { ok: true, ...WinGuard.getProtectedRegistrySnapshot() });
+  }
+
   private async postTunnelDriver(
     res: http.ServerResponse,
     body: any,
@@ -2328,6 +2413,12 @@ export class MwhControlPlane {
     } catch {
       // Best-effort: Job Object kill-on-close still applies at process exit.
     }
+    try {
+      UiaBridge.dispose();
+    } catch {
+      // Best-effort: Job Object kill-on-close still applies at process exit.
+    }
+    this.kernel.getApprovalEngine().clearSessionApprovals();
     const rejectedApprovalIds = this.kernel
       .getApprovalEngine()
       .rejectAllPending('EMERGENCY_KILL');

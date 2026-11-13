@@ -55,6 +55,7 @@ const SENSITIVE_CONTEXT_KEYS: (keyof ExecutionContext)[] = [
   'yoloExpiresAt',
   'tunnelUrl',
   'desktopHandsEnabled',
+  'desktopHandsForegroundFallback',
   'subagentTimeoutMs',
   'subagentMaxSteps',
   'multiDeviceApproval'
@@ -287,6 +288,17 @@ export class PipelineKernel {
       return { status: 'SUCCESS', riskLevel: 'low' };
     }
 
+    // Read-only desktop_hands perception actions (windows / inspect / screenshot)
+    // are non-mutating and permitted in Plan (read-only) mode when enabled.
+    if (
+      toolName === 'desktop_hands' &&
+      (params.action === 'windows' ||
+        params.action === 'inspect' ||
+        params.action === 'screenshot')
+    ) {
+      return { status: 'SUCCESS', riskLevel: 'low' };
+    }
+
     // Guard: exec_command requires a string command (prevents downstream
     // regex/string operations from throwing on unexpected input types)
     if (toolName === 'exec_command' && typeof params.command !== 'string') {
@@ -480,7 +492,8 @@ export class PipelineKernel {
       actionKey,
       riskEval.riskLevel,
       context.approvalPolicy,
-      context
+      context,
+      params
     );
 
     if (!isPreApproved) {

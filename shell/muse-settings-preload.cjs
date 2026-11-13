@@ -3839,6 +3839,8 @@ function normalizeSettings(raw) {
     autoDowngradeTwoHours: s.autoDowngradeTwoHours === true,
     autoDowngradeRemainingSec: Number(s.autoDowngradeRemainingSec) || 0,
     multiDeviceApproval: s.multiDeviceApproval === true,
+    desktopHandsEnabled: s.desktopHandsEnabled === true,
+    desktopHandsForegroundFallback: s.desktopHandsForegroundFallback === true,
     workspaceRoots: Array.isArray(s.workspaceRoots) ? s.workspaceRoots.slice() : [],
     alwaysAllowedWorkspaces: Array.isArray(s.alwaysAllowedWorkspaces)
       ? s.alwaysAllowedWorkspaces.slice()
@@ -4751,6 +4753,30 @@ function renderPermissions(settings) {
       title: settings.multiDeviceApproval ? '已开启，点击关闭' : '已关闭，点击开启'
     }) +
     '</div>' +
+    '</div>' +
+    '<div class="mwh-card">' +
+    '<div class="mwh-list-row">' +
+    '<div><div style="font-size:12px;font-weight:600">原生桌面操控（Desktop Hands）</div>' +
+    '<div class="mwh-hint" style="margin-top:2px">默认关闭。开启后允许 Muse 枚举窗口、读取 UIA 控件树、脱敏截图并以「后台优先」方式操控原生桌面应用。</div></div>' +
+    renderSwitchHtml({
+      checked: settings.desktopHandsEnabled,
+      action: 'toggle-desktop-hands',
+      label: '原生桌面操控',
+      title: settings.desktopHandsEnabled ? '已开启，点击关闭' : '已关闭，点击开启'
+    }) +
+    '</div>' +
+    (settings.desktopHandsEnabled
+      ? '<div class="mwh-list-row" style="margin-top:8px">' +
+        '<div><div style="font-size:12px;font-weight:600">允许前台物理键鼠回退</div>' +
+        '<div class="mwh-hint" style="margin-top:2px">当后台 UIA/窗口消息无法投递时允许 SendInput 前台回退（检测到人工键鼠输入时自动暂停）。</div></div>' +
+        renderSwitchHtml({
+          checked: settings.desktopHandsForegroundFallback,
+          action: 'toggle-desktop-hands-foreground',
+          label: '允许前台物理键鼠回退',
+          title: settings.desktopHandsForegroundFallback ? '已开启，点击关闭' : '已关闭，点击开启'
+        }) +
+        '</div>'
+      : '') +
     '</div>' +
     '<details class="mwh-disclosure">' +
     '<summary><span>' +
@@ -7307,6 +7333,54 @@ async function handleSubpanelAction(action, target) {
       showToast('切换失败: ' + String((err && err.message) || err));
     } finally {
       pendingSwitchKeys.delete('multi-device-approval');
+    }
+    return;
+  }
+  if (action === 'toggle-desktop-hands') {
+    if (pendingSwitchKeys.has('desktop-hands')) return;
+    const on = Boolean(settings.desktopHandsEnabled);
+    const startedAt = Date.now();
+    const switchEl = resolveSwitchNode(target);
+    pendingSwitchKeys.set('desktop-hands', startedAt);
+    paintSwitch(switchEl, !on);
+    try {
+      await daemonHttp('POST', '/api/v1/security/desktop-hands', {
+        enabled: !on,
+        foregroundFallback: Boolean(settings.desktopHandsForegroundFallback),
+        source: 'ui_island'
+      });
+      await holdSwitchMin(startedAt);
+      await refreshSettings();
+    } catch (err) {
+      if (switchEl && switchEl.isConnected) paintSwitch(switchEl, on);
+      else scheduleRender(true);
+      showToast('切换失败: ' + String((err && err.message) || err));
+    } finally {
+      pendingSwitchKeys.delete('desktop-hands');
+    }
+    return;
+  }
+  if (action === 'toggle-desktop-hands-foreground') {
+    if (pendingSwitchKeys.has('desktop-hands-foreground')) return;
+    const on = Boolean(settings.desktopHandsForegroundFallback);
+    const startedAt = Date.now();
+    const switchEl = resolveSwitchNode(target);
+    pendingSwitchKeys.set('desktop-hands-foreground', startedAt);
+    paintSwitch(switchEl, !on);
+    try {
+      await daemonHttp('POST', '/api/v1/security/desktop-hands', {
+        enabled: Boolean(settings.desktopHandsEnabled),
+        foregroundFallback: !on,
+        source: 'ui_island'
+      });
+      await holdSwitchMin(startedAt);
+      await refreshSettings();
+    } catch (err) {
+      if (switchEl && switchEl.isConnected) paintSwitch(switchEl, on);
+      else scheduleRender(true);
+      showToast('切换失败: ' + String((err && err.message) || err));
+    } finally {
+      pendingSwitchKeys.delete('desktop-hands-foreground');
     }
     return;
   }

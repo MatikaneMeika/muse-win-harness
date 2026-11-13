@@ -470,12 +470,26 @@ export class MwhServer {
       );
 
       if (pipeRes.status === 'SUCCESS') {
+        const dataObj = pipeRes.data && typeof pipeRes.data === 'object' ? { ...pipeRes.data } : pipeRes.data;
+        const mcpImage =
+          dataObj && typeof dataObj === 'object' && dataObj.__mcpImage && typeof dataObj.__mcpImage.data === 'string'
+            ? dataObj.__mcpImage
+            : null;
+        if (mcpImage) {
+          delete dataObj.__mcpImage;
+        }
+        const content: any[] = [{ type: 'text', text: JSON.stringify(dataObj, null, 2) }];
+        if (mcpImage) {
+          content.push({
+            type: 'image',
+            data: mcpImage.data,
+            mimeType: mcpImage.mimeType || 'image/png'
+          });
+        }
         return {
           jsonrpc: '2.0',
           id,
-          result: {
-            content: [{ type: 'text', text: JSON.stringify(pipeRes.data, null, 2) }]
-          }
+          result: { content }
         };
       } else if (pipeRes.status === 'CONFIRMATION_REQUIRED') {
         const isCriticalHmac = Boolean(pipeRes.requiresMobileHmac);

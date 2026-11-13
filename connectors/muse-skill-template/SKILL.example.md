@@ -44,13 +44,14 @@ Invokes and controls a profile-addressed local subagent (ACP stdio agent, custom
 ### `git_checkpoint` (write)
 Creates deterministic snapshots of tracked and untracked files and provides 1-click rollback.
 
-> **Optional 8th tool**: `desktop_hands` (sensitive_write) — performs desktop automation
-> (screenshot, mouse move, click, keyboard type). It is only exposed when
-> `desktopHands.enabled: true` in the MWH config, in which case the generated
-> `SKILL.md` lists 8 Muse Tools and includes the entry below.
+> **Optional 8th tool**: `desktop_hands` (sensitive_write) — native Windows desktop automation
+> (`windows`, `inspect` UIA tree, multimodal `screenshot` with redaction, background-first `act`,
+> and emergency-stoppable `batch`). For native desktop apps only—use Resource Library MCP tools
+> for web/browser tasks. It is only exposed when `desktopHands.enabled: true` in config or enabled
+> in settings, in which case the generated `SKILL.md` lists 8 Muse Tools and includes the entry below.
 >
 > ### `desktop_hands` (sensitive_write)
-> Performs desktop automation (screenshot, mouse move, click, keyboard type). Disabled by default.
+> Native Windows desktop automation (windows, inspect UIA tree, screenshot with multimodal image output, background-first act, and emergency-stoppable batch). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.
 
 ## 本机资源库 (Local Resource Library)
 

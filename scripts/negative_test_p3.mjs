@@ -715,11 +715,17 @@ await runCase('C15 static-analysis closure: normalizeClientIpKey pure function, 
     fs.rmSync(tmpCfRoot, { recursive: true, force: true });
   }
 
-  // 3) DesktopHands rejects non-finite coordinates before spawning PowerShell
+  // 3) DesktopHands rejects non-finite coordinates before invoking Win32/UIA
   if (process.platform === 'win32') {
-    expectThrowSync(
-      () => DesktopHands.execute({ action: 'mouse_move', x: Number.NaN, y: 10 }, true),
-      'INVALID_COORDINATES'
+    let caught = '';
+    try {
+      await DesktopHands.execute({ action: 'mouse_move', x: Number.NaN, y: 10 }, true);
+    } catch (err) {
+      caught = String(err?.message || err);
+    }
+    assert(
+      caught.includes('INVALID_COORDINATES'),
+      `Expected INVALID_COORDINATES for NaN mouse_move, got: ${caught}`
     );
   }
 });

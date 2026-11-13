@@ -1232,6 +1232,40 @@ export const MwhSettingsModal: React.FC = () => {
                               dark={chromeDark}
                             />
                           </div>
+                          <div
+                            className={`p-3 rounded-xl flex items-center justify-between gap-3 mt-3 ${subtleBg}`}
+                          >
+                            <div>
+                              <div className="text-xs font-medium">{t('permissions.desktopHandsTitle')}</div>
+                              <div className={`text-[11px] mt-0.5 leading-relaxed ${mutedText}`}>
+                                {t('permissions.desktopHandsBody')}
+                              </div>
+                            </div>
+                            <MwhSwitch
+                              checked={Boolean(state.desktopHandsEnabled)}
+                              onChange={() => mwhService.toggleDesktopHands()}
+                              label={t('permissions.desktopHandsAria')}
+                              dark={chromeDark}
+                            />
+                          </div>
+                          {state.desktopHandsEnabled && (
+                            <div
+                              className={`p-3 rounded-xl flex items-center justify-between gap-3 mt-2 ${subtleBg}`}
+                            >
+                              <div>
+                                <div className="text-xs font-medium">{t('permissions.desktopHandsForegroundTitle')}</div>
+                                <div className={`text-[11px] mt-0.5 leading-relaxed ${mutedText}`}>
+                                  {t('permissions.desktopHandsForegroundBody')}
+                                </div>
+                              </div>
+                              <MwhSwitch
+                                checked={Boolean(state.desktopHandsForegroundFallback)}
+                                onChange={() => mwhService.toggleDesktopHandsForegroundFallback()}
+                                label={t('permissions.desktopHandsForegroundAria')}
+                                dark={chromeDark}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {/* 动态安全边界说明 */}

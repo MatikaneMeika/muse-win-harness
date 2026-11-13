@@ -302,31 +302,104 @@ export const MUSE_TOOLS: ToolDefinition[] = [
   {
     name: 'desktop_hands',
     category: 'sensitive_write',
-    description: 'Performs desktop automation (screenshot, mouse move, click, keyboard type). Disabled by default.',
+    description:
+      'Native Windows desktop automation (windows, inspect UIA tree, screenshot with multimodal image output, background-first act, and emergency-stoppable batch). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.',
     inputSchema: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['screenshot', 'mouse_move', 'click', 'type_text'],
-          description: 'Desktop interaction action'
+          enum: ['windows', 'inspect', 'screenshot', 'act', 'batch', 'mouse_move', 'click', 'type_text'],
+          description: 'Desktop operation: windows (enumerate), inspect (UIA tree), screenshot (capture), act (single input/UIA op), batch (multi-step sequence)'
+        },
+        hwnd: {
+          type: 'number',
+          description: 'Target window handle (HWND) from windows action'
+        },
+        titleFilter: {
+          type: 'string',
+          description: 'Optional substring filter on window title for windows action'
+        },
+        processFilter: {
+          type: 'string',
+          description: 'Optional substring filter on process executable name for windows action'
+        },
+        includeMinimized: {
+          type: 'boolean',
+          description: 'Include minimized windows in windows action (default true)'
+        },
+        maxDepth: {
+          type: 'number',
+          description: 'Max UIA tree depth for inspect (1-8, default 4)'
+        },
+        maxNodes: {
+          type: 'number',
+          description: 'Max UIA nodes for inspect (10-300, default 120)'
+        },
+        region: {
+          type: 'object',
+          description: 'Optional screen capture region { x, y, width, height }'
+        },
+        delivery: {
+          type: 'string',
+          enum: ['auto', 'background', 'foreground'],
+          description: 'Delivery channel: auto (background-first), background (UIA/PostMessage only), foreground (SendInput fallback, requires setting/approval)'
+        },
+        op: {
+          type: 'string',
+          enum: ['click', 'double_click', 'right_click', 'move', 'type_text', 'hotkey', 'scroll', 'invoke', 'set_value', 'toggle', 'select', 'focus', 'wait'],
+          description: 'Operation for act action'
         },
         x: {
           type: 'number',
-          description: 'X coordinate'
+          description: 'Screen X coordinate (physical pixels)'
         },
         y: {
           type: 'number',
-          description: 'Y coordinate'
+          description: 'Screen Y coordinate (physical pixels)'
         },
         button: {
           type: 'string',
           enum: ['left', 'right', 'middle'],
-          description: 'Mouse button for click action'
+          description: 'Mouse button for click'
         },
         text: {
           type: 'string',
-          description: 'Text string to type'
+          description: 'Text string to type or set_value'
+        },
+        keys: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Key combo for hotkey (e.g. ["ctrl", "c"])'
+        },
+        delta: {
+          type: 'number',
+          description: 'Scroll wheel delta (positive up, negative down)'
+        },
+        automationId: {
+          type: 'string',
+          description: 'UIA AutomationId selector for UIA ops'
+        },
+        name: {
+          type: 'string',
+          description: 'UIA Name selector for UIA ops'
+        },
+        controlType: {
+          type: 'string',
+          description: 'UIA ControlType filter'
+        },
+        value: {
+          type: 'string',
+          description: 'Value for UIA set_value'
+        },
+        durationMs: {
+          type: 'number',
+          description: 'Wait duration in ms (max 10000)'
+        },
+        steps: {
+          type: 'array',
+          description: 'Ordered step list for batch action (max 30 steps)',
+          items: { type: 'object' }
         }
       },
       required: ['action']

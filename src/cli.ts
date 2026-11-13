@@ -206,7 +206,11 @@ async function main() {
     config.confinement?.approvalPolicy ||
     (confinementMode === 'danger-full-access' ? 'unattended-yolo' : 'smart-risk');
 
-  const desktopHandsEnabled = !!config.desktopHands?.enabled;
+  const userSettings = loadUserSettings(workspaceRoot);
+  const desktopHandsEnabled =
+    !!config.desktopHands?.enabled || userSettings.desktopHandsEnabled === true;
+  const desktopHandsForegroundFallback =
+    !!config.desktopHands?.foregroundFallback || userSettings.desktopHandsForegroundFallback === true;
 
   // ------------------------------------------------------------------
   // Subagent defaults from config.yaml (subagents.*) — previously dead
@@ -226,12 +230,12 @@ async function main() {
     maxSteps: subagentMaxSteps
   });
 
-  const userSettings = loadUserSettings(workspaceRoot);
   const kernel = new PipelineKernel({
     confinementMode,
     approvalPolicy,
     workspaceRoot,
     desktopHandsEnabled,
+    desktopHandsForegroundFallback,
     subagentTimeoutMs,
     subagentMaxSteps,
     multiDeviceApproval: userSettings.multiDeviceApproval

@@ -332,7 +332,9 @@ export async function executeMuseTool(
       ) {
         throw new Error('INVALID_PARAMS_TYPE: desktop_hands text must be a string');
       }
-      return DesktopHands.execute(params as any, !!context.desktopHandsEnabled);
+      return DesktopHands.execute(params as any, !!context.desktopHandsEnabled, {
+        foregroundFallback: !!context.desktopHandsForegroundFallback
+      });
     }
 
     case 'skill_read': {

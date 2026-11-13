@@ -1,133 +1,479 @@
 /**
- * Desktop Hands (Win32 GUI Automation)
- * Provides DPI-aware screenshot, mouse control, and keyboard input via Win32 / .NET APIs.
- * Disabled by default.
+ * Desktop Hands v2 (Native Win32 + Lazy-Loaded UIA Bridge + WinGuard)
+ * - Zero per-action powershell.exe spawning
+ * - Multimodal screenshot capture with protected-window redaction
+ * - Background-first delivery (UIA / PostMessageW), gated foreground SendInput fallback
+ * - Emergency-epoch step-level abort for batch sequences
+ * - Disabled by default
  */
 
-import { execFileSync } from 'node:child_process';
-import os from 'node:os';
-import { joinInsideRoot } from '../pipeline/pathGuard.js';
+import {
+  captureScreenshot,
+  focusWindow,
+  foregroundClick,
+  foregroundHotkey,
+  foregroundMouseMove,
+  foregroundScroll,
+  foregroundTypeText,
+  listWindows,
+  postMouseClick,
+  postScroll,
+  postText
+} from '../desktop/win32Native.js';
+import { WinGuard } from '../desktop/winGuard.js';
+import { UiaBridge } from '../desktop/uiaBridge.js';
+import { SubagentDispatcher } from '../subagents/dispatcher.js';
 
-export interface DesktopHandsParams {
-  action: 'screenshot' | 'mouse_move' | 'click' | 'type_text';
+export type DesktopDelivery = 'auto' | 'background' | 'foreground';
+
+export type DesktopActOp =
+  | 'click'
+  | 'double_click'
+  | 'right_click'
+  | 'move'
+  | 'type_text'
+  | 'hotkey'
+  | 'scroll'
+  | 'invoke'
+  | 'set_value'
+  | 'toggle'
+  | 'select'
+  | 'focus'
+  | 'wait';
+
+export interface DesktopHandsStep {
+  op: DesktopActOp;
+  hwnd?: number;
+  delivery?: DesktopDelivery;
   x?: number;
   y?: number;
   button?: 'left' | 'right' | 'middle';
   text?: string;
+  keys?: string[];
+  delta?: number;
+  automationId?: string;
+  name?: string;
+  controlType?: string;
+  value?: string;
+  durationMs?: number;
+}
+
+export interface DesktopHandsParams {
+  action:
+    | 'windows'
+    | 'inspect'
+    | 'screenshot'
+    | 'act'
+    | 'batch'
+    | 'mouse_move'
+    | 'click'
+    | 'type_text';
+  hwnd?: number;
+  titleFilter?: string;
+  processFilter?: string;
+  includeMinimized?: boolean;
+  maxDepth?: number;
+  maxNodes?: number;
+  region?: { x: number; y: number; width: number; height: number };
+  delivery?: DesktopDelivery;
+  op?: DesktopActOp;
+  x?: number;
+  y?: number;
+  button?: 'left' | 'right' | 'middle';
+  text?: string;
+  keys?: string[];
+  delta?: number;
+  automationId?: string;
+  name?: string;
+  controlType?: string;
+  value?: string;
+  durationMs?: number;
+  steps?: DesktopHandsStep[];
+}
+
+export interface DesktopHandsExecuteOptions {
+  foregroundFallback?: boolean;
+  preemptionThresholdMs?: number;
+  onForegroundVisual?: (rect: { x: number; y: number; width: number; height: number }) => void;
+}
+
+const MAX_BATCH_STEPS = 30;
+const MAX_WAIT_MS = 10000;
+const MAX_TEXT_LEN = 4096;
+
+function assertFiniteCoord(val: unknown, label: string): number {
+  const num = Number(val);
+  if (!Number.isFinite(num)) {
+    throw new Error(`INVALID_COORDINATES: ${label} must be a finite number`);
+  }
+  return Math.trunc(num);
+}
+
+function assertPositiveHwnd(val: unknown, contextLabel: string): number {
+  const hwnd = Number(val);
+  if (!Number.isFinite(hwnd) || hwnd <= 0) {
+    throw new Error(`INVALID_HWND: ${contextLabel} requires a valid positive window handle (hwnd)`);
+  }
+  return Math.trunc(hwnd);
+}
+
+async function sleepSlicedWithEmergency(ms: number, startEpoch: number): Promise<void> {
+  const clamped = Math.max(0, Math.min(MAX_WAIT_MS, Math.trunc(ms)));
+  let remaining = clamped;
+  while (remaining > 0) {
+    if (SubagentDispatcher.getEmergencyEpoch() !== startEpoch) {
+      throw new Error('EMERGENCY_STOP_ABORTED: Desktop wait aborted by emergency stop');
+    }
+    const slice = Math.min(100, remaining);
+    await new Promise((resolve) => setTimeout(resolve, slice));
+    remaining -= slice;
+  }
+  if (SubagentDispatcher.getEmergencyEpoch() !== startEpoch) {
+    throw new Error('EMERGENCY_STOP_ABORTED: Desktop wait aborted by emergency stop');
+  }
 }
 
 export class DesktopHands {
-  public static execute(params: DesktopHandsParams, enabled = false): any {
+  public static async execute(
+    params: DesktopHandsParams,
+    enabled = false,
+    options: DesktopHandsExecuteOptions = {}
+  ): Promise<any> {
     if (!enabled) {
       throw new Error('DESKTOP_HANDS_DISABLED: Desktop Hands is disabled in configuration.');
     }
-
     if (process.platform !== 'win32') {
       throw new Error('PLATFORM_NOT_SUPPORTED: Desktop Hands only supports Windows platform.');
     }
 
     switch (params.action) {
-      case 'screenshot': {
-        const tempPath = joinInsideRoot(os.tmpdir(), `screenshot_${Date.now()}.png`);
-        const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Windows.Forms.Application]::SetHighDpiMode([System.Windows.Forms.HighDpiMode]::PerMonitorV2) | Out-Null
-$screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-$bitmap = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
-$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-$graphics.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
-$bitmap.Save("${tempPath.replace(/\\/g, '/')}", [System.Drawing.Imaging.ImageFormat]::Png)
-$graphics.Dispose()
-$bitmap.Dispose()
-`;
-        execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe']
+      case 'windows': {
+        const raw = listWindows({
+          includeMinimized: params.includeMinimized,
+          titleFilter: params.titleFilter,
+          processFilter: params.processFilter
         });
-
+        const windows = raw.filter(
+          (w) => !WinGuard.isProtectedOrSensitiveWindow(w.hwnd, w.pid, w.processName, w.title)
+        );
         return {
-          action: 'screenshot',
-          path: tempPath,
-          format: 'png'
+          action: 'windows',
+          count: windows.length,
+          windows
         };
       }
 
-      case 'mouse_move': {
-        const rawX = Number(params.x ?? 0);
-        const rawY = Number(params.y ?? 0);
-        if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) {
-          throw new Error('INVALID_COORDINATES: mouse_move requires finite numeric x and y coordinates');
-        }
-        const x = Math.trunc(rawX);
-        const y = Math.trunc(rawY);
-        const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})
-`;
-        execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe']
+      case 'inspect': {
+        const hwnd = assertPositiveHwnd(params.hwnd, 'inspect');
+        WinGuard.assertTargetAllowed({ hwnd });
+        const treeRes = await UiaBridge.inspect({
+          hwnd,
+          maxDepth: params.maxDepth,
+          maxNodes: params.maxNodes
         });
+        return {
+          action: 'inspect',
+          hwnd,
+          ...treeRes
+        };
+      }
 
-        return { action: 'mouse_move', x, y };
+      case 'screenshot': {
+        const hwnd = typeof params.hwnd === 'number' && params.hwnd > 0 ? Math.trunc(params.hwnd) : undefined;
+        if (hwnd) {
+          WinGuard.assertTargetAllowed({ hwnd });
+        }
+        if (params.region) {
+          assertFiniteCoord(params.region.x, 'region.x');
+          assertFiniteCoord(params.region.y, 'region.y');
+          const rw = assertFiniteCoord(params.region.width, 'region.width');
+          const rh = assertFiniteCoord(params.region.height, 'region.height');
+          if (rw <= 0 || rh <= 0) {
+            throw new Error('INVALID_REGION: screenshot region width and height must be positive');
+          }
+        }
+        const redactRects = WinGuard.getRedactionRects(hwnd);
+        const shot = captureScreenshot({
+          hwnd,
+          region: params.region,
+          redactRects
+        });
+        return {
+          action: 'screenshot',
+          hwnd: hwnd ?? null,
+          width: shot.width,
+          height: shot.height,
+          bounds: shot.bounds,
+          dpiScale: shot.dpiScale,
+          redactedCount: shot.redactedCount,
+          __mcpImage: {
+            data: shot.base64,
+            mimeType: 'image/png'
+          }
+        };
+      }
+
+      case 'act': {
+        if (!params.op) {
+          throw new Error('INVALID_ACT_PARAMS: act requires an op parameter');
+        }
+        const startEpoch = SubagentDispatcher.getEmergencyEpoch();
+        const result = await this.executeStep(
+          {
+            op: params.op,
+            hwnd: params.hwnd,
+            delivery: params.delivery,
+            x: params.x,
+            y: params.y,
+            button: params.button,
+            text: params.text,
+            keys: params.keys,
+            delta: params.delta,
+            automationId: params.automationId,
+            name: params.name,
+            controlType: params.controlType,
+            value: params.value,
+            durationMs: params.durationMs
+          },
+          options,
+          startEpoch
+        );
+        return {
+          action: 'act',
+          ...result
+        };
+      }
+
+      case 'batch': {
+        if (!Array.isArray(params.steps) || params.steps.length === 0) {
+          throw new Error('INVALID_BATCH_PARAMS: batch requires a non-empty steps array');
+        }
+        if (params.steps.length > MAX_BATCH_STEPS) {
+          throw new Error(`BATCH_LIMIT_EXCEEDED: batch supports at most ${MAX_BATCH_STEPS} steps`);
+        }
+        const startEpoch = SubagentDispatcher.getEmergencyEpoch();
+        const results: any[] = [];
+        for (let i = 0; i < params.steps.length; i++) {
+          if (SubagentDispatcher.getEmergencyEpoch() !== startEpoch) {
+            throw new Error(`EMERGENCY_STOP_ABORTED: Desktop batch aborted at step ${i + 1}`);
+          }
+          const step = params.steps[i];
+          const stepHwnd = step.hwnd ?? params.hwnd;
+          const stepDelivery = step.delivery ?? params.delivery;
+          const res = await this.executeStep(
+            { ...step, hwnd: stepHwnd, delivery: stepDelivery },
+            options,
+            startEpoch
+          );
+          results.push({ step: i + 1, ...res });
+        }
+        return {
+          action: 'batch',
+          completedSteps: results.length,
+          results
+        };
+      }
+
+      // --- Legacy v1 compatibility actions ---
+      case 'mouse_move': {
+        const x = assertFiniteCoord(params.x ?? 0, 'x');
+        const y = assertFiniteCoord(params.y ?? 0, 'y');
+        const startEpoch = SubagentDispatcher.getEmergencyEpoch();
+        return this.executeStep(
+          { op: 'move', x, y, hwnd: params.hwnd, delivery: 'foreground' },
+          options,
+          startEpoch
+        );
       }
 
       case 'click': {
-        const button = params.button || 'left';
-        let flagDown = 0x0002; // MOUSEEVENTF_LEFTDOWN
-        let flagUp = 0x0004;   // MOUSEEVENTF_LEFTUP
-
-        if (button === 'right') {
-          flagDown = 0x0008;
-          flagUp = 0x0010;
-        } else if (button === 'middle') {
-          flagDown = 0x0020;
-          flagUp = 0x0040;
-        }
-
-        const psScript = `
-$signature = @"
-[DllImport("user32.dll", CharSet=CharSet.Auto, CallingConvention=CallingConvention.StdCall)]
-public static extern void mouse_event(long dwFlags, long dx, long dy, long cButtons, long dwExtraInfo);
-"@
-$mouse = Add-Type -memberDefinition $signature -name "Win32Mouse" -namespace Win32Functions -passThru
-$mouse::mouse_event(${flagDown}, 0, 0, 0, 0)
-Start-Sleep -Milliseconds 50
-$mouse::mouse_event(${flagUp}, 0, 0, 0, 0)
-`;
-        execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe']
-        });
-
-        return { action: 'click', button };
+        const startEpoch = SubagentDispatcher.getEmergencyEpoch();
+        const x = params.x !== undefined ? assertFiniteCoord(params.x, 'x') : undefined;
+        const y = params.y !== undefined ? assertFiniteCoord(params.y, 'y') : undefined;
+        return this.executeStep(
+          {
+            op: 'click',
+            x,
+            y,
+            hwnd: params.hwnd,
+            button: params.button,
+            delivery: params.delivery ?? 'auto'
+          },
+          options,
+          startEpoch
+        );
       }
 
       case 'type_text': {
         const text = params.text || '';
-        if (text.length > 4096) {
-          throw new Error('TEXT_TOO_LONG: type_text text exceeds the 4096 character limit');
+        if (text.length > MAX_TEXT_LEN) {
+          throw new Error(`TEXT_TOO_LONG: type_text text exceeds the ${MAX_TEXT_LEN} character limit`);
         }
-        // Escape special SendKeys characters: + ^ % ~ ( ) { }
-        const escaped = text.replace(/[{}+^%~()]/g, '{$&}');
-        // Pass the text as a PowerShell single-quoted literal: inside '...' no
-        // interpolation/backtick expansion happens; only ' needs doubling.
-        const psLiteral = escaped.replace(/'/g, "''");
-        const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.SendKeys]::SendWait('${psLiteral}')
-`;
-        execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe']
-        });
-
-        return { action: 'type_text', length: text.length };
+        const startEpoch = SubagentDispatcher.getEmergencyEpoch();
+        return this.executeStep(
+          {
+            op: 'type_text',
+            text,
+            hwnd: params.hwnd,
+            delivery: params.delivery ?? 'auto'
+          },
+          options,
+          startEpoch
+        );
       }
 
       default:
-        throw new Error(`UNKNOWN_DESKTOP_HANDS_ACTION: ${params.action}`);
+        throw new Error(`UNKNOWN_DESKTOP_HANDS_ACTION: ${(params as any).action}`);
+    }
+  }
+
+  private static async executeStep(
+    step: DesktopHandsStep,
+    options: DesktopHandsExecuteOptions,
+    startEpoch: number
+  ): Promise<any> {
+    if (SubagentDispatcher.getEmergencyEpoch() !== startEpoch) {
+      throw new Error('EMERGENCY_STOP_ABORTED: Desktop step aborted by emergency stop');
+    }
+
+    const op = step.op;
+    if (op === 'wait') {
+      const durationMs = Number.isFinite(Number(step.durationMs)) ? Number(step.durationMs) : 200;
+      await sleepSlicedWithEmergency(durationMs, startEpoch);
+      return { op: 'wait', durationMs: Math.max(0, Math.min(MAX_WAIT_MS, Math.trunc(durationMs))), delivery: 'none' };
+    }
+
+    const hwnd = typeof step.hwnd === 'number' && step.hwnd > 0 ? Math.trunc(step.hwnd) : undefined;
+    const x = step.x !== undefined ? assertFiniteCoord(step.x, 'x') : undefined;
+    const y = step.y !== undefined ? assertFiniteCoord(step.y, 'y') : undefined;
+
+    // Security fence before any UIA/input operation
+    WinGuard.assertTargetAllowed({ hwnd, x, y });
+
+    // UIA semantic operations (always background/UIA)
+    if (op === 'invoke' || op === 'set_value' || op === 'toggle' || op === 'select' || op === 'focus') {
+      const targetHwnd = assertPositiveHwnd(hwnd, `UIA ${op}`);
+      const uiaRes = await UiaBridge.act({
+        hwnd: targetHwnd,
+        automationId: step.automationId,
+        name: step.name,
+        controlType: step.controlType,
+        op,
+        value: step.value ?? step.text
+      });
+      return {
+        op,
+        delivery: 'background_uia',
+        hwnd: targetHwnd,
+        ...uiaRes
+      };
+    }
+
+    const requestedDelivery: DesktopDelivery = step.delivery ?? 'auto';
+    const canBackground =
+      Boolean(hwnd) &&
+      (op === 'type_text' ||
+        ((op === 'click' || op === 'double_click' || op === 'right_click' || op === 'scroll') &&
+          x !== undefined &&
+          y !== undefined));
+
+    let useForeground = false;
+    if (requestedDelivery === 'background') {
+      if (!canBackground) {
+        throw new Error(
+          `BACKGROUND_DELIVERY_UNAVAILABLE: op '${op}' requires a target hwnd (and x/y for pointer ops) for background delivery`
+        );
+      }
+    } else if (requestedDelivery === 'foreground') {
+      useForeground = true;
+    } else {
+      // auto: background-first, fallback to foreground only when background is not applicable
+      useForeground = !canBackground;
+    }
+
+    if (!useForeground && hwnd) {
+      switch (op) {
+        case 'click':
+        case 'double_click':
+        case 'right_click': {
+          const px = assertFiniteCoord(x, 'x');
+          const py = assertFiniteCoord(y, 'y');
+          const button = op === 'right_click' ? 'right' : step.button || 'left';
+          const dbl = op === 'double_click';
+          const client = postMouseClick(hwnd, px, py, button, dbl);
+          return { op, delivery: 'background_msg', hwnd, x: px, y: py, button, client };
+        }
+        case 'type_text': {
+          const text = step.text || '';
+          if (text.length > MAX_TEXT_LEN) {
+            throw new Error(`TEXT_TOO_LONG: type_text text exceeds the ${MAX_TEXT_LEN} character limit`);
+          }
+          postText(hwnd, text);
+          return { op, delivery: 'background_msg', hwnd, length: text.length };
+        }
+        case 'scroll': {
+          const px = assertFiniteCoord(x, 'x');
+          const py = assertFiniteCoord(y, 'y');
+          const delta = assertFiniteCoord(step.delta ?? -3, 'delta');
+          postScroll(hwnd, px, py, delta);
+          return { op, delivery: 'background_msg', hwnd, x: px, y: py, delta };
+        }
+      }
+    }
+
+    // Foreground fallback path (SendInput)
+    if (!options.foregroundFallback) {
+      throw new Error(
+        `FOREGROUND_FALLBACK_DISABLED: Operation '${op}' requires foreground fallback, which is currently disabled in settings.`
+      );
+    }
+    WinGuard.assertNoUserPreemption(options.preemptionThresholdMs ?? 1500);
+
+    if (hwnd) {
+      focusWindow(hwnd);
+    }
+
+    switch (op) {
+      case 'move': {
+        const px = assertFiniteCoord(x, 'x');
+        const py = assertFiniteCoord(y, 'y');
+        options.onForegroundVisual?.({ x: px - 18, y: py - 18, width: 36, height: 36 });
+        foregroundMouseMove(px, py);
+        return { op, delivery: 'foreground', x: px, y: py };
+      }
+      case 'click':
+      case 'double_click':
+      case 'right_click': {
+        const button = op === 'right_click' ? 'right' : step.button || 'left';
+        const dbl = op === 'double_click';
+        if (x !== undefined && y !== undefined) {
+          options.onForegroundVisual?.({ x: x - 18, y: y - 18, width: 36, height: 36 });
+        }
+        foregroundClick(x, y, button, dbl);
+        return { op, delivery: 'foreground', x: x ?? null, y: y ?? null, button };
+      }
+      case 'scroll': {
+        const delta = assertFiniteCoord(step.delta ?? -3, 'delta');
+        foregroundScroll(x, y, delta);
+        return { op, delivery: 'foreground', x: x ?? null, y: y ?? null, delta };
+      }
+      case 'type_text': {
+        const text = step.text || '';
+        if (text.length > MAX_TEXT_LEN) {
+          throw new Error(`TEXT_TOO_LONG: type_text text exceeds the ${MAX_TEXT_LEN} character limit`);
+        }
+        foregroundTypeText(text);
+        return { op, delivery: 'foreground', length: text.length };
+      }
+      case 'hotkey': {
+        if (!Array.isArray(step.keys) || step.keys.length === 0) {
+          throw new Error('INVALID_HOTKEY_PARAMS: hotkey requires a non-empty keys array');
+        }
+        foregroundHotkey(step.keys);
+        return { op, delivery: 'foreground', keys: step.keys };
+      }
+      default:
+        throw new Error(`UNKNOWN_DESKTOP_OP: ${op}`);
     }
   }
 }

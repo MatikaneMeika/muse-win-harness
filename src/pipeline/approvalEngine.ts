@@ -203,6 +203,31 @@ export class ApprovalEngine {
       };
     }
 
+    // 4.5. Desktop Hands v2: perception (windows/inspect/screenshot) is low risk;
+    // background UIA/PostMessage is medium risk; foreground SendInput is high risk.
+    if (toolName === 'desktop_hands') {
+      const action = typeof params.action === 'string' ? params.action : '';
+      if (action === 'windows' || action === 'inspect' || action === 'screenshot') {
+        return {
+          riskLevel: 'low',
+          summary: `Desktop perception (${action})${params.hwnd ? ` on hwnd=${params.hwnd}` : ''}`,
+          requiresMobileHmac: false
+        };
+      }
+      const isForeground =
+        params.delivery === 'foreground' ||
+        action === 'mouse_move' ||
+        (Array.isArray(params.steps) &&
+          params.steps.some(
+            (s: any) => s?.delivery === 'foreground' || s?.op === 'move' || s?.op === 'hotkey'
+          ));
+      return {
+        riskLevel: isForeground ? 'high' : 'medium',
+        summary: `Desktop ${isForeground ? 'foreground' : 'background'} ${action}${params.op ? `:${params.op}` : ''}${params.hwnd ? ` (hwnd=${params.hwnd})` : ''}`,
+        requiresMobileHmac: false
+      };
+    }
+
     // 5. Sensitive write / write operations
     if (category === 'sensitive_write') {
       return {
@@ -254,7 +279,8 @@ export class ApprovalEngine {
     actionKey: string,
     riskLevel: RiskLevel,
     policy: ApprovalPolicy,
-    context: ExecutionContext
+    context: ExecutionContext,
+    params?: Record<string, any>
   ): boolean {
     // Critical actions can NEVER be exempted by session/workspace memory scopes:
     // they always require explicit human approval through the mobile HMAC channel.
@@ -268,6 +294,21 @@ export class ApprovalEngine {
       context.sessionApprovedActions?.has(actionKey)
     ) {
       return true;
+    }
+
+    // Session-level app/window authorization for desktop_hands
+    if (
+      toolName === 'desktop_hands' &&
+      typeof params?.hwnd === 'number' &&
+      params.hwnd > 0
+    ) {
+      const hwndKey = `desktop_hands:hwnd:${Math.trunc(params.hwnd)}`;
+      if (
+        this.sessionApprovedActions.has(hwndKey) ||
+        context.sessionApprovedActions?.has(hwndKey)
+      ) {
+        return true;
+      }
     }
 
     // Workspace memory check
@@ -479,6 +520,17 @@ export class ApprovalEngine {
       if (context?.sessionApprovedActions) {
         context.sessionApprovedActions.add(actionKey);
       }
+      if (
+        record.toolName === 'desktop_hands' &&
+        typeof record.params?.hwnd === 'number' &&
+        record.params.hwnd > 0
+      ) {
+        const hwndKey = `desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}`;
+        this.sessionApprovedActions.add(hwndKey);
+        if (context?.sessionApprovedActions) {
+          context.sessionApprovedActions.add(hwndKey);
+        }
+      }
     } else if (granularity === 'workspace') {
       this.workspaceApprovedActions.add(actionKey);
       if (context?.workspaceApprovedActions) {
@@ -595,6 +647,11 @@ export class ApprovalEngine {
     }
     this.evictTerminalRecordsIfNeeded();
     return rejectedIds;
+  }
+
+  /** Clears in-memory session-level approvals (invoked by Global Emergency Kill). */
+  public clearSessionApprovals(): void {
+    this.sessionApprovedActions.clear();
   }
 
   /** Caps in-memory approval history to prevent unbounded growth over long daemon runs. */

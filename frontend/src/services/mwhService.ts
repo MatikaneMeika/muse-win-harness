@@ -252,6 +252,8 @@ export interface MwhState {
   autoDowngradeTwoHours: boolean;
   autoDowngradeRemainingSec: number;
   multiDeviceApproval: boolean;
+  desktopHandsEnabled: boolean;
+  desktopHandsForegroundFallback: boolean;
   pendingApprovals?: PendingApprovalItem[];
   workspaceRoots: string[];
   alwaysAllowedWorkspaces: string[];
@@ -324,6 +326,8 @@ function createInitialState(): MwhState {
     autoDowngradeTwoHours: true,
     autoDowngradeRemainingSec: 7200,
     multiDeviceApproval: false,
+    desktopHandsEnabled: false,
+    desktopHandsForegroundFallback: false,
     pendingApprovals: [],
     workspaceRoots: [],
     alwaysAllowedWorkspaces: [],
@@ -610,6 +614,28 @@ export class MwhDaemonService {
     this.state = { ...this.state, multiDeviceApproval: enabled };
     this.emit();
     void this.request('POST', '/api/v1/security/multi-device-approval', { enabled, source: 'ui_island' });
+  }
+
+  public toggleDesktopHands() {
+    const enabled = !this.state.desktopHandsEnabled;
+    this.state = { ...this.state, desktopHandsEnabled: enabled };
+    this.emit();
+    void this.request('POST', '/api/v1/security/desktop-hands', {
+      enabled,
+      foregroundFallback: this.state.desktopHandsForegroundFallback,
+      source: 'ui_island'
+    });
+  }
+
+  public toggleDesktopHandsForegroundFallback() {
+    const foregroundFallback = !this.state.desktopHandsForegroundFallback;
+    this.state = { ...this.state, desktopHandsForegroundFallback: foregroundFallback };
+    this.emit();
+    void this.request('POST', '/api/v1/security/desktop-hands', {
+      enabled: this.state.desktopHandsEnabled,
+      foregroundFallback,
+      source: 'ui_island'
+    });
   }
 
   public toggleAutoDowngradeTwoHours() {

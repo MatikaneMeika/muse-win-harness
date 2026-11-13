@@ -392,6 +392,14 @@ assert(
   'MWH启动.cmd must run the daemon preflight (--ensure-daemon-only) before opening the shell'
 );
 assert(
+  launcherSource.includes('ensure-ready.mjs'),
+  'MWH启动.cmd must run scripts/ensure-ready.mjs three-layer self-healing before preflight'
+);
+assert(
+  !/[DE]:[\\/]+gongju/i.test(launcherSource),
+  'MWH启动.cmd must not contain hardcoded private machine paths'
+);
+assert(
   launcherSource.includes('Opening the shell anyway'),
   'MWH启动.cmd must still open the shell after preflight failure (Opening the shell anyway)'
 );
@@ -399,6 +407,17 @@ assert(
   !/taskkill/i.test(launcherSource),
   'MWH启动.cmd must not kill processes by image name (taskkill)'
 );
+const ensureReadyPath = path.join(root, 'scripts', 'ensure-ready.mjs');
+assert(fs.existsSync(ensureReadyPath), 'missing scripts/ensure-ready.mjs self-healing guard');
+if (fs.existsSync(ensureReadyPath)) {
+  const ensureReadySource = read(ensureReadyPath);
+  for (const fnName of ['ensureShellLayer', 'ensureBackendLayer', 'ensureFrontendLayer']) {
+    assert(
+      ensureReadySource.includes(fnName),
+      `scripts/ensure-ready.mjs is missing self-healing layer: ${fnName}`
+    );
+  }
+}
 assert(
   mainSource.includes('--ensure-daemon-only'),
   'main.cjs must support the --ensure-daemon-only preflight mode'

@@ -180,7 +180,11 @@ export class UiStaticHost {
 
     let target = lexicalTarget;
     if (!fs.existsSync(target) || (fs.existsSync(target) && fs.statSync(target).isDirectory())) {
-      if (!hasStaticExtension(rel) || fs.existsSync(target) && fs.statSync(target).isDirectory()) {
+      if (
+        rel === 'index.html' ||
+        !hasStaticExtension(rel) ||
+        (fs.existsSync(target) && fs.statSync(target).isDirectory())
+      ) {
         target = path.resolve(lexicalRoot, 'index.html');
         if (!fs.existsSync(target)) {
           this.sendFallback(res);

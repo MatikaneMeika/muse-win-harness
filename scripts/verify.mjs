@@ -100,15 +100,19 @@ const SUITES = {
   }
 };
 
-function newestMtimeMs(dir) {
-  if (!fs.existsSync(dir)) return 0;
+function newestMtimeMs(targetPath, extensions = ['.ts']) {
+  if (!fs.existsSync(targetPath)) return 0;
+  const stat = fs.statSync(targetPath);
+  if (stat.isFile()) {
+    return extensions.some((ext) => targetPath.endsWith(ext)) ? stat.mtimeMs : 0;
+  }
   let max = 0;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
+  for (const entry of fs.readdirSync(targetPath, { withFileTypes: true })) {
+    const full = path.join(targetPath, entry.name);
     if (entry.isDirectory()) {
-      const sub = newestMtimeMs(full);
+      const sub = newestMtimeMs(full, extensions);
       if (sub > max) max = sub;
-    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+    } else if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) {
       const mtime = fs.statSync(full).mtimeMs;
       if (mtime > max) max = mtime;
     }
@@ -120,22 +124,53 @@ function isDistStale() {
   const distCli = path.join(root, 'dist', 'cli.js');
   if (!fs.existsSync(distCli)) return true;
   const distMtime = fs.statSync(distCli).mtimeMs;
-  const srcNewest = newestMtimeMs(path.join(root, 'src'));
+  const srcNewest = newestMtimeMs(path.join(root, 'src'), ['.ts']);
   return srcNewest > distMtime;
 }
 
+function isFrontendDistStale() {
+  const uiIndex = path.join(root, 'frontend', 'dist', 'index.html');
+  if (!fs.existsSync(uiIndex)) return true;
+  const distMtime = fs.statSync(uiIndex).mtimeMs;
+  const uiExts = ['.ts', '.tsx', '.css', '.html', '.json', '.svg'];
+  const newestUiSrc = Math.max(
+    newestMtimeMs(path.join(root, 'frontend', 'src'), uiExts),
+    newestMtimeMs(path.join(root, 'frontend', 'index.html'), ['.html']),
+    newestMtimeMs(path.join(root, 'frontend', 'vite.config.ts'), ['.ts'])
+  );
+  return newestUiSrc > distMtime;
+}
+
 function ensureBuilt(force = false) {
-  if (!force && !isDistStale()) {
-    console.log('[verify] dist/ is up-to-date with src/.');
+  const backendStale = isDistStale();
+  const frontendStale = isFrontendDistStale();
+  if (!force && !backendStale && !frontendStale) {
+    console.log('[verify] dist/ and frontend/dist/ are up-to-date.');
     return;
   }
-  const tscBin = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
-  console.log('[verify] Compiling TypeScript (src/ -> dist/)...');
-  execFileSync(process.execPath, [tscBin, '-p', path.join(root, 'tsconfig.json')], {
-    cwd: root,
-    stdio: 'inherit',
-    windowsHide: true
-  });
+  if (force || backendStale) {
+    const tscBin = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
+    console.log('[verify] Compiling TypeScript (src/ -> dist/)...');
+    execFileSync(process.execPath, [tscBin, '-p', path.join(root, 'tsconfig.json')], {
+      cwd: root,
+      stdio: 'inherit',
+      windowsHide: true
+    });
+  }
+  if (force || frontendStale) {
+    const frontendDir = path.join(root, 'frontend');
+    const viteBin = path.join(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js');
+    console.log('[verify] Compiling Frontend UI (frontend/src/ -> frontend/dist/)...');
+    execFileSync(
+      process.execPath,
+      [viteBin, 'build', '--config', path.join(frontendDir, 'vite.config.ts'), frontendDir],
+      {
+        cwd: frontendDir,
+        stdio: 'inherit',
+        windowsHide: true
+      }
+    );
+  }
 }
 
 function getChangedFiles() {
@@ -255,7 +290,7 @@ if (LIST_ONLY) {
 }
 
 const anyNeedsDist = suiteIds.some((id) => SUITES[id]?.needsDist);
-if (anyNeedsDist || FORCE_BUILD) {
+if (anyNeedsDist || FORCE_BUILD || isFrontendDistStale()) {
   ensureBuilt(FORCE_BUILD);
 }
 

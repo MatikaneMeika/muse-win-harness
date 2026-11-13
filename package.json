@@ -7,6 +7,8 @@
   "scripts": {
     "build": "tsc",
     "build:ui": "npm --prefix frontend run build",
+    "build:all": "node scripts/ensure-ready.mjs",
+    "ensure:ready": "node scripts/ensure-ready.mjs",
     "start": "node dist/cli.js",
     "gate1": "node dist/gates/gate1.js",
     "gate2": "node dist/gates/gate2.js",

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem MWH launcher: run daemon preflight, then open the desktop shell.
+rem MWH launcher: three-layer silent self-healing, daemon preflight, then open the desktop shell.
 rem Preflight failure no longer blocks the window; the chrome banner shows the real host status.
 rem Exit MWH via the tray icon (MWH logo) -> Quit.
 
@@ -8,27 +8,33 @@ set "ELECTRON_RUN_AS_NODE="
 set "ROOT=%~dp0"
 set "ELECTRON_EXE=%ROOT%shell\node_modules\electron\dist\electron.exe"
 
-if not exist "%ELECTRON_EXE%" (
-  echo [ERROR] electron.exe not found:
-  echo %ELECTRON_EXE%
-  echo Run "npm --prefix shell install" first.
+rem 0. Locate node.exe dynamically and prepend its directory to local PATH to bypass broken npm shims.
+set "NODE_EXE="
+for /f "delims=" %%I in ('where node 2^>nul') do (
+  if not defined NODE_EXE set "NODE_EXE=%%I"
+)
+if not defined NODE_EXE if exist "%ProgramFiles%\nodejs\node.exe" set "NODE_EXE=%ProgramFiles%\nodejs\node.exe"
+if not defined NODE_EXE if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" set "NODE_EXE=%LOCALAPPDATA%\Programs\nodejs\node.exe"
+if not defined NODE_EXE (
+  echo [ERROR] node.exe not found. Please install Node.js 22+ first.
+  pause
+  exit /b 1
+)
+for %%I in ("%NODE_EXE%") do set "PATH=%%~dpI;%PATH%"
+
+rem 1. Three-layer silent self-healing (shell electron, backend cli, frontend ui).
+"%NODE_EXE%" "%ROOT%scripts\ensure-ready.mjs"
+if errorlevel 1 (
+  echo [ERROR] MWH auto-heal/build failed. Window NOT opened.
   pause
   exit /b 1
 )
 
-if not exist "%ROOT%dist\cli.js" (
-  echo [INFO] dist\cli.js not found, building backend first...
-  call npm --prefix "%ROOT%." run build
-  if errorlevel 1 (
-    rem npm can be broken on some machines (missing shim); fall back to tsc directly.
-    echo [WARN] "npm run build" failed, retrying with local typescript...
-    node "%ROOT%node_modules\typescript\bin\tsc" -p "%ROOT%tsconfig.json"
-    if errorlevel 1 (
-      echo [ERROR] backend build failed. Window NOT opened.
-      pause
-      exit /b 1
-    )
-  )
+if not exist "%ELECTRON_EXE%" (
+  echo [ERROR] electron.exe still missing after self-heal:
+  echo %ELECTRON_EXE%
+  pause
+  exit /b 1
 )
 
 echo [INFO] starting host daemon and waiting for 127.0.0.1:19820 ...

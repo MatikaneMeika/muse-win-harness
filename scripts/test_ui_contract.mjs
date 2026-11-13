@@ -411,7 +411,13 @@ const ensureReadyPath = path.join(root, 'scripts', 'ensure-ready.mjs');
 assert(fs.existsSync(ensureReadyPath), 'missing scripts/ensure-ready.mjs self-healing guard');
 if (fs.existsSync(ensureReadyPath)) {
   const ensureReadySource = read(ensureReadyPath);
-  for (const fnName of ['ensureShellLayer', 'ensureBackendLayer', 'ensureFrontendLayer']) {
+  for (const fnName of [
+    'ensureShellLayer',
+    'ensureBackendLayer',
+    'ensureFrontendLayer',
+    'ensureCloudflaredVendored',
+    'restartStaleMwhProcessesIfNeeded'
+  ]) {
     assert(
       ensureReadySource.includes(fnName),
       `scripts/ensure-ready.mjs is missing self-healing layer: ${fnName}`

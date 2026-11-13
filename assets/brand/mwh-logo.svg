@@ -4,7 +4,7 @@
       <stop offset="0%" stop-color="#141320"/>
       <stop offset="100%" stop-color="#0B0C14"/>
     </linearGradient>
-    <linearGradient id="mwhPurpleBlue" x1="200" y1="30" x2="40" y2="210" gradientUnits="userSpaceOnUse">
+    <linearGradient id="mwhPurpleBlue" x1="1" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#8B5CF6"/>
       <stop offset="50%" stop-color="#6366F1"/>
       <stop offset="100%" stop-color="#3B82F6"/>
@@ -16,9 +16,11 @@
   </defs>
   <rect x="8" y="8" width="224" height="224" rx="52" fill="url(#mwhBg)" stroke="url(#mwhBorder)" stroke-width="3"/>
   <circle cx="184" cy="56" r="64" fill="#8B5CF6" fill-opacity="0.09"/>
-  <g transform="rotate(12 120 120)">
-    <path d="M 60 160 C 80 40, 110 60, 110 120 C 110 180, 140 80, 150 60 C 160 40, 180 100, 190 90"
-          fill="none" stroke="url(#mwhPurpleBlue)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="176" cy="164" r="20" fill="url(#mwhPurpleBlue)"/>
+  <g transform="translate(48, 48) scale(1.2)">
+    <g transform="rotate(12 60 60)">
+      <path d="M 30 80 C 40 20, 55 30, 55 60 C 55 90, 70 40, 75 30 C 80 20, 90 50, 95 45"
+            fill="none" stroke="url(#mwhPurpleBlue)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="88" cy="82" r="11" fill="url(#mwhPurpleBlue)"/>
+    </g>
   </g>
 </svg>

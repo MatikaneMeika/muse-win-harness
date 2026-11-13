@@ -227,6 +227,7 @@
 | 3 | `endpoints-credentials` | `tour-endpoints-credentials` | 防窥端点与一键配对 | 公网 MCP/REST 端点与 Token 默认脱敏防截屏泄露（展开 15 秒自动回掩），支持一键复制配对口令与 MCP JSON |
 | 4 | `advanced-center` | `tour-advanced-center` | 四栏高级配置中心 | 展开连接与权限、工作区与 ACP 代理、本机 MCP 与 Skill 资源库、Git Shadow 快照回滚与审计日志 |
 | 5 | `approval-island` | `tour-approval-island` | 底部实时审批灵动岛 | 写操作或高危命令触发时自动从胶囊展开，支持允许一次、本工作区始终允许、进程树强杀与快照回滚 |
+| 6 | `desktop-hands` | `tour-desktop-hands` | 原生桌面操控与防抢占护栏 | 默认关闭，开启后支持窗口枚举、UIA 控件树、脱敏截图与后台优先操控，前台回退遇人工键鼠自动暂停 |
 
 4. **功能变更时强制同步更新机制（Engineering Sync Gate）**：
    - **双向静态门禁（`scripts/test_ui_contract.mjs` Gate 15）**：门禁脚本自动解析 `docs/DESIGN.md`、`shell/muse-settings-preload.cjs` 与 `frontend/src/overlay/MwhSettingsModal.tsx` 中的 `TOUR_STEPS` 定义及 DOM `data-tour-id` 锚点，并交叉校验四大高级配置域（`连接与权限`、`工作区与代理`、`资源库`、`审计日志`）与四档权限模式是否全部被引导步骤覆盖。

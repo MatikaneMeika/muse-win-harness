@@ -111,6 +111,12 @@ export const TOUR_STEPS = [
     titleKey: 'tour.step5.title',
     bodyKey: 'tour.step5.body',
   },
+  {
+    id: 'desktop-hands',
+    target: 'tour-desktop-hands',
+    titleKey: 'tour.step6.title',
+    bodyKey: 'tour.step6.body',
+  },
 ] as const;
 
 type SnapshotSortOrder = 'newest' | 'oldest' | 'files-desc';
@@ -1233,6 +1239,7 @@ export const MwhSettingsModal: React.FC = () => {
                             />
                           </div>
                           <div
+                            data-tour-id="tour-desktop-hands"
                             className={`p-3 rounded-xl flex items-center justify-between gap-3 mt-3 ${subtleBg}`}
                           >
                             <div>

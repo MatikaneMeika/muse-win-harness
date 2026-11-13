@@ -109,6 +109,16 @@ public static class MwhUiaHelper {
         var conds = new List<Condition>();
         if (!string.IsNullOrEmpty(automationId)) conds.Add(new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
         if (!string.IsNullOrEmpty(name)) conds.Add(new PropertyCondition(AutomationElement.NameProperty, name));
+        if (!string.IsNullOrEmpty(controlType)) {
+            var normCt = controlType.StartsWith("ControlType.") ? controlType : "ControlType." + controlType;
+            foreach (var f in typeof(ControlType).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)) {
+                var ct = f.GetValue(null) as ControlType;
+                if (ct != null && string.Equals(ct.ProgrammaticName, normCt, StringComparison.OrdinalIgnoreCase)) {
+                    conds.Add(new PropertyCondition(AutomationElement.ControlTypeProperty, ct));
+                    break;
+                }
+            }
+        }
         Condition cond = conds.Count == 0 ? Condition.TrueCondition : (conds.Count == 1 ? conds[0] : new AndCondition(conds.ToArray()));
 
         AutomationElement target = root.FindFirst(TreeScope.Descendants, cond);
@@ -237,13 +247,28 @@ export class UiaBridge {
       }
     });
 
-    child.on('exit', () => {
+    // Drain stderr so the 64KB OS pipe buffer never stalls the worker
+    child.stderr.on('data', () => {});
+
+    const failAllPending = (err: Error) => {
       for (const [id, req] of this.pending.entries()) {
         clearTimeout(req.timer);
-        req.reject(new Error('UIA_BRIDGE_EXITED'));
+        req.reject(err);
         this.pending.delete(id);
       }
       if (this.child === child) this.child = null;
+    };
+
+    child.on('error', (err) => {
+      failAllPending(new Error(`UIA_BRIDGE_SPAWN_ERROR: ${err.message}`));
+    });
+
+    child.stdin.on('error', (err) => {
+      failAllPending(new Error(`UIA_BRIDGE_STDIN_ERROR: ${err.message}`));
+    });
+
+    child.on('exit', () => {
+      failAllPending(new Error('UIA_BRIDGE_EXITED'));
     });
 
     this.child = child;
@@ -271,10 +296,19 @@ export class UiaBridge {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        // Kill the hung worker so retries cannot double-execute on the same UI control
+        this.dispose();
         reject(new Error('UIA_BRIDGE_TIMEOUT'));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      child.stdin.write(JSON.stringify({ id, ...payload }) + '\n', 'utf-8');
+      try {
+        child.stdin.write(JSON.stringify({ id, ...payload }) + '\n', 'utf-8');
+      } catch (err: any) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        this.dispose();
+        reject(new Error(`UIA_BRIDGE_WRITE_FAILED: ${err?.message || String(err)}`));
+      }
     });
   }
 

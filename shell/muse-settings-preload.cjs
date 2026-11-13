@@ -351,6 +351,16 @@ const MWH_I18N = {
     '多端审批': 'Multi-device approval',
     '关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。':
       'Off: approvals stay in the local island. On: routine writes, ordinary commands and subagent launches use Muse’s native cards (phone, web and Mac can approve) with no second island prompt. Destructive actions such as disk deletes and force pushes are still checked locally against the command. If that tool is set to “always allow” in Muse, the native card is skipped too.',
+    '原生桌面操控（Desktop Hands）': 'Native Desktop Hands (Experimental)',
+    '默认关闭。开启后允许 Muse 枚举窗口、读取 UIA 控件树、脱敏截图并以「后台优先」方式操控原生桌面应用。':
+      'Disabled by default. When enabled, Muse can enumerate windows, inspect UIA trees, capture redacted screenshots, and act in background-first mode.',
+    '原生桌面操控': 'Native Desktop Hands',
+    '允许前台物理键鼠回退': 'Allow foreground input fallback',
+    '当后台 UIA/窗口消息无法投递时允许 SendInput 前台回退（检测到人工键鼠输入时自动暂停）。':
+      'Allow SendInput foreground fallback when background UIA/PostMessage delivery is unavailable (pauses automatically on user input).',
+    '原生桌面操控与防抢占护栏': 'Native Desktop Hands & preemption guard',
+    '默认关闭。开启后 Muse 可枚举窗口、读取 UIA 控件树并以后台优先方式操作原生桌面应用；敏感窗口截屏自动涂黑，前台回退遇人工键鼠输入自动暂停。':
+      'Disabled by default. When enabled, Muse can enumerate windows, inspect UIA trees, and act background-first on native apps with sensitive-window redaction and user-input preemption pause.',
     '安全机制与边界如实披露 (No Security Washing)': 'Safeguards and limits disclosed (no security washing)',
     '当前生效的保护机制：': 'Active protections:',
     '未覆盖边界说明：': 'Uncovered boundaries:',
@@ -789,6 +799,16 @@ const MWH_I18N = {
     '多端审批': 'マルチデバイス承認',
     '关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。':
       'オフのときはローカルアイランドで承認します。オンのときは、日常的な書き込み・通常のコマンド・サブエージェントの起動を Muse 標準カード（スマートフォン・Web・Mac で承認可能）で確認し、アイランドの二重表示は行いません。ディスク削除や強制プッシュなどの破壊的操作は、引き続きコマンド単位でローカル確認します。Muse でそのツールを「常に許可」にしている場合、標準カードもスキップされます。',
+    '原生桌面操控（Desktop Hands）': 'ネイティブデスクトップ操作（Desktop Hands）',
+    '默认关闭。开启后允许 Muse 枚举窗口、读取 UIA 控件树、脱敏截图并以「后台优先」方式操控原生桌面应用。':
+      'デフォルト無効。有効にすると、ウィンドウ一覧、UIA ツリー取得、マスキング済みスクリーンショット、バックグラウンド優先操作が許可されます。',
+    '原生桌面操控': 'ネイティブデスクトップ操作',
+    '允许前台物理键鼠回退': 'フォアグラウンド入力フォールバックを許可',
+    '当后台 UIA/窗口消息无法投递时允许 SendInput 前台回退（检测到人工键鼠输入时自动暂停）。':
+      'バックグラウンド UIA / PostMessage が使えない場合に SendInput フォールバックを許可します（ユーザー操作検知で自動一時停止）。',
+    '原生桌面操控与防抢占护栏': 'ネイティブデスクトップ操作と入力競合ガード',
+    '默认关闭。开启后 Muse 可枚举窗口、读取 UIA 控件树并以后台优先方式操作原生桌面应用；敏感窗口截屏自动涂黑，前台回退遇人工键鼠输入自动暂停。':
+      'デフォルト無効。有効にするとウィンドウ一覧や UIA 取得、バックグラウンド優先操作が可能になり、機密ウィンドウのマスキングとユーザー入力検知時の自動停止が働きます。',
     '安全机制与边界如实披露 (No Security Washing)': '保護機構と限界をそのまま開示（No Security Washing）',
     '当前生效的保护机制：': '現在有効な保護機構：',
     '未覆盖边界说明：': '対象外の境界：',
@@ -1214,6 +1234,16 @@ const MWH_I18N = {
     '多端审批': '多端審批',
     '关闭时仍用本机浮岛审批。开启后，日常写入、普通命令和派生子代理等改由 Muse 官方卡片确认（手机、网页、Mac 都能批），不再二次弹浮岛。删除磁盘、强制推送等破坏性操作仍在本机按命令检查。若在 Muse 里对该工具选了「始终允许」，官方卡片也会跳过。':
       '關閉時仍由本機浮島審批。開啟後，日常寫入、一般命令與派生次代理等改由 Muse 官方卡片確認（手機、網頁、Mac 皆可核准），不再二次彈出浮島。刪除磁碟、強制推送等破壞性操作仍在本機依命令檢查。若在 Muse 中對該工具選擇「一律允許」，官方卡片也會略過。',
+    '原生桌面操控（Desktop Hands）': '原生桌面操控（Desktop Hands）',
+    '默认关闭。开启后允许 Muse 枚举窗口、读取 UIA 控件树、脱敏截图并以「后台优先」方式操控原生桌面应用。':
+      '預設關閉。開啟後允許 Muse 列舉視窗、讀取 UIA 控制項樹、脫敏截圖並以「後台優先」方式操控原生桌面應用。',
+    '原生桌面操控': '原生桌面操控',
+    '允许前台物理键鼠回退': '允許前景實體鍵鼠回退',
+    '当后台 UIA/窗口消息无法投递时允许 SendInput 前台回退（检测到人工键鼠输入时自动暂停）。':
+      '當後台 UIA/視窗訊息無法投遞時允許 SendInput 前景回退（偵測到人工鍵鼠輸入時自動暫停）。',
+    '原生桌面操控与防抢占护栏': '原生桌面操控與防搶佔護欄',
+    '默认关闭。开启后 Muse 可枚举窗口、读取 UIA 控件树并以后台优先方式操作原生桌面应用；敏感窗口截屏自动涂黑，前台回退遇人工键鼠输入自动暂停。':
+      '預設關閉。開啟後 Muse 可列舉視窗、讀取 UIA 控制項樹並以後台優先方式操作原生桌面應用；敏感視窗截圖自動塗黑，前景回退遇人工鍵鼠輸入自動暫停。',
     '安全机制与边界如实披露 (No Security Washing)': '安全機制與邊界如實揭露 (No Security Washing)',
     '当前生效的保护机制：': '目前生效的保護機制：',
     '未覆盖边界说明：': '未涵蓋邊界說明：',
@@ -3673,6 +3703,12 @@ const TOUR_STEPS = [
     title: '底部实时审批灵动岛',
     body: '当 Muse 请求修改文件或执行命令时，底部灵动岛会自动展开展示风险等级与目标路径，支持「允许一次 / 本工作区始终允许 / 拒绝」及运行中强杀中止。',
   },
+  {
+    id: 'desktop-hands',
+    target: 'tour-desktop-hands',
+    title: '原生桌面操控与防抢占护栏',
+    body: '默认关闭。开启后 Muse 可枚举窗口、读取 UIA 控件树并以后台优先方式操作原生桌面应用；敏感窗口截屏自动涂黑，前台回退遇人工键鼠输入自动暂停。',
+  },
 ];
 
 async function fetchRealTokenIfNeeded() {
@@ -4754,7 +4790,7 @@ function renderPermissions(settings) {
     }) +
     '</div>' +
     '</div>' +
-    '<div class="mwh-card">' +
+    '<div class="mwh-card" data-tour-id="tour-desktop-hands">' +
     '<div class="mwh-list-row">' +
     '<div><div style="font-size:12px;font-weight:600">原生桌面操控（Desktop Hands）</div>' +
     '<div class="mwh-hint" style="margin-top:2px">默认关闭。开启后允许 Muse 枚举窗口、读取 UIA 控件树、脱敏截图并以「后台优先」方式操控原生桌面应用。</div></div>' +

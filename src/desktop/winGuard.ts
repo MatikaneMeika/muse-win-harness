@@ -13,7 +13,7 @@ import {
   getWindowPid,
   getWindowRect,
   getWindowText,
-  listWindows,
+  listRedactionCandidates,
   windowFromPoint,
   type WinRect
 } from './win32Native.js';
@@ -40,6 +40,7 @@ export const SENSITIVE_PROCESS_BLACKLIST = new Set<string>([
 const PROTECTED_TITLE_PATTERNS = [
   /Muse-Win-Harness/i,
   /MWH Approval/i,
+  /MWH 安全审批请求/i,
   /安全确认\s*·\s*Security Confirmation/i
 ];
 
@@ -113,13 +114,12 @@ export class WinGuard {
   }
 
   public static getRedactionRects(excludeTargetHwnd?: number): WinRect[] {
-    const windows = listWindows({ includeMinimized: false });
+    const windows = listRedactionCandidates();
     const rects: WinRect[] = [];
     for (const w of windows) {
       if (excludeTargetHwnd && w.hwnd === excludeTargetHwnd) continue;
       if (this.isProtectedOrSensitiveWindow(w.hwnd, w.pid, w.processName, w.title)) {
-        const r = getWindowRect(w.hwnd);
-        if (r) rects.push(r);
+        rects.push(w.rect);
       }
     }
     return rects;

@@ -23,6 +23,7 @@ import {
 import { WinGuard } from '../desktop/winGuard.js';
 import { UiaBridge } from '../desktop/uiaBridge.js';
 import { SubagentDispatcher } from '../subagents/dispatcher.js';
+import { classifyDesktopStepDelivery } from './desktopDelivery.js';
 
 export type DesktopDelivery = 'auto' | 'background' | 'foreground';
 
@@ -93,8 +94,6 @@ export interface DesktopHandsParams {
 
 export interface DesktopHandsExecuteOptions {
   foregroundFallback?: boolean;
-  preemptionThresholdMs?: number;
-  onForegroundVisual?: (rect: { x: number; y: number; width: number; height: number }) => void;
 }
 
 const MAX_BATCH_STEPS = 30;
@@ -134,6 +133,17 @@ async function sleepSlicedWithEmergency(ms: number, startEpoch: number): Promise
 }
 
 export class DesktopHands {
+  private static mutexChain: Promise<void> = Promise.resolve();
+
+  private static withDesktopMutex<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.mutexChain.then(fn, fn);
+    this.mutexChain = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
   public static async execute(
     params: DesktopHandsParams,
     enabled = false,
@@ -166,16 +176,18 @@ export class DesktopHands {
       case 'inspect': {
         const hwnd = assertPositiveHwnd(params.hwnd, 'inspect');
         WinGuard.assertTargetAllowed({ hwnd });
-        const treeRes = await UiaBridge.inspect({
-          hwnd,
-          maxDepth: params.maxDepth,
-          maxNodes: params.maxNodes
+        return this.withDesktopMutex(async () => {
+          const treeRes = await UiaBridge.inspect({
+            hwnd,
+            maxDepth: params.maxDepth,
+            maxNodes: params.maxNodes
+          });
+          return {
+            action: 'inspect',
+            hwnd,
+            ...treeRes
+          };
         });
-        return {
-          action: 'inspect',
-          hwnd,
-          ...treeRes
-        };
       }
 
       case 'screenshot': {
@@ -192,25 +204,27 @@ export class DesktopHands {
             throw new Error('INVALID_REGION: screenshot region width and height must be positive');
           }
         }
-        const redactRects = WinGuard.getRedactionRects(hwnd);
-        const shot = captureScreenshot({
-          hwnd,
-          region: params.region,
-          redactRects
+        return this.withDesktopMutex(async () => {
+          const redactRects = WinGuard.getRedactionRects(hwnd);
+          const shot = await captureScreenshot({
+            hwnd,
+            region: params.region,
+            redactRects
+          });
+          return {
+            action: 'screenshot',
+            hwnd: hwnd ?? null,
+            width: shot.width,
+            height: shot.height,
+            bounds: shot.bounds,
+            dpiScale: shot.dpiScale,
+            redactedCount: shot.redactedCount,
+            __mcpImage: {
+              data: shot.base64,
+              mimeType: 'image/png'
+            }
+          };
         });
-        return {
-          action: 'screenshot',
-          hwnd: hwnd ?? null,
-          width: shot.width,
-          height: shot.height,
-          bounds: shot.bounds,
-          dpiScale: shot.dpiScale,
-          redactedCount: shot.redactedCount,
-          __mcpImage: {
-            data: shot.base64,
-            mimeType: 'image/png'
-          }
-        };
       }
 
       case 'act': {
@@ -218,30 +232,32 @@ export class DesktopHands {
           throw new Error('INVALID_ACT_PARAMS: act requires an op parameter');
         }
         const startEpoch = SubagentDispatcher.getEmergencyEpoch();
-        const result = await this.executeStep(
-          {
-            op: params.op,
-            hwnd: params.hwnd,
-            delivery: params.delivery,
-            x: params.x,
-            y: params.y,
-            button: params.button,
-            text: params.text,
-            keys: params.keys,
-            delta: params.delta,
-            automationId: params.automationId,
-            name: params.name,
-            controlType: params.controlType,
-            value: params.value,
-            durationMs: params.durationMs
-          },
-          options,
-          startEpoch
-        );
-        return {
-          action: 'act',
-          ...result
-        };
+        return this.withDesktopMutex(async () => {
+          const result = await this.executeStep(
+            {
+              op: params.op!,
+              hwnd: params.hwnd,
+              delivery: params.delivery,
+              x: params.x,
+              y: params.y,
+              button: params.button,
+              text: params.text,
+              keys: params.keys,
+              delta: params.delta,
+              automationId: params.automationId,
+              name: params.name,
+              controlType: params.controlType,
+              value: params.value,
+              durationMs: params.durationMs
+            },
+            options,
+            startEpoch
+          );
+          return {
+            action: 'act',
+            ...result
+          };
+        });
       }
 
       case 'batch': {
@@ -252,26 +268,46 @@ export class DesktopHands {
           throw new Error(`BATCH_LIMIT_EXCEEDED: batch supports at most ${MAX_BATCH_STEPS} steps`);
         }
         const startEpoch = SubagentDispatcher.getEmergencyEpoch();
-        const results: any[] = [];
-        for (let i = 0; i < params.steps.length; i++) {
-          if (SubagentDispatcher.getEmergencyEpoch() !== startEpoch) {
-            throw new Error(`EMERGENCY_STOP_ABORTED: Desktop batch aborted at step ${i + 1}`);
+        return this.withDesktopMutex(async () => {
+          const results: any[] = [];
+          for (let i = 0; i < params.steps!.length; i++) {
+            const step = params.steps![i];
+            const stepHwnd = step.hwnd ?? params.hwnd;
+            const stepDelivery = step.delivery ?? params.delivery;
+            try {
+              if (SubagentDispatcher.getEmergencyEpoch() !== startEpoch) {
+                throw new Error(`EMERGENCY_STOP_ABORTED: Desktop batch aborted at step ${i + 1}`);
+              }
+              const res = await this.executeStep(
+                { ...step, hwnd: stepHwnd, delivery: stepDelivery },
+                options,
+                startEpoch
+              );
+              results.push({ step: i + 1, ...res });
+            } catch (err: any) {
+              const errMsg = String(err?.message || err);
+              const status = errMsg.includes('USER_INPUT_PREEMPTED')
+                ? 'PAUSED_USER_PREEMPTION'
+                : errMsg.includes('EMERGENCY_STOP_ABORTED')
+                  ? 'ABORTED'
+                  : 'PARTIAL_FAILURE';
+              return {
+                action: 'batch',
+                status,
+                completedSteps: results.length,
+                nextStepIndex: i,
+                error: errMsg,
+                results
+              };
+            }
           }
-          const step = params.steps[i];
-          const stepHwnd = step.hwnd ?? params.hwnd;
-          const stepDelivery = step.delivery ?? params.delivery;
-          const res = await this.executeStep(
-            { ...step, hwnd: stepHwnd, delivery: stepDelivery },
-            options,
-            startEpoch
-          );
-          results.push({ step: i + 1, ...res });
-        }
-        return {
-          action: 'batch',
-          completedSteps: results.length,
-          results
-        };
+          return {
+            action: 'batch',
+            status: 'COMPLETED',
+            completedSteps: results.length,
+            results
+          };
+        });
       }
 
       // --- Legacy v1 compatibility actions ---
@@ -279,28 +315,32 @@ export class DesktopHands {
         const x = assertFiniteCoord(params.x ?? 0, 'x');
         const y = assertFiniteCoord(params.y ?? 0, 'y');
         const startEpoch = SubagentDispatcher.getEmergencyEpoch();
-        return this.executeStep(
-          { op: 'move', x, y, hwnd: params.hwnd, delivery: 'foreground' },
-          options,
-          startEpoch
+        return this.withDesktopMutex(() =>
+          this.executeStep(
+            { op: 'move', x, y, hwnd: params.hwnd, delivery: 'foreground' },
+            options,
+            startEpoch
+          )
         );
       }
 
       case 'click': {
         const startEpoch = SubagentDispatcher.getEmergencyEpoch();
-        const x = params.x !== undefined ? assertFiniteCoord(params.x, 'x') : undefined;
-        const y = params.y !== undefined ? assertFiniteCoord(params.y, 'y') : undefined;
-        return this.executeStep(
-          {
-            op: 'click',
-            x,
-            y,
-            hwnd: params.hwnd,
-            button: params.button,
-            delivery: params.delivery ?? 'auto'
-          },
-          options,
-          startEpoch
+        const x = assertFiniteCoord(params.x, 'x');
+        const y = assertFiniteCoord(params.y, 'y');
+        return this.withDesktopMutex(() =>
+          this.executeStep(
+            {
+              op: 'click',
+              x,
+              y,
+              hwnd: params.hwnd,
+              button: params.button,
+              delivery: params.delivery ?? 'auto'
+            },
+            options,
+            startEpoch
+          )
         );
       }
 
@@ -310,15 +350,17 @@ export class DesktopHands {
           throw new Error(`TEXT_TOO_LONG: type_text text exceeds the ${MAX_TEXT_LEN} character limit`);
         }
         const startEpoch = SubagentDispatcher.getEmergencyEpoch();
-        return this.executeStep(
-          {
-            op: 'type_text',
-            text,
-            hwnd: params.hwnd,
-            delivery: params.delivery ?? 'auto'
-          },
-          options,
-          startEpoch
+        return this.withDesktopMutex(() =>
+          this.executeStep(
+            {
+              op: 'type_text',
+              text,
+              hwnd: params.hwnd,
+              delivery: params.delivery ?? 'auto'
+            },
+            options,
+            startEpoch
+          )
         );
       }
 
@@ -344,8 +386,18 @@ export class DesktopHands {
     }
 
     const hwnd = typeof step.hwnd === 'number' && step.hwnd > 0 ? Math.trunc(step.hwnd) : undefined;
-    const x = step.x !== undefined ? assertFiniteCoord(step.x, 'x') : undefined;
-    const y = step.y !== undefined ? assertFiniteCoord(step.y, 'y') : undefined;
+    const requiresCoords =
+      op === 'click' || op === 'double_click' || op === 'right_click' || op === 'move' || op === 'scroll';
+    const x = requiresCoords
+      ? assertFiniteCoord(step.x, 'x')
+      : step.x !== undefined
+        ? assertFiniteCoord(step.x, 'x')
+        : undefined;
+    const y = requiresCoords
+      ? assertFiniteCoord(step.y, 'y')
+      : step.y !== undefined
+        ? assertFiniteCoord(step.y, 'y')
+        : undefined;
 
     // Security fence before any UIA/input operation
     WinGuard.assertTargetAllowed({ hwnd, x, y });
@@ -377,19 +429,14 @@ export class DesktopHands {
           x !== undefined &&
           y !== undefined));
 
-    let useForeground = false;
     if (requestedDelivery === 'background') {
       if (!canBackground) {
         throw new Error(
           `BACKGROUND_DELIVERY_UNAVAILABLE: op '${op}' requires a target hwnd (and x/y for pointer ops) for background delivery`
         );
       }
-    } else if (requestedDelivery === 'foreground') {
-      useForeground = true;
-    } else {
-      // auto: background-first, fallback to foreground only when background is not applicable
-      useForeground = !canBackground;
     }
+    const useForeground = classifyDesktopStepDelivery({ op, hwnd, delivery: requestedDelivery, x, y });
 
     if (!useForeground && hwnd) {
       switch (op) {
@@ -427,7 +474,7 @@ export class DesktopHands {
         `FOREGROUND_FALLBACK_DISABLED: Operation '${op}' requires foreground fallback, which is currently disabled in settings.`
       );
     }
-    WinGuard.assertNoUserPreemption(options.preemptionThresholdMs ?? 1500);
+    WinGuard.assertNoUserPreemption(1500);
 
     if (hwnd) {
       focusWindow(hwnd);
@@ -437,25 +484,25 @@ export class DesktopHands {
       case 'move': {
         const px = assertFiniteCoord(x, 'x');
         const py = assertFiniteCoord(y, 'y');
-        options.onForegroundVisual?.({ x: px - 18, y: py - 18, width: 36, height: 36 });
         foregroundMouseMove(px, py);
         return { op, delivery: 'foreground', x: px, y: py };
       }
       case 'click':
       case 'double_click':
       case 'right_click': {
+        const px = assertFiniteCoord(x, 'x');
+        const py = assertFiniteCoord(y, 'y');
         const button = op === 'right_click' ? 'right' : step.button || 'left';
         const dbl = op === 'double_click';
-        if (x !== undefined && y !== undefined) {
-          options.onForegroundVisual?.({ x: x - 18, y: y - 18, width: 36, height: 36 });
-        }
-        foregroundClick(x, y, button, dbl);
-        return { op, delivery: 'foreground', x: x ?? null, y: y ?? null, button };
+        foregroundClick(px, py, button, dbl);
+        return { op, delivery: 'foreground', x: px, y: py, button };
       }
       case 'scroll': {
+        const px = assertFiniteCoord(x, 'x');
+        const py = assertFiniteCoord(y, 'y');
         const delta = assertFiniteCoord(step.delta ?? -3, 'delta');
-        foregroundScroll(x, y, delta);
-        return { op, delivery: 'foreground', x: x ?? null, y: y ?? null, delta };
+        foregroundScroll(px, py, delta);
+        return { op, delivery: 'foreground', x: px, y: py, delta };
       }
       case 'type_text': {
         const text = step.text || '';

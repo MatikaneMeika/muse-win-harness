@@ -52,6 +52,8 @@ export const ja: Record<string, string> = {
   'tour.step4.body': '「接続と権限」「作業領域と代理（パス許可リストと ACP エンジン）」「ライブラリ（ローカル MCP / Skill の切替）」「監査ログ（Git Shadow ロールバック）」を一元管理します。',
   'tour.step5.title': '画面下部の承認アイランド',
   'tour.step5.body': 'Muse がファイル編集やコマンド実行を要求すると、リスクレベルと対象パスを表示して自動展開します。「1 回許可 / この作業領域で常に許可 / 拒否」や強制停止が可能です。',
+  'tour.step6.title': 'ネイティブデスクトップ操作と入力競合ガード',
+  'tour.step6.body': 'デフォルト無効。有効にするとウィンドウ一覧や UIA 取得、バックグラウンド優先操作が可能になり、機密ウィンドウのマスキングとユーザー入力検知時の自動停止が働きます。',
 
   // Connectors & Pairing
   'connectors.title': 'コネクタ',

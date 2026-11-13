@@ -581,6 +581,7 @@ const expectedTourTargets = [
   'tour-endpoints-credentials',
   'tour-advanced-center',
   'tour-approval-island',
+  'tour-desktop-hands',
 ];
 for (const targetId of expectedTourTargets) {
   assert(designDocSource.includes(targetId), `docs/DESIGN.md is missing tour anchor spec: ${targetId}`);

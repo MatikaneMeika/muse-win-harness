@@ -14,6 +14,7 @@ import type {
   ToolMetaCategory
 } from '../types.js';
 import type { PathAccessResult } from './pathGuard.js';
+import { classifyDesktopCall } from '../tools/desktopDelivery.js';
 
 /**
  * Computes a deterministic SHA-256 hash over the tool params with keys sorted,
@@ -207,20 +208,14 @@ export class ApprovalEngine {
     // background UIA/PostMessage is medium risk; foreground SendInput is high risk.
     if (toolName === 'desktop_hands') {
       const action = typeof params.action === 'string' ? params.action : '';
-      if (action === 'windows' || action === 'inspect' || action === 'screenshot') {
+      const { isPerception, isForeground } = classifyDesktopCall(params);
+      if (isPerception) {
         return {
           riskLevel: 'low',
           summary: `Desktop perception (${action})${params.hwnd ? ` on hwnd=${params.hwnd}` : ''}`,
           requiresMobileHmac: false
         };
       }
-      const isForeground =
-        params.delivery === 'foreground' ||
-        action === 'mouse_move' ||
-        (Array.isArray(params.steps) &&
-          params.steps.some(
-            (s: any) => s?.delivery === 'foreground' || s?.op === 'move' || s?.op === 'hotkey'
-          ));
       return {
         riskLevel: isForeground ? 'high' : 'medium',
         summary: `Desktop ${isForeground ? 'foreground' : 'background'} ${action}${params.op ? `:${params.op}` : ''}${params.hwnd ? ` (hwnd=${params.hwnd})` : ''}`,
@@ -302,7 +297,8 @@ export class ApprovalEngine {
       typeof params?.hwnd === 'number' &&
       params.hwnd > 0
     ) {
-      const hwndKey = `desktop_hands:hwnd:${Math.trunc(params.hwnd)}`;
+      const { deliveryTag } = classifyDesktopCall(params);
+      const hwndKey = `desktop_hands:hwnd:${Math.trunc(params.hwnd)}:${deliveryTag}`;
       if (
         this.sessionApprovedActions.has(hwndKey) ||
         context.sessionApprovedActions?.has(hwndKey)
@@ -461,6 +457,11 @@ export class ApprovalEngine {
         'HIGH_RISK_AI_SELF_APPROVAL_FORBIDDEN: Critical action requires resolution via the mobile link channel'
       );
     }
+    if (record.toolName === 'desktop_hands' && source === 'job_control') {
+      throw new Error(
+        'HIGH_RISK_AI_SELF_APPROVAL_FORBIDDEN: Desktop Hands approvals cannot be resolved via job_control'
+      );
+    }
 
     // Signature format hard check before any approve/reject handling:
     // a valid HMAC-SHA256 hex digest is always exactly 64 lowercase/uppercase hex chars.
@@ -525,7 +526,8 @@ export class ApprovalEngine {
         typeof record.params?.hwnd === 'number' &&
         record.params.hwnd > 0
       ) {
-        const hwndKey = `desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}`;
+        const { deliveryTag } = classifyDesktopCall(record.params);
+        const hwndKey = `desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}:${deliveryTag}`;
         this.sessionApprovedActions.add(hwndKey);
         if (context?.sessionApprovedActions) {
           context.sessionApprovedActions.add(hwndKey);

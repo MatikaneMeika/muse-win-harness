@@ -52,6 +52,8 @@ export const en: Record<string, string> = {
   'tour.step4.body': 'Manage Connectors & Permissions, Workspaces & Subagents (path allowlists and ACP engines), Resource Library (local MCPs & Skills), and Audit Log (Git Shadow rollback).',
   'tour.step5.title': 'Live Approval Floating Island',
   'tour.step5.body': 'When Muse requests file edits or commands, the bottom-right island expands with risk level and target path, offering Allow Once, Always in Workspace, Deny, or Kill.',
+  'tour.step6.title': 'Native Desktop Hands & Preemption Guard',
+  'tour.step6.body': 'Disabled by default. When enabled, Muse can enumerate windows, inspect UIA trees, and act background-first on native apps with sensitive-window redaction and user-input preemption pause.',
 
   // Connectors & Pairing
   'connectors.title': 'Connectors',

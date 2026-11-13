@@ -1070,7 +1070,7 @@ export class MwhControlPlane {
       }
       if (pathname === '/api/v1/desktop-hands/protect-hwnd' && method === 'POST') {
         const body = await this.readJson(req);
-        await this.postProtectHwnd(res, body);
+        await this.postProtectHwnd(res, body, this.resolveRequestActor(req, body));
         return true;
       }
       if (pathname === '/api/v1/tunnel/driver' && method === 'POST') {
@@ -1801,6 +1801,21 @@ export class MwhControlPlane {
     body: any,
     actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
   ): Promise<void> {
+    if (actor !== 'ui_island') {
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor,
+        toolName: 'desktop_hands_config',
+        commandOrPath: `enabled=${String(body?.enabled)},foreground=${String(body?.foregroundFallback)}`,
+        reason: `[${actor}] REMOTE_DESKTOP_HANDS_CONFIG_FORBIDDEN: only local UI island may toggle desktop_hands`,
+        status: 'DENIED'
+      });
+      this.send(res, 403, {
+        error: 'REMOTE_DESKTOP_HANDS_CONFIG_FORBIDDEN',
+        message: 'Desktop Hands configuration can only be changed from the local UI'
+      });
+      return;
+    }
     const ctx = this.kernel.getContext();
     const nextEnabled =
       typeof body?.enabled === 'boolean' ? body.enabled === true : ctx.desktopHandsEnabled === true;
@@ -1853,7 +1868,26 @@ export class MwhControlPlane {
     });
   }
 
-  private async postProtectHwnd(res: http.ServerResponse, body: any): Promise<void> {
+  private async postProtectHwnd(
+    res: http.ServerResponse,
+    body: any,
+    actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
+  ): Promise<void> {
+    if (actor !== 'ui_island') {
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor,
+        toolName: 'desktop_hands_protect_hwnd',
+        commandOrPath: `hwnd=${String(body?.hwnd)},pid=${String(body?.pid)}`,
+        reason: `[${actor}] REMOTE_PROTECT_HWND_FORBIDDEN: only local UI island may register protected HWNDs`,
+        status: 'DENIED'
+      });
+      this.send(res, 403, {
+        error: 'REMOTE_PROTECT_HWND_FORBIDDEN',
+        message: 'Protected HWND registration is restricted to the local UI'
+      });
+      return;
+    }
     const hwnd = Number(body?.hwnd);
     if (Number.isFinite(hwnd) && hwnd > 0) {
       WinGuard.registerProtectedHwnd(Math.trunc(hwnd));
@@ -1862,6 +1896,14 @@ export class MwhControlPlane {
     if (Number.isFinite(pid) && pid > 0) {
       WinGuard.registerProtectedPid(Math.trunc(pid));
     }
+    this.appendAudit({
+      decision: 'ALLOW',
+      actor,
+      toolName: 'desktop_hands_protect_hwnd',
+      commandOrPath: `hwnd=${Number.isFinite(hwnd) ? Math.trunc(hwnd) : 'none'},pid=${Number.isFinite(pid) ? Math.trunc(pid) : 'none'}`,
+      reason: `[${actor}] registered protected desktop window/process`,
+      status: 'SUCCESS'
+    });
     this.send(res, 200, { ok: true, ...WinGuard.getProtectedRegistrySnapshot() });
   }
 

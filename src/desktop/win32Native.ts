@@ -6,6 +6,10 @@
 
 import koffi from 'koffi';
 import zlib from 'node:zlib';
+import { promisify } from 'node:util';
+
+const deflateAsync = promisify(zlib.deflate);
+const MAX_SCREENSHOT_PIXELS = 3840 * 2160;
 
 export interface WinRect {
   left: number;
@@ -296,6 +300,42 @@ export function listWindows(options?: { includeMinimized?: boolean; titleFilter?
   return results;
 }
 
+export interface RedactionCandidate {
+  hwnd: number;
+  pid: number;
+  processName: string;
+  title: string;
+  rect: WinRect;
+}
+
+export function listRedactionCandidates(): RedactionCandidate[] {
+  const b = ensureWin32();
+  const hwnds: number[] = [];
+  const cb = koffi.register((hwnd: number) => {
+    hwnds.push(Number(hwnd));
+    return true;
+  }, koffi.pointer(b.EnumWindowsProc));
+
+  try {
+    b.EnumWindows(cb, 0);
+  } finally {
+    koffi.unregister(cb);
+  }
+
+  const candidates: RedactionCandidate[] = [];
+  for (const hwnd of hwnds) {
+    if (!b.IsWindowVisible(hwnd)) continue;
+    if (b.IsIconic(hwnd)) continue;
+    const rect = getWindowRect(hwnd);
+    if (!rect || rect.right - rect.left <= 1 || rect.bottom - rect.top <= 1) continue;
+    const pid = getWindowPid(hwnd);
+    const processName = pid > 0 ? getProcessNameByPid(pid) : '';
+    const title = getWindowText(hwnd);
+    candidates.push({ hwnd, pid, processName, title, rect });
+  }
+  return candidates;
+}
+
 export function windowFromPoint(x: number, y: number): { hwnd: number; rootHwnd: number; pid: number; processName: string; title: string } {
   const b = ensureWin32();
   const rawHwnd = Number(b.WindowFromPoint({ x: Math.trunc(x), y: Math.trunc(y) })) || 0;
@@ -315,9 +355,12 @@ export function windowFromPoint(x: number, y: number): { hwnd: number; rootHwnd:
 export function getLastInputIdleMs(): number {
   const b = ensureWin32();
   const lii = { cbSize: 8, dwTime: 0 };
-  if (!b.GetLastInputInfo(lii)) return Number.MAX_SAFE_INTEGER;
+  if (!b.GetLastInputInfo(lii)) return 0; // fail-closed: treat as active user input
   const nowTick = Number(b.GetTickCount());
-  return (nowTick - lii.dwTime) >>> 0;
+  const diff = (nowTick - lii.dwTime) >>> 0;
+  // If diff > 2^31 (~24.8 days), treat as wraparound/skew and fail-closed
+  if (diff > 0x80000000) return 0;
+  return diff;
 }
 
 export function getVirtualScreenBounds(): { x: number; y: number; width: number; height: number } {
@@ -361,7 +404,7 @@ function pngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([lenBuf, crcInput, crcBuf]);
 }
 
-function encodeBgraToPng(bgra: Buffer, width: number, height: number): Buffer {
+async function encodeBgraToPng(bgra: Buffer, width: number, height: number): Promise<Buffer> {
   const stride = width * 4;
   const raw = Buffer.allocUnsafe((stride + 1) * height);
   for (let y = 0; y < height; y++) {
@@ -377,7 +420,7 @@ function encodeBgraToPng(bgra: Buffer, width: number, height: number): Buffer {
       raw[d + 3] = 255;         // A
     }
   }
-  const compressed = zlib.deflateSync(raw, { level: 6 });
+  const compressed = await deflateAsync(raw, { level: 3 });
   const ihdr = Buffer.allocUnsafe(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
@@ -430,19 +473,23 @@ export function redactBgraRects(
   return redactedCount;
 }
 
-export function captureScreenshot(options: {
+export async function captureScreenshot(options: {
   hwnd?: number;
   region?: { x: number; y: number; width: number; height: number };
   redactRects?: WinRect[];
-}): ScreenshotCaptureResult & { redactedCount: number } {
+}): Promise<ScreenshotCaptureResult & { redactedCount: number }> {
   const b = ensureWin32();
   let captureBounds: { x: number; y: number; width: number; height: number };
+  let printWindowBounds: { x: number; y: number; width: number; height: number } | null = null;
   let dpiScale = 1;
   const targetHwnd = options.hwnd && options.hwnd > 0 ? options.hwnd : 0;
 
   if (targetHwnd) {
     if (!isWindowValid(targetHwnd)) {
       throw new Error(`INVALID_HWND: Window handle ${targetHwnd} is no longer valid`);
+    }
+    if (b.IsIconic(targetHwnd)) {
+      throw new Error(`WINDOW_MINIMIZED: Cannot screenshot minimized window ${targetHwnd}`);
     }
     const r = getWindowRect(targetHwnd);
     if (!r || r.right - r.left <= 0 || r.bottom - r.top <= 0) {
@@ -454,27 +501,51 @@ export function captureScreenshot(options: {
       width: r.right - r.left,
       height: r.bottom - r.top
     };
+    const rawRect = { left: 0, top: 0, right: 0, bottom: 0 };
+    if (b.GetWindowRect(targetHwnd, rawRect) && rawRect.right > rawRect.left && rawRect.bottom > rawRect.top) {
+      printWindowBounds = {
+        x: rawRect.left,
+        y: rawRect.top,
+        width: rawRect.right - rawRect.left,
+        height: rawRect.bottom - rawRect.top
+      };
+    }
     const dpi = Number(b.GetDpiForWindow(targetHwnd)) || 96;
     dpiScale = Number((dpi / 96).toFixed(2));
   } else if (options.region) {
-    captureBounds = {
-      x: Math.trunc(options.region.x),
-      y: Math.trunc(options.region.y),
-      width: Math.max(1, Math.trunc(options.region.width)),
-      height: Math.max(1, Math.trunc(options.region.height))
-    };
+    const vs = getVirtualScreenBounds();
+    const rx1 = Math.trunc(options.region.x);
+    const ry1 = Math.trunc(options.region.y);
+    const rx2 = rx1 + Math.max(1, Math.trunc(options.region.width));
+    const ry2 = ry1 + Math.max(1, Math.trunc(options.region.height));
+    const ix1 = Math.max(vs.x, rx1);
+    const iy1 = Math.max(vs.y, ry1);
+    const ix2 = Math.min(vs.x + vs.width, rx2);
+    const iy2 = Math.min(vs.y + vs.height, ry2);
+    if (ix2 <= ix1 || iy2 <= iy1) {
+      throw new Error('INVALID_REGION: screenshot region does not intersect virtual screen');
+    }
+    captureBounds = { x: ix1, y: iy1, width: ix2 - ix1, height: iy2 - iy1 };
   } else {
     captureBounds = getVirtualScreenBounds();
   }
 
-  const { width, height } = captureBounds;
+  const activeBounds = targetHwnd && printWindowBounds ? printWindowBounds : captureBounds;
+  let { width, height } = captureBounds;
+  if (width * height > MAX_SCREENSHOT_PIXELS || activeBounds.width * activeBounds.height > MAX_SCREENSHOT_PIXELS) {
+    throw new Error(
+      `SCREENSHOT_REGION_TOO_LARGE: Capture area (${width}x${height}) exceeds ${MAX_SCREENSHOT_PIXELS} pixel limit; specify a smaller region or target hwnd.`
+    );
+  }
+
   const screenDc = b.GetDC(0);
   if (!screenDc) {
     throw new Error('GDI_DC_FAILED: Failed to acquire screen DC');
   }
   const memDc = b.CreateCompatibleDC(screenDc);
-  const hBitmap = b.CreateCompatibleBitmap(screenDc, width, height);
-  const oldObj = b.SelectObject(memDc, hBitmap);
+  let hBitmap = b.CreateCompatibleBitmap(screenDc, activeBounds.width, activeBounds.height);
+  let oldObj = b.SelectObject(memDc, hBitmap);
+  let effectiveBounds = activeBounds;
 
   try {
     let captured = false;
@@ -483,10 +554,23 @@ export function captureScreenshot(options: {
       captured = Boolean(b.PrintWindow(targetHwnd, memDc, 2));
     }
     if (!captured) {
+      if (effectiveBounds !== captureBounds) {
+        b.SelectObject(memDc, oldObj);
+        b.DeleteObject(hBitmap);
+        hBitmap = b.CreateCompatibleBitmap(screenDc, captureBounds.width, captureBounds.height);
+        oldObj = b.SelectObject(memDc, hBitmap);
+        effectiveBounds = captureBounds;
+      }
       const SRCCOPY = 0x00cc0020;
       const CAPTUREBLT = 0x40000000;
-      b.BitBlt(memDc, 0, 0, width, height, screenDc, captureBounds.x, captureBounds.y, SRCCOPY | CAPTUREBLT);
+      b.BitBlt(memDc, 0, 0, captureBounds.width, captureBounds.height, screenDc, captureBounds.x, captureBounds.y, SRCCOPY | CAPTUREBLT);
     }
+
+    width = effectiveBounds.width;
+    height = effectiveBounds.height;
+
+    // MSDN: bitmap must NOT be selected into a DC when GetDIBits is called
+    b.SelectObject(memDc, oldObj);
 
     // BITMAPINFOHEADER (40 bytes) for top-down 32-bit BGRA DIB
     const bmi = Buffer.alloc(40);
@@ -504,20 +588,22 @@ export function captureScreenshot(options: {
     }
 
     const redactedCount = options.redactRects?.length
-      ? redactBgraRects(bgra, captureBounds, options.redactRects)
+      ? redactBgraRects(bgra, effectiveBounds, options.redactRects)
       : 0;
 
-    const png = encodeBgraToPng(bgra, width, height);
+    const png = await encodeBgraToPng(bgra, width, height);
     return {
       base64: png.toString('base64'),
       width,
       height,
-      bounds: captureBounds,
+      bounds: effectiveBounds,
       dpiScale,
       redactedCount
     };
   } finally {
-    b.SelectObject(memDc, oldObj);
+    try {
+      b.SelectObject(memDc, oldObj);
+    } catch {}
     b.DeleteObject(hBitmap);
     b.DeleteDC(memDc);
     b.ReleaseDC(0, screenDc);

@@ -52,6 +52,8 @@ export const zhTW: Record<string, string> = {
   'tour.step4.body': '展開右側伴隨子面板，集中管理「連線與權限」、「工作區與代理（目錄白名單與 ACP 引擎）」、「資源庫（本機 MCP 與 Skill 原地開關）」及「稽核日誌（Git Shadow 寫前快照單步還原）」。',
   'tour.step5.title': '底部即時審批靈動島',
   'tour.step5.body': '當 Muse 請求修改檔案或執行指令時，底部靈動島會自動展開顯示風險等級與目標路徑，支援「允許一次 / 本工作區一律允許 / 拒絕」及執行中強殺中止。',
+  'tour.step6.title': '原生桌面操控與防搶佔護欄',
+  'tour.step6.body': '預設關閉。開啟後 Muse 可列舉視窗、讀取 UIA 控制項樹並以後台優先方式操作原生桌面應用；敏感視窗截圖自動塗黑，前景回退遇人工鍵鼠輸入自動暫停。',
 
   // Connectors & Pairing
   'connectors.title': '連接器',

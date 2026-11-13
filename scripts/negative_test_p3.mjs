@@ -727,7 +727,76 @@ await runCase('C15 static-analysis closure: normalizeClientIpKey pure function, 
       caught.includes('INVALID_COORDINATES'),
       `Expected INVALID_COORDINATES for NaN mouse_move, got: ${caught}`
     );
+
+    // 3b) S3: zero-coordinate click must be rejected fail-closed (no blind cursor click)
+    let zeroCoordMsg = '';
+    try {
+      await DesktopHands.execute({ action: 'click' }, true);
+    } catch (err) {
+      zeroCoordMsg = String(err?.message || err);
+    }
+    assert(
+      zeroCoordMsg.includes('INVALID_COORDINATES'),
+      `Expected INVALID_COORDINATES for zero-coord click, got: ${zeroCoordMsg}`
+    );
+
+    // 3c) F3: DesktopHands disabled by default (fail-closed)
+    let disabledMsg = '';
+    try {
+      await DesktopHands.execute({ action: 'windows' }, false);
+    } catch (err) {
+      disabledMsg = String(err?.message || err);
+    }
+    assert(
+      disabledMsg.includes('DESKTOP_HANDS_DISABLED'),
+      `Expected DESKTOP_HANDS_DISABLED when enabled=false, got: ${disabledMsg}`
+    );
   }
+
+  // 4) F3 + S2 + S4: desktop_hands hidden by default, foreground risk alignment, and job_control self-approval blocked
+  const { getExposedMuseTools } = await import('../dist/tools/definitions.js');
+  assert(
+    !getExposedMuseTools(false).some((t) => t.name === 'desktop_hands'),
+    'getExposedMuseTools(false) must hide desktop_hands'
+  );
+  assert(
+    getExposedMuseTools(true).some((t) => t.name === 'desktop_hands'),
+    'getExposedMuseTools(true) must expose desktop_hands'
+  );
+
+  const { ApprovalEngine } = await import('../dist/pipeline/approvalEngine.js');
+  const ae = new ApprovalEngine('p3_c15_hmac_secret_0123456789abcdef0123456789abcdef');
+  const fgMoveEval = ae.evaluateRisk(
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'move', x: 100, y: 100 },
+    { confinementMode: 'workspace-write', approvalPolicy: 'auto-workspace', workspaceRoot: process.cwd() }
+  );
+  assert(fgMoveEval.riskLevel === 'high', `act(move) must evaluate as high risk, got ${fgMoveEval.riskLevel}`);
+  const autoFallbackEval = ae.evaluateRisk(
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'click', x: 100, y: 100, delivery: 'auto' },
+    { confinementMode: 'workspace-write', approvalPolicy: 'auto-workspace', workspaceRoot: process.cwd() }
+  );
+  assert(
+    autoFallbackEval.riskLevel === 'high',
+    `act(click, auto, no hwnd) must evaluate as high risk, got ${autoFallbackEval.riskLevel}`
+  );
+  const { approvalRecord: pendingDh } = ae.createApproval(
+    'req_c15_dh_1',
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'click', hwnd: 12345, x: 100, y: 100 },
+    'medium',
+    'Desktop background act:click',
+    false,
+    { confinementMode: 'workspace-write', approvalPolicy: 'smart-risk', workspaceRoot: process.cwd() }
+  );
+  expectThrowSync(
+    () => ae.resolveApproval(pendingDh.id, 'approve', undefined, 'session', undefined, 'job_control'),
+    'HIGH_RISK_AI_SELF_APPROVAL_FORBIDDEN'
+  );
 });
 
 // ---------------------------------------------------------------------------

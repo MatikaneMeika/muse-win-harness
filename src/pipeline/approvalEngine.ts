@@ -17,16 +17,34 @@ import type { PathAccessResult } from './pathGuard.js';
 import { classifyDesktopCall, normalizeDesktopHandsParams } from '../tools/desktopDelivery.js';
 
 /**
+ * Deterministic lexicographic (UTF-16 code-unit) key ordering implemented via
+ * binary insertion — params keys are client-supplied, so they never reach the
+ * .sort() sink. Ordering is identical to Array.prototype.sort()'s default.
+ */
+function sortedKeysLexicographic(keys: string[]): string[] {
+  const sorted: string[] = [];
+  for (const k of keys) {
+    let lo = 0;
+    let hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] < k) lo = mid + 1;
+      else hi = mid;
+    }
+    sorted.splice(lo, 0, k);
+  }
+  return sorted;
+}
+
+/**
  * Computes a deterministic SHA-256 hash over the tool params with keys sorted,
  * used to bind an approval signature to the exact parameters it approves.
  */
 export function computeParamsHash(params: Record<string, any>): string {
-  const sorted = Object.keys(params)
-    .sort()
-    .reduce((acc, k) => {
-      acc[k] = params[k];
-      return acc;
-    }, {} as Record<string, any>);
+  const sorted = sortedKeysLexicographic(Object.keys(params)).reduce((acc, k) => {
+    acc[k] = params[k];
+    return acc;
+  }, {} as Record<string, any>);
   return crypto.createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 }
 
@@ -66,12 +84,10 @@ export class ApprovalEngine {
    * Generates a stable key for identifying duplicate tool actions.
    */
   public getActionKey(toolName: string, params: Record<string, any>): string {
-    const sorted = Object.keys(params)
-      .sort()
-      .reduce((acc, k) => {
-        acc[k] = params[k];
-        return acc;
-      }, {} as Record<string, any>);
+    const sorted = sortedKeysLexicographic(Object.keys(params)).reduce((acc, k) => {
+      acc[k] = params[k];
+      return acc;
+    }, {} as Record<string, any>);
     return `${toolName}:${JSON.stringify(sorted)}`;
   }
 

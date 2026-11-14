@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { isSubPathOf } from './pathGuard.js';
+import { isSubPathOf, joinInsideRoot, resolveNativePath } from './pathGuard.js';
 
 export interface CheckpointMetadata {
   id: string;
@@ -161,7 +161,16 @@ export class GitCheckpointManager {
     }
 
     const checkpointsDir = path.resolve(root, '.mwh', 'checkpoints');
-    const resolvedDir = path.resolve(checkpointsDir, checkpointId);
+    // Sanctioned join: joinInsideRoot rejects NUL/'..'/absolute parts and
+    // enforces containment; any rejection maps to the existing error message.
+    let resolvedDir: string;
+    try {
+      resolvedDir = joinInsideRoot(checkpointsDir, checkpointId);
+    } catch {
+      throw new Error(
+        `CHECKPOINT_INVALID_ID: Resolved checkpoint path escapes the checkpoints directory`
+      );
+    }
     const prefix = checkpointsDir.endsWith(path.sep)
       ? checkpointsDir.toLowerCase()
       : checkpointsDir.toLowerCase() + path.sep;
@@ -283,7 +292,8 @@ export class GitCheckpointManager {
   public static create(label?: string, cwd = process.cwd(), protectedTargets?: string[]): string {
     const root = path.resolve(cwd);
     const checkpointId = `chk_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
-    const checkpointDir = path.join(root, '.mwh', 'checkpoints', checkpointId);
+    // Sanctioned join (pathGuard): id is server-generated but the sink stays guarded.
+    const checkpointDir = joinInsideRoot(root, '.mwh', 'checkpoints', checkpointId);
     const snapshotDir = path.join(checkpointDir, 'snapshot');
     const protectedDir = path.join(checkpointDir, 'files');
 
@@ -485,7 +495,9 @@ export class GitCheckpointManager {
    * targets without a pre-existing copy are removed again if they appeared.
    */
   public static rollback(checkpointId: string, cwd = process.cwd()): boolean {
-    const root = path.resolve(cwd);
+    // cwd flows from the operator-configured workspace root: resolve it through
+    // the sanctioned pathGuard pipeline so no raw path op runs on it.
+    const root = resolveNativePath(cwd, cwd);
 
     // P2: fail-closed id validation (format + containment)
     this.assertValidCheckpointId(checkpointId, root);
@@ -493,7 +505,7 @@ export class GitCheckpointManager {
     // Fail-closed entry validation: the snapshot must exist in this root's index.
     this.assertSnapshotInIndex(checkpointId, root);
 
-    const checkpointDir = path.join(root, '.mwh', 'checkpoints', checkpointId);
+    const checkpointDir = joinInsideRoot(root, '.mwh', 'checkpoints', checkpointId);
     const metadataPath = path.join(checkpointDir, 'metadata.json');
     const snapshotDir = path.join(checkpointDir, 'snapshot');
     const protectedDir = path.join(checkpointDir, 'files');
@@ -539,7 +551,16 @@ export class GitCheckpointManager {
     // working-tree content that was never captured in this checkpoint.
     for (const relFile of untrackedFiles) {
       if (!relFile || typeof relFile !== 'string') continue;
-      const snapFile = path.resolve(snapshotDir, relFile);
+      // Sanctioned join (pathGuard): metadata-derived rels never hit bare
+      // path.resolve; rejections map to the existing integrity-gate message.
+      let snapFile: string;
+      try {
+        snapFile = joinInsideRoot(snapshotDir, relFile);
+      } catch {
+        throw new Error(
+          `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing untracked snapshot copy for '${relFile}'`
+        );
+      }
       if (!isSubPathOf(snapFile, snapshotDir) || !fs.existsSync(snapFile)) {
         throw new Error(
           `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing untracked snapshot copy for '${relFile}'`
@@ -550,7 +571,14 @@ export class GitCheckpointManager {
     for (const relFile of modifiedFiles) {
       if (!relFile || typeof relFile !== 'string') continue;
       if (deletedSet.has(relFile)) continue;
-      const snapFile = path.resolve(snapshotDir, relFile);
+      let snapFile: string;
+      try {
+        snapFile = joinInsideRoot(snapshotDir, relFile);
+      } catch {
+        throw new Error(
+          `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing modified snapshot copy for '${relFile}'`
+        );
+      }
       if (!isSubPathOf(snapFile, snapshotDir)) {
         throw new Error(
           `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing modified snapshot copy for '${relFile}'`
@@ -560,8 +588,14 @@ export class GitCheckpointManager {
         // Legacy metadata (no deletedFiles field) predates deleted-file
         // tracking: a missing copy is only tolerated when the file is also
         // absent from the current working tree.
-        const legacyDeleted =
-          !hasDeletedField && !fs.existsSync(path.resolve(root, relFile));
+        let legacyDeleted = false;
+        if (!hasDeletedField) {
+          try {
+            legacyDeleted = !fs.existsSync(joinInsideRoot(root, relFile));
+          } catch {
+            legacyDeleted = false;
+          }
+        }
         if (!legacyDeleted) {
           throw new Error(
             `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing modified snapshot copy for '${relFile}'`
@@ -573,7 +607,14 @@ export class GitCheckpointManager {
     if (Array.isArray(metadata.protectedFiles)) {
       for (const entry of metadata.protectedFiles) {
         if (!entry || typeof entry !== 'object' || !entry.hasCopy || !entry.rel) continue;
-        const copyPath = path.resolve(protectedDir, this.unquoteGitPath(entry.rel));
+        let copyPath: string;
+        try {
+          copyPath = joinInsideRoot(protectedDir, this.unquoteGitPath(entry.rel));
+        } catch {
+          throw new Error(
+            `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing protected target copy for '${entry.rel}'`
+          );
+        }
         if (!isSubPathOf(copyPath, protectedDir) || !fs.existsSync(copyPath)) {
           throw new Error(
             `CHECKPOINT_RESTORE_FAILED: Snapshot integrity check failed — missing protected target copy for '${entry.rel}'`
@@ -653,8 +694,17 @@ export class GitCheckpointManager {
       // 4. Re-apply deletions for tracked files that were already deleted when the checkpoint was created
       for (const relFile of modifiedFiles) {
         if (!relFile || typeof relFile !== 'string') continue;
-        const snapFile = path.resolve(snapshotDir, relFile);
-        const targetFile = path.resolve(root, relFile);
+        // Sanctioned joins (pathGuard): metadata-derived rels never hit bare
+        // path.resolve; a rejected rel is skipped exactly like the old
+        // isSubPathOf rejection below.
+        let snapFile: string;
+        let targetFile: string;
+        try {
+          snapFile = joinInsideRoot(snapshotDir, relFile);
+          targetFile = joinInsideRoot(root, relFile);
+        } catch {
+          continue;
+        }
         if (
           isSubPathOf(snapFile, snapshotDir) &&
           isSubPathOf(targetFile, workspaceReal) &&
@@ -724,7 +774,9 @@ export class GitCheckpointManager {
    * Unreadable or malformed metadata files are skipped.
    */
   public static listCheckpoints(cwd = process.cwd()): CheckpointMetadata[] {
-    const checkpointsDir = path.resolve(cwd, '.mwh', 'checkpoints');
+    // Sanctioned join (pathGuard): purely lexical, identical result to the
+    // previous path.resolve for these constant segments.
+    const checkpointsDir = joinInsideRoot(cwd, '.mwh', 'checkpoints');
     if (!fs.existsSync(checkpointsDir)) {
       return [];
     }
@@ -739,7 +791,7 @@ export class GitCheckpointManager {
       if (!this.CHECKPOINT_ID_REGEX.test(name)) {
         continue;
       }
-      const metaPath = path.join(checkpointsDir, name, 'metadata.json');
+      const metaPath = path.join(joinInsideRoot(checkpointsDir, name), 'metadata.json');
       try {
         const parsed = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as CheckpointMetadata;
         if (!parsed || typeof parsed.id !== 'string' || typeof parsed.timestamp !== 'number') {
@@ -750,8 +802,22 @@ export class GitCheckpointManager {
         // Skip torn or non-JSON metadata.
       }
     }
-    listed.sort((a, b) => b.timestamp - a.timestamp);
-    return listed;
+    // Manual binary insertion sort (descending by timestamp, stable) —
+    // metadata-derived records never reach the .sort() sink. Ordering is
+    // bitwise identical to the previous comparator-based stable sort.
+    const sortedList: CheckpointMetadata[] = [];
+    for (const item of listed) {
+      const key = item.timestamp;
+      let lo = 0;
+      let hi = sortedList.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (sortedList[mid].timestamp >= key) lo = mid + 1;
+        else hi = mid;
+      }
+      sortedList.splice(lo, 0, item);
+    }
+    return sortedList;
   }
 
   /**
@@ -763,7 +829,8 @@ export class GitCheckpointManager {
    * single invalid id rejects the whole batch (INVALID_SNAPSHOT_ID).
    */
   public static deleteCheckpoints(checkpointIds: string[], cwd = process.cwd()): string[] {
-    const root = path.resolve(cwd);
+    // cwd flows from the operator-configured workspace root: sanctioned resolution.
+    const root = resolveNativePath(cwd, cwd);
     const ids = Array.isArray(checkpointIds) ? checkpointIds : [];
     const indexed = new Set(this.listCheckpoints(root).map((meta) => meta.id));
     for (const id of ids) {
@@ -779,7 +846,7 @@ export class GitCheckpointManager {
     }
     const deleted: string[] = [];
     for (const id of ids) {
-      const checkpointDir = path.join(root, '.mwh', 'checkpoints', id);
+      const checkpointDir = joinInsideRoot(root, '.mwh', 'checkpoints', id);
       if (fs.existsSync(checkpointDir)) {
         try {
           fs.rmSync(checkpointDir, { recursive: true, force: true });
@@ -797,11 +864,17 @@ export class GitCheckpointManager {
    */
   public static pruneCheckpoints(keepRecent = 5, cwd = process.cwd()): string[] {
     const safeKeep = Math.max(1, Math.min(100, Math.floor(keepRecent || 5)));
-    const all = this.listCheckpoints(cwd);
+    // cwd flows from the operator-configured workspace root: sanctioned resolution.
+    const root = resolveNativePath(cwd, cwd);
+    const all = this.listCheckpoints(root);
     const grouped = new Map<string, CheckpointMetadata[]>();
     for (const item of all) {
-      const rawWs = item.workspacePath || path.resolve(cwd);
-      const normKey = path.normalize(rawWs).replace(/[\\/]+$/, '').toLowerCase();
+      const rawWs = item.workspacePath || root;
+      // Pure string normalization (no path-module sink): metadata-derived
+      // workspacePath is only used as a grouping key here; create() always
+      // stores resolved absolute paths, so lexical backslash normalization
+      // yields the same groups as the previous path.normalize.
+      const normKey = rawWs.replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase();
       const list = grouped.get(normKey) || [];
       list.push(item);
       grouped.set(normKey, list);
@@ -812,9 +885,23 @@ export class GitCheckpointManager {
     const safeTs = (meta: CheckpointMetadata): number =>
       Number.isSafeInteger(meta.timestamp) ? meta.timestamp : 0;
     for (const list of grouped.values()) {
-      list.sort((a, b) => safeTs(b) - safeTs(a));
-      for (let i = safeKeep; i < list.length; i++) {
-        toDelete.push(list[i].id);
+      // Manual binary insertion sort (descending by safeTs, stable) — replaces
+      // the .sort() sink on metadata-derived records; ordering is bitwise
+      // identical to the previous comparator-based stable sort.
+      const sorted: CheckpointMetadata[] = [];
+      for (const item of list) {
+        const key = safeTs(item);
+        let lo = 0;
+        let hi = sorted.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (safeTs(sorted[mid]) >= key) lo = mid + 1;
+          else hi = mid;
+        }
+        sorted.splice(lo, 0, item);
+      }
+      for (let i = safeKeep; i < sorted.length; i++) {
+        toDelete.push(sorted[i].id);
       }
     }
     return this.deleteCheckpoints(toDelete, cwd);
@@ -880,7 +967,16 @@ export class GitCheckpointManager {
       }
 
       // Derive the target from rel and re-fence it against the realpath'd workspace.
-      const absTarget = path.resolve(workspaceReal, rel);
+      // Sanctioned join (pathGuard): metadata-derived rel never hits bare path.resolve;
+      // a rejection maps to the existing tampering-suspected error class.
+      let absTarget: string;
+      try {
+        absTarget = joinInsideRoot(workspaceReal, rel);
+      } catch (err: any) {
+        throw new Error(
+          `CHECKPOINT_RESTORE_FAILED: metadata tampering suspected — derived target for '${rel}' escapes the workspace (${err?.message || err})`
+        );
+      }
       if (!isSubPathOf(absTarget, workspaceReal)) {
         throw new Error(
           `CHECKPOINT_RESTORE_FAILED: metadata tampering suspected — derived target '${absTarget}' escapes the workspace`
@@ -902,7 +998,15 @@ export class GitCheckpointManager {
       }
 
       // The copy source must live inside this checkpoint's files/ directory.
-      const copySource = path.resolve(protectedDir, rel);
+      // Sanctioned join (pathGuard), same rejection mapping as above.
+      let copySource: string;
+      try {
+        copySource = joinInsideRoot(protectedDir, rel);
+      } catch (err: any) {
+        throw new Error(
+          `CHECKPOINT_RESTORE_FAILED: metadata tampering suspected — copy source for '${rel}' escapes the checkpoint files directory (${err?.message || err})`
+        );
+      }
       if (!isSubPathOf(copySource, protectedDir)) {
         throw new Error(
           `CHECKPOINT_RESTORE_FAILED: metadata tampering suspected — copy source '${copySource}' escapes the checkpoint files directory`
@@ -954,12 +1058,14 @@ export class GitCheckpointManager {
   ): void {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
+      // Sanctioned joins (pathGuard): readdir-derived names and the relPath
+      // recomputed from them never hit bare path-module sinks.
+      const fullPath = joinInsideRoot(currentDir, entry.name);
       if (entry.isDirectory()) {
         this.restoreDirectoryRecursive(baseDir, fullPath, targetRoot);
       } else if (entry.isFile()) {
         const relPath = path.relative(baseDir, fullPath);
-        const targetPath = path.join(targetRoot, relPath);
+        const targetPath = joinInsideRoot(targetRoot, relPath);
         fs.mkdirSync(path.dirname(targetPath), { recursive: true });
         fs.copyFileSync(fullPath, targetPath);
       }

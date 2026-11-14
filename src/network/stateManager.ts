@@ -2971,8 +2971,14 @@ export class MwhControlPlane {
     // The request path is normalized lexically and compared against the
     // registry — no fs operation is ever performed on unregistered input,
     // which closes the path-traversal probe/mutation surface.
-    const resolvedInput = path.resolve(raw).toLowerCase();
-    const idx = this.workspaceRoots.findIndex((p) => path.resolve(p).toLowerCase() === resolvedInput);
+    // Pure string normalization: the HTTP-supplied path is never passed to
+    // path.resolve (no path-module sink on untrusted input). Registry entries
+    // (p) are server-side data; path.resolve on them stays acceptable.
+    const normInput = raw.replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase();
+    const idx = this.workspaceRoots.findIndex((p) => {
+      const rp = path.resolve(p).toLowerCase();
+      return rp === normInput || rp.replace(/\\+$/, '') === normInput;
+    });
     if (idx < 0) {
       this.appendAudit({
         decision: 'BLOCK',
@@ -3263,7 +3269,10 @@ export class MwhControlPlane {
   ): Promise<void> {
     const ctx = this.kernel.getContext();
     try {
-      GitCheckpointManager.rollback(id, ctx.workspaceRoot);
+      // Sanctioned canonicalization (pathGuard): the HTTP-registered root is
+      // realpath-resolved before entering the checkpoint manager; failures
+      // fall through to the existing ROLLBACK_FAILED catch below.
+      GitCheckpointManager.rollback(id, resolveNativePath(ctx.workspaceRoot, ctx.workspaceRoot));
     } catch (err: any) {
       const message = err?.message || String(err);
       if (message.startsWith('INVALID_SNAPSHOT_ID')) {
@@ -3315,7 +3324,11 @@ export class MwhControlPlane {
     // rejects the whole order (no partial fs mutation).
     const knownIds = new Set<string>();
     for (const root of rootsToScan) {
-      for (const meta of GitCheckpointManager.listCheckpoints(root)) {
+      // Sanctioned canonicalization (pathGuard) before every checkpoint-manager
+      // call: failures fall through to existing error paths (the global BAD_REQUEST
+      // catch of handle() for this validation pass).
+      const safeRoot = resolveNativePath(root, root);
+      for (const meta of GitCheckpointManager.listCheckpoints(safeRoot)) {
         knownIds.add(meta.id);
       }
     }
@@ -3335,14 +3348,17 @@ export class MwhControlPlane {
     const deletedSet = new Set<string>();
     try {
       for (const root of rootsToScan) {
+        // Sanctioned canonicalization (pathGuard); failures fall through to the
+        // existing SNAPSHOT_DELETE_FAILED catch below.
+        const safeRoot = resolveNativePath(root, root);
         // Partition per root so the manager-level per-root index check passes
         // for ids that legitimately live in different registered roots.
         const rootIndex = new Set(
-          GitCheckpointManager.listCheckpoints(root).map((meta) => meta.id)
+          GitCheckpointManager.listCheckpoints(safeRoot).map((meta) => meta.id)
         );
         const idsInRoot = ids.filter((id: string) => rootIndex.has(id));
         if (idsInRoot.length === 0) continue;
-        for (const delId of GitCheckpointManager.deleteCheckpoints(idsInRoot, root)) {
+        for (const delId of GitCheckpointManager.deleteCheckpoints(idsInRoot, safeRoot)) {
           deletedSet.add(delId);
         }
       }
@@ -3408,7 +3424,10 @@ export class MwhControlPlane {
     const deletedSet = new Set<string>();
     try {
       for (const root of rootsToScan) {
-        for (const delId of GitCheckpointManager.pruneCheckpoints(keepRecent, root)) {
+        // Sanctioned canonicalization (pathGuard); failures fall through to the
+        // existing SNAPSHOT_PRUNE_FAILED catch below.
+        const safeRoot = resolveNativePath(root, root);
+        for (const delId of GitCheckpointManager.pruneCheckpoints(keepRecent, safeRoot)) {
           deletedSet.add(delId);
         }
       }

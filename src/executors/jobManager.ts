@@ -465,9 +465,11 @@ export class JobManager {
     };
 
     try {
-      const logDir = path.join(wsRoot, '.mwh', 'logs');
+      // Sanctioned joins (pathGuard): wsRoot-derived log paths never hit bare
+      // path-module sinks; audit.jsonl is a server-side constant.
+      const logDir = joinInsideRoot(wsRoot, '.mwh', 'logs');
       fs.mkdirSync(logDir, { recursive: true });
-      fs.appendFileSync(path.join(logDir, 'audit.jsonl'), JSON.stringify(entry) + '\n', 'utf-8');
+      fs.appendFileSync(joinInsideRoot(logDir, 'audit.jsonl'), JSON.stringify(entry) + '\n', 'utf-8');
     } catch {
       // Never block job finalization on audit write errors.
     }
@@ -1203,11 +1205,11 @@ export class JobManager {
     this.assertValidJobId(jobId);
 
     const job = this.jobs.get(jobId);
-    let logAbsPath = job?.logAbsPath || path.resolve(workspaceRoot, '.mwh', 'logs', `${jobId}.log`);
+    let logAbsPath = job?.logAbsPath || joinInsideRoot(workspaceRoot, '.mwh', 'logs', `${jobId}.log`);
 
     // Worktree / cwd drift: the log may have been created under another root.
     if (!fs.existsSync(logAbsPath)) {
-      const fallback = path.resolve(process.cwd(), '.mwh', 'logs', `${jobId}.log`);
+      const fallback = joinInsideRoot(process.cwd(), '.mwh', 'logs', `${jobId}.log`);
       if (fs.existsSync(fallback)) {
         logAbsPath = fallback;
       }

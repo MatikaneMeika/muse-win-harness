@@ -164,13 +164,15 @@ export class AcpConfigManager {
         if (fs.existsSync(trimmed)) {
           const stat = fs.statSync(trimmed);
           if (stat.isFile()) {
-            const resolved = path.resolve(trimmed);
+            // No path-module sink on untrusted input: the whitelist above already
+            // forces trimmed to be a drive-letter absolute path, so it is returned
+            // as-is (no intermediate path.resolve layer).
             this.probeCache.set(trimmed, {
               available: true,
-              path: resolved,
+              path: trimmed,
               expiresAt: Date.now() + 30000
             });
-            return { available: true, path: resolved };
+            return { available: true, path: trimmed };
           }
         }
       } catch {

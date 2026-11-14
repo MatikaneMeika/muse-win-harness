@@ -53,6 +53,8 @@ interface PendingReq {
 }
 
 const UIA_CSHARP_HOST_SCRIPT = `
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Web.Extensions
@@ -183,6 +185,113 @@ public static class MwhUiaHelper {
             { "automationId", target.Current.AutomationId ?? "" }
         };
     }
+
+    private static string NormalizeLineEndings(string s) {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Replace("\\r\\n", "\\n").Replace("\\r", "\\n");
+    }
+
+    private static bool EndsWithNormalized(string fullText, string tailText) {
+        if (string.IsNullOrEmpty(tailText)) return true;
+        if (fullText == null) return false;
+        if (fullText.EndsWith(tailText, StringComparison.Ordinal)) return true;
+        string normTail = NormalizeLineEndings(tailText);
+        int sliceLen = Math.Min(fullText.Length, Math.Max(normTail.Length * 2 + 64, 512));
+        string tailSlice = NormalizeLineEndings(fullText.Substring(fullText.Length - sliceLen));
+        return tailSlice.EndsWith(normTail, StringComparison.Ordinal);
+    }
+
+    private static string ReadElementText(AutomationElement el, out ValuePattern writableVp) {
+        writableVp = null;
+        if (el == null) return null;
+        try {
+            object vpObj;
+            if (el.TryGetCurrentPattern(ValuePattern.Pattern, out vpObj)) {
+                var vp = vpObj as ValuePattern;
+                if (vp != null && !el.Current.IsPassword) {
+                    if (!vp.Current.IsReadOnly) writableVp = vp;
+                    return vp.Current.Value ?? "";
+                }
+            }
+        } catch {}
+        try {
+            object tpObj;
+            if (el.TryGetCurrentPattern(TextPattern.Pattern, out tpObj)) {
+                var tp = tpObj as TextPattern;
+                if (tp != null && tp.DocumentRange != null) {
+                    return tp.DocumentRange.GetText(-1) ?? "";
+                }
+            }
+        } catch {}
+        return null;
+    }
+
+    public static Dictionary<string, object> VerifyOrAppendText(long hwndVal, string automationId, string name, string controlType, string text) {
+        AutomationElement root = hwndVal > 0
+            ? AutomationElement.FromHandle(new IntPtr(hwndVal))
+            : AutomationElement.RootElement;
+        if (root == null) throw new Exception("UIA_WINDOW_NOT_FOUND");
+
+        AutomationElement target = null;
+        if (!string.IsNullOrEmpty(automationId) || !string.IsNullOrEmpty(name) || !string.IsNullOrEmpty(controlType)) {
+            var conds = new List<Condition>();
+            if (!string.IsNullOrEmpty(automationId)) conds.Add(new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
+            if (!string.IsNullOrEmpty(name)) conds.Add(new PropertyCondition(AutomationElement.NameProperty, name));
+            if (!string.IsNullOrEmpty(controlType)) {
+                var normCt = controlType.StartsWith("ControlType.") ? controlType : "ControlType." + controlType;
+                foreach (var f in typeof(ControlType).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)) {
+                    var ct = f.GetValue(null) as ControlType;
+                    if (ct != null && string.Equals(ct.ProgrammaticName, normCt, StringComparison.OrdinalIgnoreCase)) {
+                        conds.Add(new PropertyCondition(AutomationElement.ControlTypeProperty, ct));
+                        break;
+                    }
+                }
+            }
+            Condition cond = conds.Count == 0 ? Condition.TrueCondition : (conds.Count == 1 ? conds[0] : new AndCondition(conds.ToArray()));
+            target = root.FindFirst(TreeScope.Descendants, cond);
+        }
+
+        if (target == null) {
+            var docOrEditCond = new OrCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit)
+            );
+            target = root.FindFirst(TreeScope.Descendants, docOrEditCond);
+        }
+        if (target == null) target = root;
+
+        ValuePattern writableVp;
+        string currentText = ReadElementText(target, out writableVp);
+        if (currentText != null && EndsWithNormalized(currentText, text)) {
+            return new Dictionary<string, object> {
+                { "verified", true },
+                { "tailMatched", true },
+                { "readBackLength", currentText.Length },
+                { "deliveryMethod", "win32_uia_verified" }
+            };
+        }
+
+        if (writableVp != null) {
+            string baseText = currentText ?? "";
+            writableVp.SetValue(baseText + (text ?? ""));
+            ValuePattern ignoredVp;
+            string afterText = ReadElementText(target, out ignoredVp) ?? "";
+            bool matched = afterText.Length > baseText.Length && EndsWithNormalized(afterText, text);
+            return new Dictionary<string, object> {
+                { "verified", matched },
+                { "tailMatched", matched },
+                { "readBackLength", afterText.Length },
+                { "deliveryMethod", "uia_value_append" }
+            };
+        }
+
+        return new Dictionary<string, object> {
+            { "verified", false },
+            { "tailMatched", false },
+            { "readBackLength", currentText != null ? currentText.Length : 0 },
+            { "deliveryMethod", "none" }
+        };
+    }
 }
 "@
 
@@ -214,6 +323,15 @@ while ($true) {
             $op = [string]($req["op"])
             $val = if ($req.ContainsKey("value")) { [string]$req["value"] } else { "" }
             $res = [MwhUiaHelper]::Act($hwnd, $aid, $nm, $ct, $op, $val)
+            $out = @{ id = $id; ok = $true; data = $res }
+            [Console]::Out.WriteLine($ser.Serialize($out))
+        } elseif ($cmd -eq "verify_or_append_text") {
+            $hwnd = [long]($req["hwnd"])
+            $aid = if ($req.ContainsKey("automationId")) { [string]$req["automationId"] } else { "" }
+            $nm = if ($req.ContainsKey("name")) { [string]$req["name"] } else { "" }
+            $ct = if ($req.ContainsKey("controlType")) { [string]$req["controlType"] } else { "" }
+            $txt = if ($req.ContainsKey("text")) { [string]$req["text"] } else { "" }
+            $res = [MwhUiaHelper]::VerifyOrAppendText($hwnd, $aid, $nm, $ct, $txt)
             $out = @{ id = $id; ok = $true; data = $res }
             [Console]::Out.WriteLine($ser.Serialize($out))
         } else {
@@ -348,13 +466,20 @@ export class UiaBridge {
       return this.child;
     }
 
-    const encoded = Buffer.from(UIA_CSHARP_HOST_SCRIPT, 'utf16le').toString('base64');
+    const bootstrapPs = [
+      '[Console]::InputEncoding = [System.Text.Encoding]::UTF8',
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      'Invoke-Expression ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:MWH_UIA_B64)))'
+    ].join('\n');
+    const encodedBootstrap = Buffer.from(bootstrapPs, 'utf16le').toString('base64');
+    const scriptB64 = Buffer.from(UIA_CSHARP_HOST_SCRIPT, 'utf-8').toString('base64');
     const child = spawn(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+      ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedBootstrap],
       {
         windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, MWH_UIA_B64: scriptB64 }
       }
     );
 
@@ -512,6 +637,55 @@ export class UiaBridge {
         );
       }
       throw err;
+    }
+  }
+
+  public static async verifyOrAppendText(params: {
+    hwnd: number;
+    elementToken?: string;
+    automationId?: string;
+    name?: string;
+    controlType?: string;
+    text: string;
+  }): Promise<{
+    verified: boolean;
+    tailMatched: boolean;
+    readBackLength: number;
+    deliveryMethod: string;
+  }> {
+    let automationId = params.automationId || '';
+    let name = params.name || '';
+    let controlType = params.controlType || '';
+    let targetHwnd = params.hwnd;
+    if (params.elementToken) {
+      const resolvedToken = this.resolveElementToken(params.elementToken, params.hwnd);
+      targetHwnd = resolvedToken.hwnd;
+      if (!automationId && resolvedToken.automationId) automationId = resolvedToken.automationId;
+      if (!name && resolvedToken.name) name = resolvedToken.name;
+      if (!controlType && resolvedToken.controlType) controlType = resolvedToken.controlType;
+    }
+    try {
+      const raw = await this.request({
+        cmd: 'verify_or_append_text',
+        hwnd: targetHwnd,
+        automationId,
+        name,
+        controlType,
+        text: params.text
+      });
+      return {
+        verified: Boolean(raw?.verified),
+        tailMatched: Boolean(raw?.tailMatched),
+        readBackLength: Number(raw?.readBackLength) || 0,
+        deliveryMethod: typeof raw?.deliveryMethod === 'string' ? raw.deliveryMethod : 'none'
+      };
+    } catch {
+      return {
+        verified: false,
+        tailMatched: false,
+        readBackLength: 0,
+        deliveryMethod: 'none'
+      };
     }
   }
 }

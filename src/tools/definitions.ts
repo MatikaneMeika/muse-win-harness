@@ -303,7 +303,7 @@ export const MUSE_TOOLS: ToolDefinition[] = [
     name: 'desktop_hands',
     category: 'sensitive_write',
     description:
-      'Native Windows desktop automation (windows, inspect UIA tree with elementToken and head+tail value preservation, screenshot with multimodal image output [unified full virtual-screen capture in Per-Monitor Aware V2 physical pixels, 1:1 source-space redaction of sensitive windows first, then proportional downsampling to <=3840x2160 with scaleFactor], background-first act, and emergency-stoppable batch). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.',
+      'Native Windows desktop automation (windows, inspect UIA tree with elementToken and head+tail value preservation, screenshot with multimodal image output [unified full virtual-screen capture in Per-Monitor Aware V2 physical pixels, 1:1 source-space redaction of sensitive windows first, then proportional downsampling to <=3840x2160 with scaleFactor], background-first act [background type_text resolves child Edit/RichEditD2DPT/UIA text surfaces and enforces read-back tail verification returning verified/tailMatched/readBackLength/targetHwnd or failing with BACKGROUND_TYPE_TEXT_UNVERIFIED], and emergency-stoppable batch [aborted batches return outer status SUCCESS with [ABORTED] summary to carry step results while approval receipts record executionStatus ERROR / terminalStatus TERMINATED to prevent false-positive completion]). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -365,7 +365,7 @@ export const MUSE_TOOLS: ToolDefinition[] = [
         },
         text: {
           type: 'string',
-          description: 'Text string to type or set_value'
+          description: 'Text string to type or set_value. For background type_text with hwnd, MWH resolves the child text-input control (Edit/RichEditD2DPT/UIA ValuePattern), appends text atomically (including on minimized windows), and verifies read-back tail match (returning verified, tailMatched, readBackLength, targetHwnd; throws BACKGROUND_TYPE_TEXT_UNVERIFIED if unverified).'
         },
         keys: {
           type: 'array',
@@ -402,7 +402,7 @@ export const MUSE_TOOLS: ToolDefinition[] = [
         },
         steps: {
           type: 'array',
-          description: 'Ordered step list for batch action (max 30 steps)',
+          description: 'Ordered step list for batch action (max 30 steps). If interrupted by kill/emergency-stop, data.status is ABORTED (outer transport status SUCCESS with [ABORTED] summary; receipt executionStatus is ERROR / terminalStatus TERMINATED).',
           items: { type: 'object' }
         }
       },

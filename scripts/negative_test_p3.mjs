@@ -2119,6 +2119,218 @@ await runCase('C23 inspect value head+tail preservation, E2 contract docs, and w
 });
 
 // ---------------------------------------------------------------------------
+// Case 24: Desktop Hands background type_text child-surface resolution,
+// atomic append + read-back verification (verified/tailMatched/readBackLength),
+// surrogate-pair safety, and fail-closed BACKGROUND_TYPE_TEXT_UNVERIFIED.
+// ---------------------------------------------------------------------------
+await runCase('C24 desktop_hands background type_text child Edit roundtrip, surrogate safety, and fail-closed BACKGROUND_TYPE_TEXT_UNVERIFIED', async () => {
+  const {
+    toSurrogateSafeUtf16Units,
+    sanitizeSurrogateString,
+    matchesTextTail,
+    readWindowText,
+    resolveTextInputTargetHwnd
+  } = await import('../dist/desktop/win32Native.js');
+  const { DesktopHands } = await import('../dist/tools/desktopHands.js');
+  const { getExposedMuseTools } = await import('../dist/tools/definitions.js');
+
+  // 1) Surrogate-pair safety & line-ending normalized tail matching
+  const emojiText = 'A\uD83D\uDE80B';
+  const emojiUnits = toSurrogateSafeUtf16Units(emojiText);
+  assert(
+    emojiUnits.length === 4 && emojiUnits[1] === 0xd83d && emojiUnits[2] === 0xde80,
+    `C24: valid surrogate pair must stay intact in order, got ${JSON.stringify(emojiUnits)}`
+  );
+  const brokenSurrogate = 'X\uD800Y\uDC00Z';
+  const sanitized = sanitizeSurrogateString(brokenSurrogate);
+  assert(
+    sanitized === 'X\uFFFDY\uFFFDZ',
+    `C24: isolated high/low surrogates must be replaced with U+FFFD, got ${JSON.stringify(sanitized)}`
+  );
+  assert(
+    matchesTextTail('line1\rline2\rMWH-FINAL-TAIL', 'line2\nMWH-FINAL-TAIL') &&
+      matchesTextTail('line1\r\nline2\r\nMWH-FINAL-TAIL', 'line2\nMWH-FINAL-TAIL'),
+    'C24: matchesTextTail must match across CR, LF, and CRLF line-ending representations'
+  );
+
+  // 2) Tool schema & SKILL.example.md contract sync
+  const dhTool = getExposedMuseTools(true).find((t) => t.name === 'desktop_hands');
+  assert(
+    dhTool &&
+      dhTool.description.includes('BACKGROUND_TYPE_TEXT_UNVERIFIED') &&
+      dhTool.description.includes('tailMatched') &&
+      dhTool.description.includes('[ABORTED]') &&
+      String(dhTool.inputSchema?.properties?.text?.description || '').includes('tailMatched'),
+    'C24: desktop_hands tool definition must document verified/tailMatched/BACKGROUND_TYPE_TEXT_UNVERIFIED and [ABORTED] receipt semantics'
+  );
+  const skillExample = fs.readFileSync(
+    path.resolve(process.cwd(), 'connectors', 'muse-skill-template', 'SKILL.example.md'),
+    'utf-8'
+  );
+  assert(
+    skillExample.includes('BACKGROUND_TYPE_TEXT_UNVERIFIED') &&
+      skillExample.includes('tailMatched') &&
+      skillExample.includes('[ABORTED]'),
+    'C24: SKILL.example.md must document verified/tailMatched/BACKGROUND_TYPE_TEXT_UNVERIFIED and [ABORTED]'
+  );
+
+  // 3) Win32 cross-process hidden parent + child Edit roundtrip & unverified rejection
+  // (Spawned in a child process so its PID != process.pid and passes WinGuard's self-PID fence,
+  // while also exercising true cross-process SendMessageTimeoutW marshaling.)
+  if (process.platform === 'win32') {
+    const { spawn } = await import('node:child_process');
+    const initial277 =
+      'ec18420 snake: playable grid\r\n## main\r\n?? .mwh/\r\nec18420 snake: playable grid\r\n README.md      |  11 ++++\r\n docs/RULES.md  |   6 ++\r\n src/game.js    | 183 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++\r\n src/index.html |  33 +++++++++++\r\n 4 files changed, 233 insertions(+)\r\n';
+
+    const childScript = `
+      import koffi from 'koffi';
+      const u32 = koffi.load('user32.dll');
+      const CreateWindowExW = u32.func('intptr_t __stdcall CreateWindowExW(uint32 dwExStyle, str16 lpClassName, str16 lpWindowName, uint32 dwStyle, int32 X, int32 Y, int32 nWidth, int32 nHeight, intptr_t hWndParent, intptr_t hMenu, intptr_t hInstance, intptr_t lpParam)');
+      const SendMessageW = u32.func('intptr_t __stdcall SendMessageW(intptr_t hWnd, uint32 Msg, intptr_t wParam, intptr_t lParam)');
+      const PeekMessageW = u32.func('bool __stdcall PeekMessageW(void* lpMsg, intptr_t hWnd, uint32 wMsgFilterMin, uint32 wMsgFilterMax, uint32 wRemoveMsg)');
+      const TranslateMessage = u32.func('bool __stdcall TranslateMessage(void* lpMsg)');
+      const DispatchMessageW = u32.func('intptr_t __stdcall DispatchMessageW(void* lpMsg)');
+
+      const WS_POPUP = 0x80000000;
+      const WS_CHILD = 0x40000000;
+      const WS_VISIBLE = 0x10000000;
+      const ES_MULTILINE = 0x0004;
+      const ES_AUTOVSCROLL = 0x0040;
+      const ES_AUTOHSCROLL = 0x0080;
+
+      const initText = ${JSON.stringify(initial277)};
+      const parentHwnd = Number(CreateWindowExW(0, 'Static', 'MWH_C24_ParentHost', WS_POPUP, -32000, -32000, 400, 300, 0, 0, 0, 0));
+      const childEditHwnd = Number(CreateWindowExW(0, 'Edit', initText, WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL, 0, 0, 400, 300, parentHwnd, 0, 0, 0));
+      const nonEditHwnd = Number(CreateWindowExW(0, 'Static', 'MWH_C24_NonEditableStatic', WS_POPUP, -32000, -32000, 200, 100, 0, 0, 0, 0));
+      SendMessageW(childEditHwnd, 0x00b1, 0, 0);
+
+      console.log(JSON.stringify({ parentHwnd, childEditHwnd, nonEditHwnd }));
+      const msgBuf = Buffer.alloc(64);
+      setInterval(() => {
+        while (PeekMessageW(msgBuf, 0, 0, 0, 1)) {
+          TranslateMessage(msgBuf);
+          DispatchMessageW(msgBuf);
+        }
+      }, 15);
+      process.stdin.on('end', () => process.exit(0));
+      process.stdin.resume();
+    `;
+
+    const helper = spawn(process.execPath, ['--input-type=module', '-e', childScript], {
+      cwd: process.cwd(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true
+    });
+
+    try {
+      const handles = await new Promise((resolve, reject) => {
+        let out = '';
+        let errOut = '';
+        const timer = setTimeout(() => reject(new Error(`C24 helper timed out: ${errOut}`)), 8000);
+        helper.stdout.on('data', (chunk) => {
+          out += chunk.toString();
+          const line = out.split(/\r?\n/).find((l) => l.trim().startsWith('{'));
+          if (line) {
+            clearTimeout(timer);
+            resolve(JSON.parse(line.trim()));
+          }
+        });
+        helper.stderr.on('data', (c) => (errOut += c.toString()));
+        helper.on('exit', (code) => {
+          clearTimeout(timer);
+          reject(new Error(`C24 helper exited prematurely (${code}): ${errOut}`));
+        });
+      });
+
+      const { parentHwnd, childEditHwnd, nonEditHwnd } = handles;
+      assert(parentHwnd > 0 && childEditHwnd > 0, `C24: failed to create test windows (${parentHwnd}, ${childEditHwnd})`);
+
+      const resolvedSurface = resolveTextInputTargetHwnd(parentHwnd);
+      assert(
+        resolvedSurface.targetHwnd === childEditHwnd &&
+          resolvedSurface.targetClassName.toLowerCase() === 'edit',
+        `C24: resolveTextInputTargetHwnd(${parentHwnd}) must resolve child Edit (${childEditHwnd}), got ${JSON.stringify(resolvedSurface)}`
+      );
+
+      const t2Payload =
+        'T2 FINAL CHECK 2026-11-14: typing a long paragraph into the same Notepad window to verify head-plus-tail preservation in inspect. The quick brown fox jumps over the lazy dog and runs across the open field while the river keeps flowing under the old wooden bridge. This paragraph is intentionally long so the total length passes three hundred characters before the end marker appears. MWH-FINAL-TAIL';
+      const typeRes = await DesktopHands.execute(
+        {
+          action: 'act',
+          op: 'type_text',
+          hwnd: parentHwnd,
+          delivery: 'background',
+          text: t2Payload
+        },
+        true
+      );
+      assert(
+        typeRes.verified === true &&
+          typeRes.tailMatched === true &&
+          typeRes.targetHwnd === childEditHwnd &&
+          typeRes.length === t2Payload.length &&
+          typeRes.readBackLength === initial277.length + t2Payload.length,
+        `C24: background type_text on parentHwnd must verify child Edit roundtrip, got ${JSON.stringify(typeRes)}`
+      );
+
+      const readBack1 = readWindowText(childEditHwnd);
+      assert(
+        readBack1.ok &&
+          readBack1.text.startsWith('ec18420 snake: playable grid') &&
+          readBack1.text.endsWith('MWH-FINAL-TAIL'),
+        `C24: child Edit text must preserve initial head and end with MWH-FINAL-TAIL, got len=${readBack1.text.length}`
+      );
+
+      // Append supplementary-plane emoji + CJK text and verify roundtrip
+      const emojiTail = ' 🚀✨ 记事本后台验证-TAIL2';
+      const typeRes2 = await DesktopHands.execute(
+        {
+          action: 'type_text',
+          hwnd: parentHwnd,
+          delivery: 'background',
+          text: emojiTail
+        },
+        true
+      );
+      assert(
+        typeRes2.verified === true &&
+          typeRes2.tailMatched === true &&
+          readWindowText(childEditHwnd).text.endsWith(emojiTail),
+        `C24: second background type_text with emoji/CJK must append and verify tail, got ${JSON.stringify(typeRes2)}`
+      );
+
+      // Negative check: non-editable window with no Edit child and no ValuePattern must fail closed
+      let unverifiedErr = '';
+      try {
+        await DesktopHands.execute(
+          {
+            action: 'act',
+            op: 'type_text',
+            hwnd: nonEditHwnd,
+            delivery: 'background',
+            text: 'SHOULD_NOT_FAKE_SUCCESS'
+          },
+          true
+        );
+      } catch (err) {
+        unverifiedErr = String(err?.message || err);
+      }
+      assert(
+        unverifiedErr.includes('BACKGROUND_TYPE_TEXT_UNVERIFIED'),
+        `C24: unverified background type_text must throw BACKGROUND_TYPE_TEXT_UNVERIFIED (never silent SUCCESS), got: ${unverifiedErr || 'no throw'}`
+      );
+    } finally {
+      try {
+        helper.stdin.end();
+      } catch {}
+      try {
+        helper.kill();
+      } catch {}
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // SUMMARY
 // ---------------------------------------------------------------------------
 console.log('\n===============================================================');

@@ -48,7 +48,10 @@ export class MwhServer {
   constructor(options: ServerOptions) {
     this.runtimeToken = options.runtimeToken;
     this.host = options.host || '127.0.0.1';
-    this.port = options.port || 19820;
+    this.port =
+      typeof options.port === 'number' && Number.isFinite(options.port) && options.port >= 0
+        ? Math.trunc(options.port)
+        : 19820;
     this.kernel = options.kernel || new PipelineKernel();
     this.authGuard = new BearerAuthGuard(this.runtimeToken, options.tokenExpiresAt);
     this.uiHost = new UiStaticHost();

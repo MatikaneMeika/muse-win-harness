@@ -48,9 +48,11 @@ interface Win32Bindings {
   dwmapi: any;
   kernel32: any;
   EnumWindows: any;
+  EnumChildWindows: any;
   EnumWindowsProc: any;
   IsWindow: any;
   IsWindowVisible: any;
+  IsWindowEnabled: any;
   IsIconic: any;
   GetWindowTextW: any;
   GetClassNameW: any;
@@ -70,6 +72,8 @@ interface Win32Bindings {
   GetLastInputInfo: any;
   SendInput: any;
   PostMessageW: any;
+  SendMessageTimeoutIntW: any;
+  SendMessageTimeoutBufW: any;
   PrintWindow: any;
   GetDC: any;
   GetWindowDC: any;
@@ -128,8 +132,10 @@ function ensureWin32(): Win32Bindings {
     kernel32,
     EnumWindowsProc,
     EnumWindows: user32.func('bool __stdcall EnumWindows(MWH_EnumWindowsProc* lpEnumFunc, intptr_t lParam)'),
+    EnumChildWindows: user32.func('bool __stdcall EnumChildWindows(intptr_t hWndParent, MWH_EnumWindowsProc* lpEnumFunc, intptr_t lParam)'),
     IsWindow: user32.func('bool __stdcall IsWindow(intptr_t hwnd)'),
     IsWindowVisible: user32.func('bool __stdcall IsWindowVisible(intptr_t hwnd)'),
+    IsWindowEnabled: user32.func('bool __stdcall IsWindowEnabled(intptr_t hwnd)'),
     IsIconic: user32.func('bool __stdcall IsIconic(intptr_t hwnd)'),
     GetWindowTextW: user32.func('int32 __stdcall GetWindowTextW(intptr_t hwnd, _Out_ uint16* lpString, int32 nMaxCount)'),
     GetClassNameW: user32.func('int32 __stdcall GetClassNameW(intptr_t hwnd, _Out_ uint16* lpClassName, int32 nMaxCount)'),
@@ -149,6 +155,8 @@ function ensureWin32(): Win32Bindings {
     GetLastInputInfo: user32.func('bool __stdcall GetLastInputInfo(_Inout_ MWH_DH_LASTINPUTINFO* plii)'),
     SendInput: user32.func('uint32 __stdcall SendInput(uint32 cInputs, void* pInputs, int32 cbSize)'),
     PostMessageW: user32.func('bool __stdcall PostMessageW(intptr_t hwnd, uint32 msg, uintptr_t wParam, intptr_t lParam)'),
+    SendMessageTimeoutIntW: user32.func('intptr_t __stdcall SendMessageTimeoutW(intptr_t hWnd, uint32 Msg, intptr_t wParam, intptr_t lParam, uint32 fuFlags, uint32 uTimeout, _Out_ uintptr_t* lpdwResult)'),
+    SendMessageTimeoutBufW: user32.func('intptr_t __stdcall SendMessageTimeoutW(intptr_t hWnd, uint32 Msg, uintptr_t wParam, void* lParam, uint32 fuFlags, uint32 uTimeout, _Out_ uintptr_t* lpdwResult)'),
     PrintWindow: user32.func('bool __stdcall PrintWindow(intptr_t hwnd, void* hdcBlt, uint32 nFlags)'),
     GetDC: user32.func('void* __stdcall GetDC(intptr_t hwnd)'),
     GetWindowDC: user32.func('void* __stdcall GetWindowDC(intptr_t hwnd)'),
@@ -733,12 +741,268 @@ export function postMouseClick(
   return { clientX: pt.x, clientY: pt.y };
 }
 
-export function postText(hwnd: number, text: string): void {
+export interface PostTextResult {
+  hwnd: number;
+  targetHwnd: number;
+  targetClassName: string;
+  deliveryMethod: 'win32_replacesel' | 'win32_wm_char';
+  verified: boolean;
+  tailMatched: boolean;
+  readBackLength: number;
+}
+
+const PRIMARY_EDIT_CLASS_RE =
+  /^(?:edit|richeditd2dpt|richedit20w|richedit20a|richedit50w|richedit60w|richedit|msftedit_class|scintilla)$/i;
+const SECONDARY_TEXT_CLASS_RE = /(?:edit|textbox)/i;
+const WRAPPER_TEXT_HOST_RE = /^notepadtextbox$/i;
+
+function scoreTextControlClass(className: string): number {
+  const trimmed = className.trim();
+  if (!trimmed) return 0;
+  if (PRIMARY_EDIT_CLASS_RE.test(trimmed)) return 300;
+  if (SECONDARY_TEXT_CLASS_RE.test(trimmed) && !WRAPPER_TEXT_HOST_RE.test(trimmed)) return 180;
+  return 0;
+}
+
+/**
+ * Resolves the actual child text-input HWND inside a top-level or container HWND
+ * (e.g., Win11 Store Notepad top-level `Notepad` -> `NotepadTextBox` -> `RichEditD2DPT`,
+ * or classic Win32 frame -> `Edit`). Prefers visible + enabled edit controls so active
+ * tabs win over hidden background tabs even when the top-level window is minimized.
+ */
+export function resolveTextInputTargetHwnd(hwnd: number): {
+  targetHwnd: number;
+  targetClassName: string;
+} {
   const b = ensureWin32();
-  const WM_CHAR = 0x0102;
-  for (let i = 0; i < text.length; i++) {
-    b.PostMessageW(hwnd, WM_CHAR, text.charCodeAt(i), 1);
+  if (!b.IsWindow(hwnd)) {
+    throw new Error(`INVALID_HWND: Window handle ${hwnd} is no longer valid`);
   }
+
+  const children: number[] = [];
+  const cb = koffi.register((childHwnd: number) => {
+    children.push(Number(childHwnd));
+    return true;
+  }, koffi.pointer(b.EnumWindowsProc));
+
+  try {
+    b.EnumChildWindows(hwnd, cb, 0);
+  } finally {
+    koffi.unregister(cb);
+  }
+
+  let bestHwnd = hwnd;
+  let bestClass = getWindowClassName(hwnd);
+  let bestScore = scoreTextControlClass(bestClass);
+  if (bestScore > 0) {
+    const vis = Boolean(b.IsWindowVisible(hwnd));
+    const en = Boolean(b.IsWindowEnabled(hwnd));
+    bestScore += vis && en ? 90 : en ? 45 : 10;
+  }
+
+  for (const child of children) {
+    if (!b.IsWindow(child)) continue;
+    const cls = getWindowClassName(child);
+    const baseScore = scoreTextControlClass(cls);
+    if (baseScore <= 0) continue;
+    const vis = Boolean(b.IsWindowVisible(child));
+    const en = Boolean(b.IsWindowEnabled(child));
+    const stateScore = vis && en ? 100 : en ? 50 : vis ? 15 : 5;
+    const total = baseScore + stateScore;
+    if (total > bestScore) {
+      bestScore = total;
+      bestHwnd = child;
+      bestClass = cls;
+    }
+  }
+
+  return {
+    targetHwnd: bestHwnd,
+    targetClassName: bestClass
+  };
+}
+
+/**
+ * Sanitizes isolated UTF-16 surrogates (replacing unpaired high/low surrogates with U+FFFD)
+ * while preserving valid supplementary-plane surrogate pairs (emoji, CJK extensions) intact.
+ */
+export function sanitizeSurrogateString(text: string): string {
+  const units = toSurrogateSafeUtf16Units(text);
+  if (units.length === 0) return '';
+  const CHUNK = 8192;
+  if (units.length <= CHUNK) {
+    return String.fromCharCode(...units);
+  }
+  const parts: string[] = [];
+  for (let i = 0; i < units.length; i += CHUNK) {
+    parts.push(String.fromCharCode(...units.slice(i, i + CHUNK)));
+  }
+  return parts.join('');
+}
+
+/**
+ * Splits a string into UTF-16 code units by iterating code points so valid surrogate
+ * pairs stay ordered as [highSurrogate, lowSurrogate] and isolated surrogates become 0xFFFD.
+ */
+export function toSurrogateSafeUtf16Units(text: string): number[] {
+  const units: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const first = text.charCodeAt(i);
+    if (first >= 0xd800 && first <= 0xdbff) {
+      if (i + 1 < text.length) {
+        const second = text.charCodeAt(i + 1);
+        if (second >= 0xdc00 && second <= 0xdfff) {
+          units.push(first, second);
+          i += 1;
+          continue;
+        }
+      }
+      units.push(0xfffd);
+    } else if (first >= 0xdc00 && first <= 0xdfff) {
+      units.push(0xfffd);
+    } else {
+      units.push(first);
+    }
+  }
+  return units;
+}
+
+/**
+ * Compares the tail of a read-back buffer against injected text, normalizing
+ * line-ending differences (\r\n vs \r vs \n) across classic Edit, RichEditD2DPT, and UIA.
+ */
+export function matchesTextTail(readBackText: string, injectedText: string): boolean {
+  if (injectedText.length === 0) return true;
+  if (readBackText.endsWith(injectedText)) return true;
+  const normInjected = injectedText.replace(/\r\n|\r/g, '\n');
+  const sliceLen = Math.min(readBackText.length, Math.max(normInjected.length * 2 + 64, 512));
+  const tailSlice = readBackText.slice(readBackText.length - sliceLen).replace(/\r\n|\r/g, '\n');
+  return tailSlice.endsWith(normInjected);
+}
+
+/**
+ * Reads text from a Win32 control via SendMessageTimeoutW (WM_GETTEXTLENGTH + WM_GETTEXT)
+ * with SMTO_ABORTIFHUNG so a hung target thread can never block the daemon.
+ */
+export function readWindowText(
+  hwnd: number,
+  timeoutMs = 1500
+): { ok: boolean; text: string; rawLength: number } {
+  const b = ensureWin32();
+  const WM_GETTEXT = 0x000d;
+  const WM_GETTEXTLENGTH = 0x000e;
+  const SMTO_ABORTIFHUNG = 0x0002;
+
+  const lenOut = [0];
+  const okLen = Number(
+    b.SendMessageTimeoutIntW(hwnd, WM_GETTEXTLENGTH, 0, 0, SMTO_ABORTIFHUNG, timeoutMs, lenOut)
+  );
+  if (!okLen) {
+    return { ok: false, text: '', rawLength: 0 };
+  }
+  const rawLength = Math.max(0, Number(lenOut[0]) || 0);
+  if (rawLength === 0) {
+    return { ok: true, text: '', rawLength: 0 };
+  }
+  const maxChars = Math.min(rawLength + 8, 1024 * 1024);
+  const buf = new Uint16Array(maxChars);
+  const copiedOut = [0];
+  const okGet = Number(
+    b.SendMessageTimeoutBufW(hwnd, WM_GETTEXT, buf.length, buf, SMTO_ABORTIFHUNG, timeoutMs, copiedOut)
+  );
+  if (!okGet) {
+    return { ok: false, text: '', rawLength };
+  }
+  const copied = Math.max(0, Math.min(buf.length, Number(copiedOut[0]) || 0));
+  return {
+    ok: true,
+    text: utf16BufToString(buf, copied),
+    rawLength
+  };
+}
+
+export function postText(hwnd: number, text: string): PostTextResult {
+  const b = ensureWin32();
+  const { targetHwnd, targetClassName } = resolveTextInputTargetHwnd(hwnd);
+  const safeText = sanitizeSurrogateString(text);
+
+  if (safeText.length === 0) {
+    const cur = readWindowText(targetHwnd);
+    return {
+      hwnd,
+      targetHwnd,
+      targetClassName,
+      deliveryMethod: 'win32_replacesel',
+      verified: true,
+      tailMatched: true,
+      readBackLength: cur.text.length
+    };
+  }
+
+  const EM_SETSEL = 0x00b1;
+  const EM_REPLACESEL = 0x00c2;
+  const WM_CHAR = 0x0102;
+  const SMTO_ABORTIFHUNG = 0x0002;
+
+  const before = readWindowText(targetHwnd);
+  const dummyOut = [0];
+
+  // Primary path: position caret at the end of the text surface and atomically append via EM_REPLACESEL.
+  // Works across process boundaries (user32 marshals EM_REPLACESEL) and on minimized windows
+  // (including Win11 Store Notepad's RichEditD2DPT and classic Win32 Edit controls).
+  b.SendMessageTimeoutIntW(targetHwnd, EM_SETSEL, 0x7fffffff, 0x7fffffff, SMTO_ABORTIFHUNG, 1500, dummyOut);
+  const nullTermBuf = Buffer.from(safeText + '\0', 'utf16le');
+  const replaceOk = Number(
+    b.SendMessageTimeoutBufW(targetHwnd, EM_REPLACESEL, 1, nullTermBuf, SMTO_ABORTIFHUNG, 2000, dummyOut)
+  );
+
+  if (replaceOk) {
+    const afterReplace = readWindowText(targetHwnd);
+    const tailOk =
+      afterReplace.ok &&
+      afterReplace.text.length > before.text.length &&
+      matchesTextTail(afterReplace.text, safeText);
+    if (tailOk) {
+      return {
+        hwnd,
+        targetHwnd,
+        targetClassName,
+        deliveryMethod: 'win32_replacesel',
+        verified: true,
+        tailMatched: true,
+        readBackLength: afterReplace.text.length
+      };
+    }
+  }
+
+  // Fallback path: surrogate-safe WM_CHAR delivery (with \r\n normalized to \r to prevent double linebreaks)
+  b.SendMessageTimeoutIntW(targetHwnd, EM_SETSEL, 0x7fffffff, 0x7fffffff, SMTO_ABORTIFHUNG, 1000, dummyOut);
+  const wmCharSource = safeText.replace(/\r\n/g, '\r');
+  const units = toSurrogateSafeUtf16Units(wmCharSource);
+  for (const unit of units) {
+    const sent = Number(
+      b.SendMessageTimeoutIntW(targetHwnd, WM_CHAR, unit, 1, SMTO_ABORTIFHUNG, 500, dummyOut)
+    );
+    if (!sent) {
+      b.PostMessageW(targetHwnd, WM_CHAR, unit, 1);
+    }
+  }
+
+  const afterChar = readWindowText(targetHwnd);
+  const charTailOk =
+    afterChar.ok &&
+    afterChar.text.length > before.text.length &&
+    matchesTextTail(afterChar.text, safeText);
+
+  return {
+    hwnd,
+    targetHwnd,
+    targetClassName,
+    deliveryMethod: 'win32_wm_char',
+    verified: charTailOk,
+    tailMatched: charTailOk,
+    readBackLength: afterChar.ok ? afterChar.text.length : 0
+  };
 }
 
 export function postScroll(hwnd: number, screenX: number, screenY: number, delta: number): void {

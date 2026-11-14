@@ -498,12 +498,48 @@ export class DesktopHands {
           if (text.length > MAX_TEXT_LEN) {
             throw new Error(`TEXT_TOO_LONG: type_text text exceeds the ${MAX_TEXT_LEN} character limit`);
           }
-          postText(hwnd, text);
+          const postRes = postText(hwnd, text);
+          let verified = postRes.verified && postRes.tailMatched;
+          let tailMatched = postRes.tailMatched;
+          let readBackLength = postRes.readBackLength;
+          let deliveryMethod: string = postRes.deliveryMethod;
+
+          if (!verified) {
+            const uiaVerify = await UiaBridge.verifyOrAppendText({
+              hwnd,
+              elementToken: resolvedToken?.token ?? step.elementToken,
+              automationId: step.automationId,
+              name: step.name,
+              controlType: step.controlType,
+              text
+            });
+            if (uiaVerify.verified && uiaVerify.tailMatched) {
+              verified = true;
+              tailMatched = true;
+              readBackLength = uiaVerify.readBackLength;
+              deliveryMethod = uiaVerify.deliveryMethod;
+            } else if (uiaVerify.readBackLength > readBackLength) {
+              readBackLength = uiaVerify.readBackLength;
+            }
+          }
+
+          if (!verified || !tailMatched) {
+            throw new Error(
+              `BACKGROUND_TYPE_TEXT_UNVERIFIED: Background type_text to hwnd=${hwnd} (targetHwnd=${postRes.targetHwnd}, class=${postRes.targetClassName || 'unknown'}) could not verify text delivery (verified=false, tailMatched=false, readBackLength=${readBackLength})`
+            );
+          }
+
           return {
             op,
             delivery: 'background_msg',
             hwnd,
+            targetHwnd: postRes.targetHwnd,
+            targetClassName: postRes.targetClassName,
+            deliveryMethod,
             length: text.length,
+            verified: true,
+            tailMatched: true,
+            readBackLength,
             ...(resolvedToken ? { elementToken: resolvedToken.token } : {})
           };
         }

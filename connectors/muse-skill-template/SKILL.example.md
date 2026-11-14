@@ -51,7 +51,7 @@ Creates deterministic snapshots of tracked and untracked files and provides 1-cl
 > in settings, in which case the generated `SKILL.md` lists 8 Muse Tools and includes the entry below.
 >
 > ### `desktop_hands` (sensitive_write)
-> Native Windows desktop automation (windows, inspect UIA tree with elementToken and head+tail value preservation, screenshot with multimodal image output [unified full virtual-screen capture in Per-Monitor Aware V2 physical pixels, 1:1 source-space redaction of sensitive windows first, then proportional downsampling to <=3840x2160 with scaleFactor], background-first act, and emergency-stoppable batch). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.
+> Native Windows desktop automation (windows, inspect UIA tree with elementToken and head+tail value preservation, screenshot with multimodal image output [unified full virtual-screen capture in Per-Monitor Aware V2 physical pixels, 1:1 source-space redaction of sensitive windows first, then proportional downsampling to <=3840x2160 with scaleFactor], background-first act [background type_text resolves child Edit/RichEditD2DPT/UIA text surfaces and enforces read-back tail verification returning verified/tailMatched/readBackLength/targetHwnd or failing with BACKGROUND_TYPE_TEXT_UNVERIFIED], and emergency-stoppable batch [aborted batches return outer status SUCCESS with [ABORTED] summary to carry step results while approval receipts record executionStatus ERROR / terminalStatus TERMINATED to prevent false-positive completion]). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.
 
 ## 本机资源库 (Local Resource Library)
 

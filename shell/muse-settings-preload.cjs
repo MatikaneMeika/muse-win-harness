@@ -542,6 +542,7 @@ const MWH_I18N = {
     '目标路径: {0}': 'Target path: {0}',
     '写前影子快照: {0}': 'Pre-write snapshot: {0}',
     '拒绝': 'Reject',
+    '本次会话允许此应用': 'Allow App This Session',
     '本工作区始终允许': 'Always in Workspace',
     '允许一次': 'Allow once',
     '一键回滚快照': 'Roll back snapshot',
@@ -982,6 +983,7 @@ const MWH_I18N = {
     '目标路径: {0}': '対象パス: {0}',
     '写前影子快照: {0}': '書き込み前スナップショット: {0}',
     '拒绝': '拒否',
+    '本次会话允许此应用': 'このセッション中このアプリを許可',
     '本工作区始终允许': '常に許可 (作業域)',
     '允许一次': '1 回だけ許可',
     '一键回滚快照': 'スナップショットを復元',
@@ -1417,6 +1419,7 @@ const MWH_I18N = {
     '目标路径: {0}': '目標路徑: {0}',
     '写前影子快照: {0}': '寫入前影子快照: {0}',
     '拒绝': '拒絕',
+    '本次会话允许此应用': '本次工作階段允許此應用',
     '本工作区始终允许': '本工作區一律允許',
     '允许一次': '允許一次',
     '一键回滚快照': '一鍵還原快照',
@@ -6571,6 +6574,10 @@ function renderApprovalIsland() {
         '</div>';
     } else {
       const waitingTitle = '等待本机执行授权 · ' + (task.sourceAgent || '');
+      const hasDesktopHwnd =
+        (typeof task.targetHwnd === 'number' && task.targetHwnd > 0) ||
+        (String(task.command || '').indexOf('desktop_hands(') === 0 &&
+          /"hwnd"\s*:\s*[1-9]\d*/.test(String(task.command || '')));
       inner =
         '<div class="mwh-island-head">' +
         '<div class="mwh-island-title">' +
@@ -6605,6 +6612,11 @@ function renderApprovalIsland() {
         '<button type="button" class="mwh-btn" data-action="task-reject">' +
         ICON.close +
         '<span>拒绝</span></button>' +
+        (hasDesktopHwnd
+          ? '<button type="button" class="mwh-btn" data-action="task-approve-session">' +
+            ICON.pin +
+            '<span>本次会话允许此应用</span></button>'
+          : '') +
         '<button type="button" class="mwh-btn" data-action="task-approve-workspace">' +
         ICON.pin +
         '<span>本工作区始终允许</span></button>' +
@@ -8041,6 +8053,11 @@ async function handleIslandAction(action, target) {
   }
   if (action === 'task-approve-once') {
     await invokeDaemon('mwh:task-approve', { id: task.id, scope: 'once', root: root });
+    await refreshSettings();
+    return;
+  }
+  if (action === 'task-approve-session') {
+    await invokeDaemon('mwh:task-approve', { id: task.id, scope: 'session', root: root });
     await refreshSettings();
     return;
   }

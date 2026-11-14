@@ -323,6 +323,7 @@ export const zhCN: Record<string, string> = {
   'island.targetPath': '目标路径: {path}',
   'island.snapshotTag': '写前影子快照: {id}',
   'island.denyBtn': '拒绝',
+  'island.allowAppSessionBtn': '本次会话允许此应用',
   'island.alwaysInWorkspaceBtn': '本工作区始终允许',
   'island.allowOnceBtn': '允许一次',
   'island.rollbackBtn': '一键回滚快照 (Rollback)',

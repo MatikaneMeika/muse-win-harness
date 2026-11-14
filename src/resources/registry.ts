@@ -365,5 +365,5 @@ export function loadEntryHeaders(workspaceRoot: string, entry: ResourceEntry): R
 
 /** Deterministic, filesystem-safe id fragment. */
 export function shortIdFragment(value: string): string {
-  return crypto.createHash('sha1').update(value.toLowerCase()).digest('hex').slice(0, 10);
+  return crypto.createHash('sha256').update(value.toLowerCase()).digest('hex').slice(0, 10);
 }

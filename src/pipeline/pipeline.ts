@@ -19,6 +19,7 @@ import { ApprovalEngine, hashClientParams } from './approvalEngine.js';
 import { checkPathAccess, checkSensitiveBlacklist, type PathAccessResult } from './pathGuard.js';
 import { AclSandboxManager } from './aclSandbox.js';
 import { executeMuseTool, MUSE_TOOLS } from '../tools/index.js';
+import { normalizeDesktopHandsParams, isValidDesktopHandsAction } from '../tools/desktopDelivery.js';
 import { getResourcesManager } from '../resources/manager.js';
 
 export const SECURITY_BOUNDARY_STATEMENT =
@@ -153,7 +154,10 @@ export class PipelineKernel {
 
     // Strip pathGuard-resolved fields from client params on a shallow copy:
     // clients must never be able to smuggle pre-resolved paths past the fence.
-    const sanitizedParams: Record<string, any> = { ...request.params };
+    const sanitizedParams: Record<string, any> =
+      request.toolName === 'desktop_hands'
+        ? normalizeDesktopHandsParams(request.params)
+        : { ...request.params };
     delete sanitizedParams._resolvedPath;
     delete sanitizedParams._resolvedDestination;
 
@@ -290,13 +294,21 @@ export class PipelineKernel {
 
     // Read-only desktop_hands perception actions (windows / inspect / screenshot)
     // are non-mutating and permitted in Plan (read-only) mode when enabled.
-    if (
-      toolName === 'desktop_hands' &&
-      (params.action === 'windows' ||
+    if (toolName === 'desktop_hands') {
+      if (!isValidDesktopHandsAction(params.action)) {
+        return {
+          status: 'ERROR',
+          error: `UNKNOWN_DESKTOP_HANDS_ACTION: ${String(params.action)}`,
+          riskLevel: 'low'
+        };
+      }
+      if (
+        params.action === 'windows' ||
         params.action === 'inspect' ||
-        params.action === 'screenshot')
-    ) {
-      return { status: 'SUCCESS', riskLevel: 'low' };
+        params.action === 'screenshot'
+      ) {
+        return { status: 'SUCCESS', riskLevel: 'low' };
+      }
     }
 
     // Guard: exec_command requires a string command (prevents downstream
@@ -507,6 +519,7 @@ export class PipelineKernel {
       // per-tool, not per-command.
       const deferToMuseHitl =
         context.multiDeviceApproval === true &&
+        toolName !== 'desktop_hands' &&
         riskEval.requiresMobileHmac !== true &&
         riskEval.riskLevel !== 'critical';
       if (deferToMuseHitl) {

@@ -430,34 +430,55 @@ export const LiveTaskFloatingIsland: React.FC = () => {
       {/* Foot */}
       {!capsule && (
         <div className="shrink-0 flex flex-wrap items-center justify-end gap-2 px-3 pt-2 pb-3">
-          {liveTask.status === 'WAITING_APPROVAL' && (
-            <>
-              <button
-                type="button"
-                onClick={() => mwhService.rejectLiveTask()}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>{t('island.denyBtn')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => mwhService.approveLiveTaskWorkspaceAlways()}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
-              >
-                <Pin className="w-3.5 h-3.5" />
-                <span>{t('island.alwaysInWorkspaceBtn')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => mwhService.approveLiveTaskOnce()}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{t('island.allowOnceBtn')}</span>
-              </button>
-            </>
-          )}
+          {liveTask.status === 'WAITING_APPROVAL' && (() => {
+            const currentPending = state.pendingApprovals?.find((p) => p.id === liveTask.id);
+            const isCriticalHmac = Boolean(currentPending?.requiresMobileHmac);
+            const hasDesktopHwnd =
+              !isCriticalHmac &&
+              ((typeof liveTask.targetHwnd === 'number' && liveTask.targetHwnd > 0) ||
+                (typeof currentPending?.targetHwnd === 'number' && currentPending.targetHwnd > 0) ||
+                (String(liveTask.command || '').startsWith('desktop_hands(') &&
+                  /"hwnd"\s*:\s*[1-9]\d*/.test(String(liveTask.command || ''))));
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => mwhService.rejectLiveTask()}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium min-w-0 max-w-full flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
+                >
+                  <X className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{t('island.denyBtn')}</span>
+                </button>
+                {hasDesktopHwnd && (
+                  <button
+                    type="button"
+                    data-testid="live-task-approve-session-btn"
+                    onClick={() => mwhService.approveLiveTaskAppSession()}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium min-w-0 max-w-full flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillAccent} ${FOCUS_RING}`}
+                  >
+                    <Pin className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{t('island.allowAppSessionBtn')}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => mwhService.approveLiveTaskWorkspaceAlways()}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium min-w-0 max-w-full flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${pillGhost} ${FOCUS_RING}`}
+                >
+                  <Pin className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{t('island.alwaysInWorkspaceBtn')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mwhService.approveLiveTaskOnce()}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold min-w-0 max-w-full bg-[#6366F1] bg-[linear-gradient(135deg,#8B5CF6_0%,#6366F1_50%,#3B82F6_100%)] hover:bg-[linear-gradient(135deg,#7C3AED_0%,#4F46E5_50%,#2563EB_100%)] text-white flex items-center gap-1.5 transition-colors duration-120 cursor-pointer whitespace-nowrap ${FOCUS_RING}`}
+                >
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{t('island.allowOnceBtn')}</span>
+                </button>
+              </>
+            );
+          })()}
 
           {liveTask.status === 'COMPLETED' && canRollback && (
             <button

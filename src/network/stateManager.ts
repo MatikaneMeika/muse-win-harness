@@ -20,6 +20,7 @@ import { PipelineKernel } from '../pipeline/pipeline.js';
 import { validateOutboundHostSync } from '../security/outboundGuard.js';
 import { SubagentDispatcher } from '../subagents/dispatcher.js';
 import { getExposedMuseTools, type ToolDefinition } from '../tools/definitions.js';
+import { classifyDesktopCall, normalizeDesktopHandsParams } from '../tools/desktopDelivery.js';
 import { getResourcesManager } from '../resources/manager.js';
 import { UiaBridge } from '../desktop/uiaBridge.js';
 import { WinGuard } from '../desktop/winGuard.js';
@@ -103,6 +104,8 @@ export interface LiveTaskState {
   id: string;
   status: TaskStatus;
   sourceAgent: 'Muse Cloud MCP' | string;
+  toolName?: string;
+  targetHwnd?: number;
   worktreeId?: string;
   command: string;
   targetPath: string;
@@ -140,6 +143,7 @@ export interface WorktreeInstance {
 export interface PendingApprovalItem {
   id: string;
   toolName: string;
+  targetHwnd?: number;
   riskLevel: RiskLevel;
   summary: string;
   command: string;
@@ -333,6 +337,7 @@ export class MwhControlPlane {
   private pendingTask: PendingUiTask | null = null;
   private pendingTasks: Map<string, PipelineRequest> = new Map();
   private boundJobId: string | null = null;
+  private activeDesktopTaskId: string | null = null;
   private armJobCapture = false;
   private autoDowngradeTwoHours = true;
   private autoDowngradeDeadlineMs: number | null = null;
@@ -646,17 +651,28 @@ export class MwhControlPlane {
       .getApprovalEngine()
       .listPendingApprovals()
       .filter((r) => Date.now() <= r.expiresAt)
-      .map((r) => ({
-        id: r.id,
-        toolName: r.toolName,
-        riskLevel: r.riskLevel,
-        summary: this.scrubSecretText(r.summary || ''),
-        command: this.scrubSecretText(commandPreview(r.toolName, r.params || {})),
-        targetPath: String(r.params?.path || r.params?.cwd || ctx.workspaceRoot),
-        requiresMobileHmac: Boolean(r.requiresMobileHmac),
-        createdAt: r.createdAt,
-        expiresAt: r.expiresAt
-      }));
+      .map((r) => {
+        const targetHwnd =
+          r.toolName === 'desktop_hands' && typeof r.params?.hwnd === 'number' && r.params.hwnd > 0
+            ? Math.trunc(r.params.hwnd)
+            : undefined;
+        return {
+          id: r.id,
+          toolName: r.toolName,
+          ...(targetHwnd ? { targetHwnd } : {}),
+          riskLevel: r.riskLevel,
+          summary: this.scrubSecretText(r.summary || ''),
+          command: this.scrubSecretText(commandPreview(r.toolName, r.params || {})),
+          targetPath: String(
+            r.params?.path ||
+              r.params?.cwd ||
+              (targetHwnd ? `hwnd:${targetHwnd}` : ctx.workspaceRoot)
+          ),
+          requiresMobileHmac: Boolean(r.requiresMobileHmac),
+          createdAt: r.createdAt,
+          expiresAt: r.expiresAt
+        };
+      });
   }
 
   private promoteNextPendingTask(): boolean {
@@ -671,18 +687,27 @@ export class MwhControlPlane {
       id: `reexec_${next.id}`,
       toolName: next.toolName,
       category: next.category,
-      params: next.params
+      params: structuredClone(next.params || {})
     };
     this.pendingTask = { approvalId: next.id, request: req };
+    const targetHwnd =
+      next.toolName === 'desktop_hands' && typeof next.params?.hwnd === 'number' && next.params.hwnd > 0
+        ? Math.trunc(next.params.hwnd)
+        : undefined;
     this.liveTask = this.sanitizeLiveTaskFrame({
       id: next.id,
       status: 'WAITING_APPROVAL',
+      toolName: next.toolName,
+      ...(targetHwnd ? { targetHwnd } : {}),
       sourceAgent:
         next.toolName === 'subagent_dispatch'
           ? subagentDisplayLabel(next.params || {})
           : 'Muse Cloud MCP',
       command: commandPreview(next.toolName, next.params || {}),
-      targetPath: next.params?.path || next.params?.cwd || ctx.workspaceRoot,
+      targetPath:
+        next.params?.path ||
+        next.params?.cwd ||
+        (targetHwnd ? `hwnd:${targetHwnd}` : ctx.workspaceRoot),
       summary: next.summary || '',
       riskScore: riskScoreOf(next.riskLevel),
       stepLabel: '等待本地执行确认...',
@@ -695,6 +720,112 @@ export class MwhControlPlane {
       startedAt: nowClock()
     });
     return true;
+  }
+
+  private formatExecutionReceiptSummary(
+    toolName: string,
+    params: Record<string, any> | undefined,
+    execRes: PipelineResponse,
+    jobId?: string
+  ): string {
+    const p = params || {};
+    const targetBaseName =
+      typeof p.path === 'string' && p.path ? path.basename(p.path) : '';
+    const head =
+      toolName === 'fs_mutate'
+        ? `fs_mutate(${p.action || 'write'})${targetBaseName ? ` on '${targetBaseName}'` : ''} -> ${execRes.status}`
+        : `${toolName} -> ${execRes.status}${jobId ? ` (jobId=${jobId})` : ''}`;
+    if (execRes.status === 'ERROR' || execRes.status === 'DENIED') {
+      const detail = execRes.error || execRes.reason || (typeof execRes.data?.error === 'string' ? execRes.data.error : '');
+      return detail ? `${head}: ${detail}` : head;
+    }
+    if (toolName === 'desktop_hands' && execRes.data && typeof execRes.data === 'object') {
+      try {
+        const clone = { ...execRes.data };
+        delete (clone as any).__mcpImage;
+        return `${head} ${JSON.stringify(clone)}`;
+      } catch {
+        return head;
+      }
+    }
+    return head;
+  }
+
+  private startDesktopRunningLiveTask(
+    request: PipelineRequest,
+    riskLevel: RiskLevel | undefined,
+    summary?: string
+  ): string {
+    const ctx = this.kernel.getContext();
+    const norm = normalizeDesktopHandsParams(request.params);
+    const dhTaskId = `dh_${Date.now()}_${crypto.randomUUID().slice(0, 8).replace(/-/g, '')}`;
+    const targetHwnd =
+      typeof norm.hwnd === 'number' && norm.hwnd > 0 ? Math.trunc(norm.hwnd) : undefined;
+    const totalSteps =
+      norm.action === 'batch' && Array.isArray(norm.steps) && norm.steps.length > 0
+        ? norm.steps.length
+        : 1;
+    this.activeDesktopTaskId = dhTaskId;
+    this.liveTask = this.sanitizeLiveTaskFrame({
+      ...this.liveTask,
+      id: dhTaskId,
+      status: 'RUNNING',
+      toolName: 'desktop_hands',
+      ...(targetHwnd ? { targetHwnd } : {}),
+      sourceAgent: 'Muse Cloud MCP',
+      command: commandPreview('desktop_hands', norm),
+      targetPath: targetHwnd ? `hwnd:${targetHwnd}` : ctx.workspaceRoot,
+      summary: summary || `Desktop ${norm.action || 'act'}${norm.op ? `:${norm.op}` : ''}`,
+      riskScore: riskScoreOf(riskLevel || 'medium'),
+      stepLabel:
+        norm.action === 'batch'
+          ? `桌面批处理执行中 (${totalSteps} 步)...`
+          : `桌面操控执行中 (${norm.op || norm.action || 'act'})...`,
+      stepIndex: 1,
+      totalSteps,
+      stdoutLines: [],
+      startedAt: nowClock()
+    });
+    this.broadcastSse({ liveTask: this.sanitizeLiveTaskFrame(this.liveTask) });
+    return dhTaskId;
+  }
+
+  private finishDesktopRunningLiveTask(
+    dhTaskId: string,
+    execRes: PipelineResponse
+  ): void {
+    if (this.activeDesktopTaskId === dhTaskId) {
+      this.activeDesktopTaskId = null;
+    }
+    if (this.liveTask.id !== dhTaskId) {
+      return;
+    }
+    const aborted =
+      execRes.data?.status === 'ABORTED' ||
+      String(execRes.error || '').includes('EMERGENCY_STOP_ABORTED');
+    if (aborted) {
+      this.liveTask = this.sanitizeLiveTaskFrame({
+        ...this.liveTask,
+        status: 'IDLE',
+        stepLabel: '已强杀'
+      });
+    } else if (execRes.status === 'SUCCESS' && execRes.data?.status !== 'PARTIAL_FAILURE') {
+      this.liveTask = this.sanitizeLiveTaskFrame({
+        ...this.liveTask,
+        status: 'COMPLETED',
+        stepLabel: '桌面操作执行完成',
+        stepIndex: this.liveTask.totalSteps || 1,
+        modifiedFilesCount: 0,
+        testResultSummary: '未检测到文件改动'
+      });
+    } else {
+      this.liveTask = this.sanitizeLiveTaskFrame({
+        ...this.liveTask,
+        status: 'IDLE',
+        stepLabel: '执行失败'
+      });
+    }
+    this.broadcastSse({ liveTask: this.sanitizeLiveTaskFrame(this.liveTask) });
   }
 
   public async resolveFromMobileLink(
@@ -717,15 +848,22 @@ export class MwhControlPlane {
       throw new Error(`APPROVAL_NOT_FOUND: No pending approval for ${id}`);
     }
 
-    const pendingReq: PipelineRequest = this.pendingTasks.get(id) ||
+    const rawPending: PipelineRequest = this.pendingTasks.get(id) ||
       (this.pendingTask?.approvalId === id
         ? this.pendingTask.request
         : {
             id: `reexec_${id}`,
             toolName: record.toolName,
             category: record.category,
-            params: record.params
+            params: structuredClone(record.params || {})
           });
+    const pendingReq: PipelineRequest = {
+      ...rawPending,
+      params:
+        rawPending.toolName === 'desktop_hands'
+          ? normalizeDesktopHandsParams(rawPending.params || record.params)
+          : structuredClone(rawPending.params || record.params || {})
+    };
 
     const resolved = engine.resolveApproval(id, action, sig, 'once', ctx, 'mobile_link');
     this.pendingTasks.delete(id);
@@ -783,18 +921,23 @@ export class MwhControlPlane {
       this.armJobCapture = true;
       this.boundJobId = null;
     }
+    let dhTaskId = '';
+    if (pendingReq.toolName === 'desktop_hands' && !classifyDesktopCall(pendingReq.params).isPerception) {
+      dhTaskId = this.startDesktopRunningLiveTask(pendingReq, record.riskLevel, record.summary);
+    }
     const execRes = await this.kernel.handleRequest({ ...pendingReq, approvalId: id });
+    if (dhTaskId) {
+      this.finishDesktopRunningLiveTask(dhTaskId, execRes);
+    }
     if (execRes.data && typeof execRes.data.jobId === 'string') {
       record.jobId = execRes.data.jobId;
     }
-    const targetBaseName =
-      typeof record.params?.path === 'string' && record.params.path
-        ? path.basename(record.params.path)
-        : '';
-    const receiptSummary =
-      record.toolName === 'fs_mutate'
-        ? `fs_mutate(${record.params?.action || 'write'})${targetBaseName ? ` on '${targetBaseName}'` : ''} -> ${execRes.status}`
-        : `${record.toolName} -> ${execRes.status}${record.jobId ? ` (jobId=${record.jobId})` : ''}`;
+    const receiptSummary = this.formatExecutionReceiptSummary(
+      record.toolName,
+      pendingReq.params,
+      execRes,
+      record.jobId
+    );
     const executionStatus =
       execRes.status === 'SUCCESS'
         ? 'SUCCESS'
@@ -1132,7 +1275,7 @@ export class MwhControlPlane {
         return true;
       }
       if (pathname === '/api/v1/workspaces/remove' && method === 'POST') {
-        await this.postWorkspaceRemove(res, await this.readJson(req));
+        await this.postWorkspaceRemove(res, await this.readJson(req), this.resolveRequestActor(req));
         return true;
       }
       if (pathname === '/api/v1/worktrees/spawn' && method === 'POST') {
@@ -1391,16 +1534,20 @@ export class MwhControlPlane {
     params: Record<string, any>
   ): Promise<PipelineResponse> {
     const ctx = this.kernel.getContext();
+    const normalizedParams =
+      toolName === 'desktop_hands'
+        ? normalizeDesktopHandsParams(params)
+        : (params || {});
     const request: PipelineRequest = {
       id: `ui_${toolName}_${Date.now()}`,
       toolName,
       category,
-      params: params as Record<string, any>
+      params: normalizedParams as Record<string, any>
     };
     const riskEval = this.kernel.getApprovalEngine().evaluateRisk(
       toolName,
       category,
-      params || {},
+      normalizedParams,
       ctx
     );
     const isReadOnlyShortCircuit = category === 'read' || riskEval.riskLevel === 'low';
@@ -1425,7 +1572,27 @@ export class MwhControlPlane {
         };
       }
     }
+
+    let dhTaskId = '';
+    if (toolName === 'desktop_hands' && !classifyDesktopCall(normalizedParams).isPerception) {
+      const actionKey = this.kernel.getApprovalEngine().getActionKey(toolName, normalizedParams);
+      const willRunImmediately = this.kernel.getApprovalEngine().isActionPreApproved(
+        toolName,
+        actionKey,
+        riskEval.riskLevel,
+        ctx.approvalPolicy,
+        ctx,
+        normalizedParams
+      );
+      if (willRunImmediately) {
+        dhTaskId = this.startDesktopRunningLiveTask(request, riskEval.riskLevel, riskEval.summary);
+      }
+    }
+
     const res = await this.kernel.handleRequest(request);
+    if (dhTaskId) {
+      this.finishDesktopRunningLiveTask(dhTaskId, res);
+    }
     this.absorbPipelineResult(request, res);
     return res;
   }
@@ -1434,18 +1601,34 @@ export class MwhControlPlane {
     const ctx = this.kernel.getContext();
     if (res.status === 'CONFIRMATION_REQUIRED' && res.approvalId) {
       this.armJobCapture = false;
-      this.pendingTask = { approvalId: res.approvalId, request };
-      this.pendingTasks.set(res.approvalId, request);
-      const params = request.params || {};
+      const storedReq: PipelineRequest = {
+        ...request,
+        params:
+          request.toolName === 'desktop_hands'
+            ? normalizeDesktopHandsParams(request.params)
+            : structuredClone(request.params || {})
+      };
+      this.pendingTask = { approvalId: res.approvalId, request: storedReq };
+      this.pendingTasks.set(res.approvalId, storedReq);
+      const params = storedReq.params || {};
+      const targetHwnd =
+        storedReq.toolName === 'desktop_hands' && typeof params.hwnd === 'number' && params.hwnd > 0
+          ? Math.trunc(params.hwnd)
+          : undefined;
       this.liveTask = this.sanitizeLiveTaskFrame({
         id: res.approvalId,
         status: 'WAITING_APPROVAL',
+        toolName: storedReq.toolName,
+        ...(targetHwnd ? { targetHwnd } : {}),
         sourceAgent:
-          request.toolName === 'subagent_dispatch'
+          storedReq.toolName === 'subagent_dispatch'
             ? subagentDisplayLabel(params)
             : 'Muse Cloud MCP',
-        command: commandPreview(request.toolName, params),
-        targetPath: params.path || params.cwd || ctx.workspaceRoot,
+        command: commandPreview(storedReq.toolName, params),
+        targetPath:
+          params.path ||
+          params.cwd ||
+          (targetHwnd ? `hwnd:${targetHwnd}` : ctx.workspaceRoot),
         summary: res.summary || '',
         riskScore: riskScoreOf(res.riskLevel),
         stepLabel: '等待本地执行确认...',
@@ -2179,7 +2362,7 @@ export class MwhControlPlane {
       this.send(res, 400, { error: 'APPROVAL_EXPIRED', approvalId: id });
       return;
     }
-    const pendingReq: PipelineRequest =
+    const rawPendingReq: PipelineRequest =
       this.pendingTasks.get(id) ||
       (this.pendingTask?.approvalId === id
         ? this.pendingTask.request
@@ -2187,9 +2370,21 @@ export class MwhControlPlane {
             id: `reexec_${id}`,
             toolName: record.toolName,
             category: record.category,
-            params: record.params
+            params: structuredClone(record.params || {})
           });
-    if (hashClientParams(pendingReq.params) !== record.paramsHash) {
+    const pendingReq: PipelineRequest = {
+      ...rawPendingReq,
+      params:
+        rawPendingReq.toolName === 'desktop_hands'
+          ? normalizeDesktopHandsParams(rawPendingReq.params || record.params)
+          : structuredClone(rawPendingReq.params || record.params || {})
+    };
+    if (
+      !pendingReq.params ||
+      typeof pendingReq.params !== 'object' ||
+      Array.isArray(pendingReq.params) ||
+      hashClientParams(pendingReq.params) !== record.paramsHash
+    ) {
       this.send(res, 400, { error: 'PARAMS_HASH_MISMATCH', approvalId: id });
       return;
     }
@@ -2248,7 +2443,12 @@ export class MwhControlPlane {
         return;
       }
     }
-    const scope = body?.scope === 'workspace' ? 'workspace' : 'once';
+    const scope =
+      body?.scope === 'workspace'
+        ? 'workspace'
+        : body?.scope === 'session' || body?.scope === 'app_session'
+          ? 'session'
+          : 'once';
     const forceOnce = record.riskLevel === 'critical' || record.requiresMobileHmac === true;
     const granularity = forceOnce ? 'once' : scope;
     try {
@@ -2278,18 +2478,23 @@ export class MwhControlPlane {
       this.armJobCapture = true;
       this.boundJobId = null;
     }
+    let dhTaskId = '';
+    if (pendingReq.toolName === 'desktop_hands' && !classifyDesktopCall(pendingReq.params).isPerception) {
+      dhTaskId = this.startDesktopRunningLiveTask(pendingReq, record.riskLevel, record.summary);
+    }
     const execRes = await this.kernel.handleRequest({ ...pendingReq, approvalId: id });
+    if (dhTaskId) {
+      this.finishDesktopRunningLiveTask(dhTaskId, execRes);
+    }
     if (execRes.data && typeof execRes.data.jobId === 'string') {
       record.jobId = execRes.data.jobId;
     }
-    const targetBaseName =
-      typeof record.params?.path === 'string' && record.params.path
-        ? path.basename(record.params.path)
-        : '';
-    const receiptSummary =
-      record.toolName === 'fs_mutate'
-        ? `fs_mutate(${record.params?.action || 'write'})${targetBaseName ? ` on '${targetBaseName}'` : ''} -> ${execRes.status}`
-        : `${record.toolName} -> ${execRes.status}${record.jobId ? ` (jobId=${record.jobId})` : ''}`;
+    const receiptSummary = this.formatExecutionReceiptSummary(
+      record.toolName,
+      pendingReq.params,
+      execRes,
+      record.jobId
+    );
     engine.recordExecutionReceipt(id, {
       executionStatus:
         execRes.status === 'SUCCESS'
@@ -2410,6 +2615,35 @@ export class MwhControlPlane {
     id: string,
     actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
   ): Promise<void> {
+    if (
+      typeof id === 'string' &&
+      id.startsWith('dh_') &&
+      this.activeDesktopTaskId === id
+    ) {
+      this.activeDesktopTaskId = null;
+      SubagentDispatcher.triggerEmergencyStop();
+      try {
+        UiaBridge.dispose();
+      } catch {
+        // Best-effort
+      }
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor,
+        toolName: 'desktop_hands',
+        commandOrPath: id,
+        reason: 'USER_KILL_VIA_UI',
+        status: 'DENIED'
+      });
+      this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已强杀' });
+      this.broadcastSse({
+        liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+        auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50)
+      });
+      this.send(res, 200, { ok: true, jobId: id, status: 'TERMINATED' });
+      return;
+    }
+
     // 严格匹配：路径中的 jobId 必须匹配 JobManager 的 JOB_ID_REGEX（单一来源，不复制手写）
     // 且真实存在于活跃作业表；禁止回退杀 boundJobId 或「第一个活跃作业」，避免误杀兜底。
     const active = JobManager.getInstance().getActiveJobs();
@@ -2460,12 +2694,13 @@ export class MwhControlPlane {
     } catch {
       // Best-effort: Job Object kill-on-close still applies at process exit.
     }
-    this.kernel.getApprovalEngine().clearSessionApprovals();
+    this.kernel.getApprovalEngine().clearSessionApprovals(this.kernel.getContext());
     const rejectedApprovalIds = this.kernel
       .getApprovalEngine()
       .rejectAllPending('EMERGENCY_KILL');
     this.pendingTask = null;
     this.pendingTasks.clear();
+    this.activeDesktopTaskId = null;
     this.worktrees = this.worktrees.map((wt) =>
       wt.status === 'RUNNING' ? { ...wt, status: 'STOPPED' } : wt
     );
@@ -2531,14 +2766,35 @@ export class MwhControlPlane {
     this.send(res, 200, { ok: true, path: resolvedPath, workspaceRoots: this.workspaceRoots });
   }
 
-  private async postWorkspaceRemove(res: http.ServerResponse, body: any): Promise<void> {
-    const raw = typeof body?.path === 'string' ? body.path : '';
-    if (!raw) {
+  private async postWorkspaceRemove(
+    res: http.ServerResponse,
+    body: any,
+    actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
+  ): Promise<void> {
+    const raw = typeof body?.path === 'string' ? body.path.trim() : '';
+    if (!raw || raw.includes('\0')) {
       this.send(res, 400, { error: 'WORKSPACE_PATH_REQUIRED' });
       return;
     }
-    const needle = raw.toLowerCase();
-    this.workspaceRoots = this.workspaceRoots.filter((p) => p.toLowerCase() !== needle && path.resolve(p).toLowerCase() !== path.resolve(raw || '.').toLowerCase());
+    // Fail-closed: only CURRENTLY REGISTERED workspace roots may be removed.
+    // The request path is normalized lexically and compared against the
+    // registry — no fs operation is ever performed on unregistered input,
+    // which closes the path-traversal probe/mutation surface.
+    const resolvedInput = path.resolve(raw).toLowerCase();
+    const idx = this.workspaceRoots.findIndex((p) => path.resolve(p).toLowerCase() === resolvedInput);
+    if (idx < 0) {
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor,
+        toolName: 'workspace_remove',
+        commandOrPath: raw,
+        reason: 'UNKNOWN_WORKSPACE: path is not a registered workspace root',
+        status: 'DENIED'
+      });
+      this.send(res, 400, { error: 'UNKNOWN_WORKSPACE' });
+      return;
+    }
+    this.workspaceRoots.splice(idx, 1);
     this.kernel.updateContext({ workspaceRoots: [...this.workspaceRoots] });
     this.broadcastSse({ workspaceRoots: this.workspaceRoots });
     this.send(res, 200, { ok: true, workspaceRoots: this.workspaceRoots });
@@ -2818,7 +3074,20 @@ export class MwhControlPlane {
     try {
       GitCheckpointManager.rollback(id, ctx.workspaceRoot);
     } catch (err: any) {
-      this.send(res, 400, { error: 'ROLLBACK_FAILED', message: err?.message || String(err) });
+      const message = err?.message || String(err);
+      if (message.startsWith('INVALID_SNAPSHOT_ID')) {
+        this.appendAudit({
+          decision: 'BLOCK',
+          actor,
+          toolName: 'git_checkpoint',
+          commandOrPath: id,
+          reason: `INVALID_SNAPSHOT_ID: rollback refused for '${id}'`,
+          status: 'DENIED'
+        });
+        this.send(res, 400, { error: 'INVALID_SNAPSHOT_ID', message });
+        return;
+      }
+      this.send(res, 400, { error: 'ROLLBACK_FAILED', message });
       return;
     }
     this.appendAudit({
@@ -2850,15 +3119,57 @@ export class MwhControlPlane {
     const rootsToScan = Array.from(
       new Set([ctx.workspaceRoot, ...this.workspaceRoots].filter(Boolean))
     );
+    // Fail-closed batch validation: every id must exist in the snapshot index
+    // of at least one candidate root BEFORE any deletion. Any unknown id
+    // rejects the whole order (no partial fs mutation).
+    const knownIds = new Set<string>();
+    for (const root of rootsToScan) {
+      for (const meta of GitCheckpointManager.listCheckpoints(root)) {
+        knownIds.add(meta.id);
+      }
+    }
+    const invalidIds = ids.filter((id: string) => !knownIds.has(id));
+    if (invalidIds.length > 0) {
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor,
+        toolName: 'git_checkpoint',
+        commandOrPath: ids.join(','),
+        reason: `INVALID_SNAPSHOT_ID: unknown snapshot id(s) ${invalidIds.join(',')} — whole delete batch refused`,
+        status: 'DENIED'
+      });
+      this.send(res, 400, { error: 'INVALID_SNAPSHOT_ID', invalidIds });
+      return;
+    }
     const deletedSet = new Set<string>();
     try {
       for (const root of rootsToScan) {
-        for (const delId of GitCheckpointManager.deleteCheckpoints(ids, root)) {
+        // Partition per root so the manager-level per-root index check passes
+        // for ids that legitimately live in different registered roots.
+        const rootIndex = new Set(
+          GitCheckpointManager.listCheckpoints(root).map((meta) => meta.id)
+        );
+        const idsInRoot = ids.filter((id: string) => rootIndex.has(id));
+        if (idsInRoot.length === 0) continue;
+        for (const delId of GitCheckpointManager.deleteCheckpoints(idsInRoot, root)) {
           deletedSet.add(delId);
         }
       }
     } catch (err: any) {
-      this.send(res, 400, { error: 'SNAPSHOT_DELETE_FAILED', message: err?.message || String(err) });
+      const message = err?.message || String(err);
+      if (message.startsWith('INVALID_SNAPSHOT_ID')) {
+        this.appendAudit({
+          decision: 'BLOCK',
+          actor,
+          toolName: 'git_checkpoint',
+          commandOrPath: ids.join(','),
+          reason: `INVALID_SNAPSHOT_ID: ${message}`,
+          status: 'DENIED'
+        });
+        this.send(res, 400, { error: 'INVALID_SNAPSHOT_ID', message });
+        return;
+      }
+      this.send(res, 400, { error: 'SNAPSHOT_DELETE_FAILED', message });
       return;
     }
     const deletedIds = Array.from(deletedSet);
@@ -2880,7 +3191,25 @@ export class MwhControlPlane {
     body: any,
     actor: 'ui_island' | 'mcp' | 'connector' = 'ui_island'
   ): Promise<void> {
-    const keepRecent = typeof body?.keepRecent === 'number' ? body.keepRecent : 5;
+    // Fail-closed parameter validation: keepRecent must be a bounded integer.
+    // Unspecified keeps the historical default (5); any other non-conforming
+    // value (non-integer / < 1 / > 100) rejects the request. The [1, 100]
+    // bound mirrors the manager-layer clamp in GitCheckpointManager.pruneCheckpoints
+    // so an out-of-range request fails loudly at the API boundary instead of
+    // being silently clamped to 100 down below.
+    const keepRecent = body?.keepRecent === undefined ? 5 : body.keepRecent;
+    if (!Number.isInteger(keepRecent) || keepRecent < 1 || keepRecent > 100) {
+      this.appendAudit({
+        decision: 'BLOCK',
+        actor,
+        toolName: 'git_checkpoint',
+        commandOrPath: `keepRecent=${String(body?.keepRecent)}`,
+        reason: `INVALID_KEEP_RECENT: ${String(body?.keepRecent)} is not an integer in [1, 100]`,
+        status: 'DENIED'
+      });
+      this.send(res, 400, { error: 'INVALID_KEEP_RECENT', keepRecent: body?.keepRecent });
+      return;
+    }
     const ctx = this.kernel.getContext();
     const rootsToScan = Array.from(
       new Set([ctx.workspaceRoot, ...this.workspaceRoots].filter(Boolean))
@@ -2893,7 +3222,20 @@ export class MwhControlPlane {
         }
       }
     } catch (err: any) {
-      this.send(res, 400, { error: 'SNAPSHOT_PRUNE_FAILED', message: err?.message || String(err) });
+      const message = err?.message || String(err);
+      if (message.startsWith('INVALID_SNAPSHOT_ID')) {
+        this.appendAudit({
+          decision: 'BLOCK',
+          actor,
+          toolName: 'git_checkpoint',
+          commandOrPath: `keepRecent=${keepRecent}`,
+          reason: `INVALID_SNAPSHOT_ID: ${message}`,
+          status: 'DENIED'
+        });
+        this.send(res, 400, { error: 'INVALID_SNAPSHOT_ID', message });
+        return;
+      }
+      this.send(res, 400, { error: 'SNAPSHOT_PRUNE_FAILED', message });
       return;
     }
     const deletedIds = Array.from(deletedSet);

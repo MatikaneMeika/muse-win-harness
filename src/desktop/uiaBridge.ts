@@ -5,11 +5,13 @@
  * - Assigned to MWH's Win32JobObject so it terminates cleanly on exit or emergency kill.
  */
 
+import crypto from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
 import { Win32JobObject } from '../pipeline/win32Job.js';
 
 export interface UiaNode {
+  elementToken: string;
   name: string;
   automationId: string;
   controlType: string;
@@ -19,6 +21,17 @@ export interface UiaNode {
   isOffscreen: boolean;
   value?: string;
   children?: UiaNode[];
+}
+
+export interface UiaElementTokenEntry {
+  token: string;
+  hwnd: number;
+  name: string;
+  automationId: string;
+  controlType: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  patterns: string[];
+  createdAt: number;
 }
 
 interface PendingReq {
@@ -204,6 +217,104 @@ export class UiaBridge {
   private static job: Win32JobObject | null = null;
   private static pending = new Map<string, PendingReq>();
   private static seq = 0;
+  private static tokenRegistry = new Map<string, UiaElementTokenEntry>();
+  private static readonly MAX_TOKENS = 2000;
+  private static readonly TOKEN_TTL_MS = 30 * 60 * 1000;
+
+  public static registerElementToken(entry: Omit<UiaElementTokenEntry, 'token' | 'createdAt'> & { seqIndex: number }): string {
+    const rawKey = `${entry.hwnd}:${entry.seqIndex}:${entry.controlType}:${entry.automationId}:${entry.name}:${entry.bounds.x},${entry.bounds.y},${entry.bounds.width},${entry.bounds.height}`;
+    const digest = crypto.createHash('sha256').update(rawKey).digest('hex').slice(0, 8);
+    const token = `el_${entry.hwnd}_${entry.seqIndex}_${digest}`;
+    if (this.tokenRegistry.size >= this.MAX_TOKENS) {
+      const oldestKey = this.tokenRegistry.keys().next().value;
+      if (oldestKey) this.tokenRegistry.delete(oldestKey);
+    }
+    this.tokenRegistry.set(token, {
+      token,
+      hwnd: entry.hwnd,
+      name: entry.name,
+      automationId: entry.automationId,
+      controlType: entry.controlType,
+      bounds: { ...entry.bounds },
+      patterns: [...(entry.patterns || [])],
+      createdAt: Date.now()
+    });
+    return token;
+  }
+
+  public static resolveElementToken(token: string, expectedHwnd?: number): UiaElementTokenEntry {
+    const trimmed = typeof token === 'string' ? token.trim() : '';
+    if (!trimmed) {
+      throw new Error('STALE_ELEMENT_TOKEN: elementToken must be a non-empty string');
+    }
+    const entry = this.tokenRegistry.get(trimmed);
+    if (!entry) {
+      throw new Error(
+        `STALE_ELEMENT_TOKEN: Element token '${trimmed}' is unknown or expired; call inspect to obtain a fresh elementToken`
+      );
+    }
+    if (Date.now() - entry.createdAt > this.TOKEN_TTL_MS) {
+      this.tokenRegistry.delete(trimmed);
+      throw new Error(
+        `STALE_ELEMENT_TOKEN: Element token '${trimmed}' has expired; call inspect to refresh`
+      );
+    }
+    if (typeof expectedHwnd === 'number' && expectedHwnd > 0 && Math.trunc(expectedHwnd) !== entry.hwnd) {
+      throw new Error(
+        `STALE_ELEMENT_TOKEN: Element token '${trimmed}' belongs to hwnd=${entry.hwnd}, not hwnd=${Math.trunc(expectedHwnd)}`
+      );
+    }
+    return entry;
+  }
+
+  public static clearElementTokens(): void {
+    this.tokenRegistry.clear();
+  }
+
+  private static annotateTreeWithTokens(hwnd: number, rootNode: any): UiaNode {
+    let seqIndex = 0;
+    const visit = (node: any): UiaNode => {
+      seqIndex += 1;
+      const name = typeof node?.name === 'string' ? node.name : '';
+      const automationId = typeof node?.automationId === 'string' ? node.automationId : '';
+      const controlType = typeof node?.controlType === 'string' ? node.controlType : '';
+      const rawBounds = node?.bounds && typeof node.bounds === 'object' ? node.bounds : {};
+      const bounds = {
+        x: Number.isFinite(Number(rawBounds.x)) ? Math.trunc(Number(rawBounds.x)) : 0,
+        y: Number.isFinite(Number(rawBounds.y)) ? Math.trunc(Number(rawBounds.y)) : 0,
+        width: Number.isFinite(Number(rawBounds.width)) ? Math.trunc(Number(rawBounds.width)) : 0,
+        height: Number.isFinite(Number(rawBounds.height)) ? Math.trunc(Number(rawBounds.height)) : 0
+      };
+      const patterns = Array.isArray(node?.patterns) ? node.patterns.map(String) : [];
+      const elementToken = this.registerElementToken({
+        hwnd,
+        seqIndex,
+        name,
+        automationId,
+        controlType,
+        bounds,
+        patterns
+      });
+      const decorated: UiaNode = {
+        elementToken,
+        name,
+        automationId,
+        controlType,
+        bounds,
+        patterns,
+        isEnabled: Boolean(node?.isEnabled),
+        isOffscreen: Boolean(node?.isOffscreen)
+      };
+      if (typeof node?.value === 'string') {
+        decorated.value = node.value;
+      }
+      if (Array.isArray(node?.children) && node.children.length > 0) {
+        decorated.children = node.children.map((ch: any) => visit(ch));
+      }
+      return decorated;
+    };
+    return visit(rootNode || {});
+  }
 
   private static ensureStarted(): ChildProcessWithoutNullStreams {
     if (process.platform !== 'win32') {
@@ -276,6 +387,7 @@ export class UiaBridge {
   }
 
   public static dispose(): void {
+    this.tokenRegistry.clear();
     if (this.child) {
       try {
         this.child.kill();
@@ -319,30 +431,63 @@ export class UiaBridge {
   }): Promise<{ nodeCount: number; tree: UiaNode }> {
     const maxDepth = Math.max(1, Math.min(8, Math.trunc(params.maxDepth ?? 4)));
     const maxNodes = Math.max(10, Math.min(300, Math.trunc(params.maxNodes ?? 120)));
-    return this.request({
+    const raw = await this.request({
       cmd: 'inspect',
       hwnd: params.hwnd,
       maxDepth,
       maxNodes
     });
+    const tree = this.annotateTreeWithTokens(Math.trunc(params.hwnd), raw?.tree);
+    return {
+      nodeCount: Number(raw?.nodeCount) || 1,
+      tree
+    };
   }
 
   public static async act(params: {
     hwnd: number;
+    elementToken?: string;
     automationId?: string;
     name?: string;
     controlType?: string;
     op: 'invoke' | 'set_value' | 'toggle' | 'select' | 'focus';
     value?: string;
   }): Promise<any> {
-    return this.request({
-      cmd: 'act',
-      hwnd: params.hwnd,
-      automationId: params.automationId || '',
-      name: params.name || '',
-      controlType: params.controlType || '',
-      op: params.op,
-      value: params.value ?? ''
-    });
+    let automationId = params.automationId || '';
+    let name = params.name || '';
+    let controlType = params.controlType || '';
+    let targetHwnd = params.hwnd;
+    let resolvedToken: UiaElementTokenEntry | undefined;
+    if (params.elementToken) {
+      resolvedToken = this.resolveElementToken(params.elementToken, params.hwnd);
+      targetHwnd = resolvedToken.hwnd;
+      if (!automationId && resolvedToken.automationId) automationId = resolvedToken.automationId;
+      if (!name && resolvedToken.name) name = resolvedToken.name;
+      if (!controlType && resolvedToken.controlType) controlType = resolvedToken.controlType;
+    }
+    try {
+      const res = await this.request({
+        cmd: 'act',
+        hwnd: targetHwnd,
+        automationId,
+        name,
+        controlType,
+        op: params.op,
+        value: params.value ?? ''
+      });
+      return resolvedToken ? { ...res, elementToken: resolvedToken.token } : res;
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      if (
+        resolvedToken &&
+        (msg.includes('UIA_ELEMENT_NOT_FOUND') || msg.includes('UIA_WINDOW_NOT_FOUND'))
+      ) {
+        this.tokenRegistry.delete(resolvedToken.token);
+        throw new Error(
+          `STALE_ELEMENT_TOKEN: Target UIA element for token '${resolvedToken.token}' is no longer present (${msg})`
+        );
+      }
+      throw err;
+    }
   }
 }

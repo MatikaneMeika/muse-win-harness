@@ -323,6 +323,7 @@ export const zhTW: Record<string, string> = {
   'island.targetPath': '目標路徑: {path}',
   'island.snapshotTag': '寫前影子快照: {id}',
   'island.denyBtn': '拒絕',
+  'island.allowAppSessionBtn': '本次工作階段允許此應用',
   'island.alwaysInWorkspaceBtn': '本工作區一律允許',
   'island.allowOnceBtn': '允許一次',
   'island.rollbackBtn': '一鍵還原快照 (Rollback)',

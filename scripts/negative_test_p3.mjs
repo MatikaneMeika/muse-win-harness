@@ -797,6 +797,82 @@ await runCase('C15 static-analysis closure: normalizeClientIpKey pure function, 
     () => ae.resolveApproval(pendingDh.id, 'approve', undefined, 'session', undefined, 'job_control'),
     'HIGH_RISK_AI_SELF_APPROVAL_FORBIDDEN'
   );
+
+  // 5) S5: string hwnd must fail closed to foreground-high (runtime normalizes
+  // non-number hwnd to undefined -> SendInput), numeric hwnd stays bg-medium
+  const strHwndEval = ae.evaluateRisk(
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'click', hwnd: '12345', x: 100, y: 100 },
+    { confinementMode: 'workspace-write', approvalPolicy: 'auto-workspace', workspaceRoot: process.cwd() }
+  );
+  assert(
+    strHwndEval.riskLevel === 'high',
+    `act(click, string hwnd) must evaluate as high risk, got ${strHwndEval.riskLevel}`
+  );
+  const numHwndEval = ae.evaluateRisk(
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'click', hwnd: 12345, x: 100, y: 100, delivery: 'auto' },
+    { confinementMode: 'workspace-write', approvalPolicy: 'auto-workspace', workspaceRoot: process.cwd() }
+  );
+  assert(
+    numHwndEval.riskLevel === 'medium',
+    `act(click, numeric hwnd, auto) must evaluate as medium risk, got ${numHwndEval.riskLevel}`
+  );
+
+  // 6) S6: fg session approval covers same-hwnd bg delivery (one-way: fg ⊇ bg)
+  const c15FgCtx = { sessionApprovedActions: new Set() };
+  const { approvalRecord: fgDhApproval } = ae.createApproval(
+    'req_c15_dh_fg_1',
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'click', hwnd: 777, x: 1, y: 1, delivery: 'foreground' },
+    'high',
+    'Desktop foreground act:click',
+    false,
+    { confinementMode: 'workspace-write', approvalPolicy: 'smart-risk', workspaceRoot: process.cwd() }
+  );
+  ae.resolveApproval(fgDhApproval.id, 'approve', undefined, 'session', c15FgCtx, 'ui_island');
+  const c15IsPreApproved = (ctx, params) =>
+    ae.isActionPreApproved(
+      'desktop_hands',
+      'desktop_hands:act:click',
+      'medium',
+      'smart-risk',
+      ctx,
+      params
+    );
+  assert(
+    c15IsPreApproved(c15FgCtx, { action: 'act', op: 'click', hwnd: 777, x: 1, y: 1, delivery: 'foreground' }),
+    'fg session approval must cover same-hwnd fg delivery'
+  );
+  assert(
+    c15IsPreApproved(c15FgCtx, { action: 'act', op: 'click', hwnd: 777, x: 1, y: 1, delivery: 'background' }),
+    'fg session approval must cover same-hwnd bg delivery'
+  );
+
+  // bg-only session approval must NOT cover fg delivery for the same hwnd
+  const c15BgCtx = { sessionApprovedActions: new Set() };
+  const { approvalRecord: bgDhApproval } = ae.createApproval(
+    'req_c15_dh_bg_1',
+    'desktop_hands',
+    'sensitive_write',
+    { action: 'act', op: 'click', hwnd: 888, x: 1, y: 1, delivery: 'background' },
+    'medium',
+    'Desktop background act:click',
+    false,
+    { confinementMode: 'workspace-write', approvalPolicy: 'smart-risk', workspaceRoot: process.cwd() }
+  );
+  ae.resolveApproval(bgDhApproval.id, 'approve', undefined, 'session', c15BgCtx, 'ui_island');
+  assert(
+    c15IsPreApproved(c15BgCtx, { action: 'act', op: 'click', hwnd: 888, x: 1, y: 1, delivery: 'background' }),
+    'bg session approval must cover same-hwnd bg delivery'
+  );
+  assert(
+    !c15IsPreApproved(c15BgCtx, { action: 'act', op: 'click', hwnd: 888, x: 1, y: 1, delivery: 'foreground' }),
+    'bg session approval must NOT cover same-hwnd fg delivery'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1227,6 +1303,549 @@ await runCase('C17 multi-device approval switch defers non-HMAC, keeps critical,
   assert(corrupt.multiDeviceApproval === false, 'corrupt settings must fail closed to off');
   const missing = loadUserSettings(path.join(ws, 'no-such-ws'));
   assert(missing.multiDeviceApproval === false, 'missing file must default off');
+});
+
+// ---------------------------------------------------------------------------
+// C18: Mimosa hardening regression — new error codes get real negative
+// assertions (UNKNOWN_WORKSPACE / INVALID_SNAPSHOT_ID / INVALID_KEEP_RECENT /
+// INVALID_COMMAND / UNKNOWN_PROFILE) and the keepRecent two-layer semantics.
+// ---------------------------------------------------------------------------
+await runCase('C18 Mimosa hardening regression: batch-reject snapshot delete, keepRecent clamp, probeCommand whitelist, UNKNOWN_PROFILE, UNKNOWN_WORKSPACE', async () => {
+  const { GitCheckpointManager } = await import('../dist/pipeline/gitCheckpoint.js');
+  const { AcpConfigManager } = await import('../dist/config/acpConfig.js');
+
+  const mkCheckpoint = (root, id, ts) => {
+    const dir = path.join(root, '.mwh', 'checkpoints', id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'metadata.json'),
+      JSON.stringify({ id, timestamp: ts, workspacePath: root }),
+      'utf-8'
+    );
+  };
+
+  // (a) deleteCheckpoints batch fail-closed: every id is validated BEFORE any
+  // on-disk deletion, so a batch mixing a valid id with a bad one must reject
+  // as a whole and leave the valid snapshot untouched. Two rejection paths:
+  //   - malformed id          -> CHECKPOINT_INVALID_ID (the INVALID_SNAPSHOT_ID
+  //                              equivalent code for format violations)
+  //   - well-formed, absent id -> INVALID_SNAPSHOT_ID (not in the index)
+  const rootA = tmpDir('mwh_p3_c18_a_');
+  try {
+    mkCheckpoint(rootA, 'chk_1001_abc', 1000);
+    expectThrowSync(
+      () => GitCheckpointManager.deleteCheckpoints(['chk_1001_abc', 'not_a_chk_id'], rootA),
+      'CHECKPOINT_INVALID_ID'
+    );
+    assert(
+      fs.existsSync(path.join(rootA, '.mwh', 'checkpoints', 'chk_1001_abc', 'metadata.json')),
+      'malformed-id batch rejection must leave the valid snapshot untouched'
+    );
+    expectThrowSync(
+      () => GitCheckpointManager.deleteCheckpoints(['chk_1001_abc', 'chk_9999_absent'], rootA),
+      'INVALID_SNAPSHOT_ID'
+    );
+    assert(
+      fs.existsSync(path.join(rootA, '.mwh', 'checkpoints', 'chk_1001_abc', 'metadata.json')),
+      'absent-id batch rejection must leave the valid snapshot untouched'
+    );
+  } finally {
+    fs.rmSync(rootA, { recursive: true, force: true });
+  }
+
+  // (b) pruneCheckpoints keepRecent: the manager layer clamps to [1, 100]
+  // (Math.max(1, Math.min(100, Math.floor(keepRecent || 5)))) instead of
+  // throwing INVALID_KEEP_RECENT — test the clamp semantics as implemented.
+  // 5 fixtures make each clamp value distinguishable:
+  //   0   -> || 5 -> 5   : keeps all 5, deletes nothing (would delete 4 if clamped to 1)
+  //   101 -> 100         : keeps all 5, deletes nothing (would delete 4 if clamped to 1)
+  //   1.5 -> floor -> 1   : keeps only the newest, deletes the 4 oldest
+  const rootB = tmpDir('mwh_p3_c18_b_');
+  try {
+    const idsB = ['chk_2001_a', 'chk_2002_b', 'chk_2003_c', 'chk_2004_d', 'chk_2005_e'];
+    idsB.forEach((id, i) => mkCheckpoint(rootB, id, 2000 + i));
+    const dirOf = (id) => path.join(rootB, '.mwh', 'checkpoints', id);
+
+    const prunedZero = GitCheckpointManager.pruneCheckpoints(0, rootB);
+    assert(
+      Array.isArray(prunedZero) && prunedZero.length === 0 &&
+        idsB.every((id) => fs.existsSync(dirOf(id))),
+      `pruneCheckpoints(0) must clamp to 5 and keep all 5, got ${JSON.stringify(prunedZero)}`
+    );
+
+    const prunedHigh = GitCheckpointManager.pruneCheckpoints(101, rootB);
+    assert(
+      Array.isArray(prunedHigh) && prunedHigh.length === 0 &&
+        idsB.every((id) => fs.existsSync(dirOf(id))),
+      `pruneCheckpoints(101) must clamp to 100 and keep all 5, got ${JSON.stringify(prunedHigh)}`
+    );
+
+    const prunedFrac = GitCheckpointManager.pruneCheckpoints(1.5, rootB);
+    assert(
+      Array.isArray(prunedFrac) && prunedFrac.length === 4 &&
+        idsB.slice(0, 4).every((id) => prunedFrac.includes(id)) &&
+        fs.existsSync(dirOf('chk_2005_e')) &&
+        idsB.slice(0, 4).every((id) => !fs.existsSync(dirOf(id))),
+      `pruneCheckpoints(1.5) must clamp to 1 (floor) and delete the 4 oldest, got ${JSON.stringify(prunedFrac)}`
+    );
+  } finally {
+    fs.rmSync(rootB, { recursive: true, force: true });
+  }
+
+  // (c) probeCommand shell-metacharacter whitelist: '&' is rejected
+  // fail-closed with INVALID_COMMAND before any where.exe/execution.
+  const acp = AcpConfigManager.getInstance();
+  const probeRes = acp.probeCommand('cmd & calc');
+  assert(
+    probeRes.available === false && probeRes.error === 'INVALID_COMMAND',
+    `probeCommand('cmd & calc') must return available:false INVALID_COMMAND, got ${JSON.stringify(probeRes)}`
+  );
+
+  // (d) toggleProfile with an unknown id must fail closed with UNKNOWN_PROFILE
+  const toggleRes = acp.toggleProfile('no_such_profile', true);
+  assert(
+    toggleRes.success === false && toggleRes.error === 'UNKNOWN_PROFILE',
+    `toggleProfile('no_such_profile') must return UNKNOWN_PROFILE, got ${JSON.stringify(toggleRes)}`
+  );
+
+  // (e) UNKNOWN_WORKSPACE through the real HTTP entry: removing a path that is
+  // not a registered workspace root must 400 without any fs operation.
+  const server = new MwhServer({
+    host: '127.0.0.1',
+    port: 0,
+    runtimeToken: 'Ab1!mnopQrStu34vwxy56789012zMWH#'
+  });
+  const { server: httpServer } = await server.start();
+  const address = httpServer.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  assert(port > 0, `server must listen on an ephemeral port, got ${port}`);
+  try {
+    const unregistered = tmpDir('mwh_p3_c18_e_');
+    try {
+      const wsRemoveRes = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/remove`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer Ab1!mnopQrStu34vwxy56789012zMWH#',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ path: unregistered })
+      });
+      const wsRemoveData = await wsRemoveRes.json();
+      assert(
+        wsRemoveRes.status === 400 && wsRemoveData.error === 'UNKNOWN_WORKSPACE',
+        `unregistered workspace remove must 400 UNKNOWN_WORKSPACE, got ${wsRemoveRes.status} ${JSON.stringify(wsRemoveData)}`
+      );
+    } finally {
+      fs.rmSync(unregistered, { recursive: true, force: true });
+    }
+  } finally {
+    await server.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// C19: desktop_hands control-plane remote lock and snapshot prune HTTP
+// validation. Remote (mcp) actors must get 403 REMOTE_DESKTOP_HANDS_CONFIG_
+// FORBIDDEN / REMOTE_PROTECT_HWND_FORBIDDEN; the loopback no-header fallback
+// (ui_island) must still succeed as a positive control; and an out-of-range
+// keepRecent must 400 INVALID_KEEP_RECENT at the HTTP boundary.
+// ---------------------------------------------------------------------------
+await runCase('C19 desktop-hands control-plane 403 for remote actors and snapshot prune HTTP INVALID_KEEP_RECENT validation', async () => {
+  const server = new MwhServer({
+    host: '127.0.0.1',
+    port: 0,
+    runtimeToken: 'Ab1!mnopQrStu34vwxy56789012zMWH#'
+  });
+  const { server: httpServer } = await server.start();
+  const address = httpServer.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  assert(port > 0, `server must listen on an ephemeral port, got ${port}`);
+  try {
+    const authHeaders = {
+      Authorization: 'Bearer Ab1!mnopQrStu34vwxy56789012zMWH#',
+      'Content-Type': 'application/json'
+    };
+
+    // (a) A request carrying an mcp-session-id header resolves to the 'mcp'
+    // actor, which must be denied desktop_hands configuration (403).
+    const handsRes = await fetch(`http://127.0.0.1:${port}/api/v1/security/desktop-hands`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'mcp-session-id': 'c19-forged-mcp-session' },
+      body: JSON.stringify({ enabled: true })
+    });
+    const handsData = await handsRes.json();
+    assert(
+      handsRes.status === 403 && handsData.error === 'REMOTE_DESKTOP_HANDS_CONFIG_FORBIDDEN',
+      `remote desktop-hands toggle must 403 REMOTE_DESKTOP_HANDS_CONFIG_FORBIDDEN, got ${handsRes.status} ${JSON.stringify(handsData)}`
+    );
+
+    // (b) Same actor rule for protected HWND registration: 'mcp' is not the
+    // local UI island -> 403 REMOTE_PROTECT_HWND_FORBIDDEN.
+    const protectRes = await fetch(`http://127.0.0.1:${port}/api/v1/desktop-hands/protect-hwnd`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'mcp-session-id': 'c19-forged-mcp-session' },
+      body: JSON.stringify({ hwnd: 12345, pid: 678 })
+    });
+    const protectData = await protectRes.json();
+    assert(
+      protectRes.status === 403 && protectData.error === 'REMOTE_PROTECT_HWND_FORBIDDEN',
+      `remote protect-hwnd must 403 REMOTE_PROTECT_HWND_FORBIDDEN, got ${protectRes.status} ${JSON.stringify(protectData)}`
+    );
+
+    // (c) Positive control: on the same server, without mcp-session-id, the
+    // loopback fallback resolves to 'ui_island' and the toggle succeeds
+    // (200 ok:true). The enabled state lives in the in-memory test server.
+    const localRes = await fetch(`http://127.0.0.1:${port}/api/v1/security/desktop-hands`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ enabled: true })
+    });
+    const localData = await localRes.json();
+    assert(
+      localRes.status === 200 && localData.ok === true,
+      `local ui_island desktop-hands toggle must succeed with ok:true, got ${localRes.status} ${JSON.stringify(localData)}`
+    );
+
+    // (d) keepRecent=5000 is outside [1, 100]: the HTTP boundary must reject
+    // with 400 INVALID_KEEP_RECENT instead of silently clamping.
+    const pruneRes = await fetch(`http://127.0.0.1:${port}/api/v1/snapshots/prune`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ keepRecent: 5000 })
+    });
+    const pruneData = await pruneRes.json();
+    assert(
+      pruneRes.status === 400 && pruneData.error === 'INVALID_KEEP_RECENT',
+      `prune keepRecent=5000 must 400 INVALID_KEEP_RECENT, got ${pruneRes.status} ${JSON.stringify(pruneData)}`
+    );
+  } finally {
+    await server.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// C20: Desktop Hands v2 E0/E1/E5 regression —
+// - E0: action-omitted `{ op: 'wait', hwnd }` and `{ steps: [...] }` normalize to
+//   `act` / `batch`, pass paramsHash verification, and execute cleanly after
+//   `/api/v1/tasks/:id/approve` without `UNKNOWN_DESKTOP_HANDS_ACTION: undefined`.
+// - E1: when `multiDeviceApproval=true` under `confirm` (smart-risk), desktop_hands
+//   perception (`windows`) stays exempt while manipulation (`act`/`batch`) STILL
+//   returns `CONFIRMATION_REQUIRED` (never silently deferred); under `full-access`
+//   manipulation remains pre-approved.
+// - E5: approving via UI island with `scope: 'session'` (or `'app_session'`) writes
+//   `desktop_hands:hwnd:<n>:bg` so subsequent background calls on the same hwnd
+//   execute without a second approval card, and `/api/v1/daemon/emergency-kill`
+//   clears the session hwnd authorization immediately.
+// ---------------------------------------------------------------------------
+await runCase('C20 desktop_hands E0/E1/E5: action normalization & replay, multiDeviceApproval guard, and UI app_session hwnd authorization', async () => {
+  const ws = tmpDir('mwh_p3_c20_');
+  const { PipelineKernel } = await import('../dist/pipeline/pipeline.js');
+  const kernel = new PipelineKernel({
+    confinementMode: 'workspace-write',
+    approvalPolicy: 'smart-risk',
+    workspaceRoot: ws,
+    desktopHandsEnabled: true,
+    desktopHandsForegroundFallback: false,
+    multiDeviceApproval: true
+  });
+  const port = 29610 + Math.floor(Math.random() * 200);
+  const server = new MwhServer({
+    host: '127.0.0.1',
+    port,
+    runtimeToken: 'Ab1!mnopQrStu34vwxy56789012zMWH#',
+    kernel
+  });
+  await server.start();
+
+  try {
+    const authHeaders = {
+      Authorization: 'Bearer Ab1!mnopQrStu34vwxy56789012zMWH#',
+      'Content-Type': 'application/json'
+    };
+
+    // (1) E1: With multiDeviceApproval=true + confirm (smart-risk):
+    // Perception ('windows') is low-risk and exempt:
+    if (process.platform === 'win32') {
+      const winRes = await kernel.handleRequest({
+        id: 'c20_win_percept',
+        toolName: 'desktop_hands',
+        category: 'sensitive_write',
+        params: { action: 'windows' }
+      });
+      assert(winRes.status === 'SUCCESS', `perception windows must succeed without confirmation, got ${winRes.status}`);
+    }
+
+    // Manipulation with omitted `action` (`{ op: 'wait', durationMs: 20, hwnd: 68752 }`)
+    // MUST normalize to `action: 'act'` and MUST NOT be deferred by multiDeviceApproval=true!
+    const triggerRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        toolName: 'desktop_hands',
+        category: 'sensitive_write',
+        params: { hwnd: 68752, op: 'wait', durationMs: 20, delivery: 'background' }
+      })
+    });
+    const triggerData = await triggerRes.json();
+    assert(
+      triggerRes.status === 200 &&
+        triggerData.execution?.status === 'CONFIRMATION_REQUIRED' &&
+        typeof triggerData.execution?.approvalId === 'string',
+      `E1/E0: omitted-action desktop_hands op under multiDeviceApproval=true must require confirmation, got ${JSON.stringify(triggerData)}`
+    );
+    assert(
+      String(triggerData.execution.summary).includes('act:wait'),
+      `E0: normalized summary must include 'act:wait', got '${triggerData.execution.summary}'`
+    );
+    assert(
+      triggerData.liveTask?.targetHwnd === 68752,
+      `E5: liveTask must expose targetHwnd=68752 for app_session button, got ${JSON.stringify(triggerData.liveTask)}`
+    );
+
+    const approvalId = triggerData.execution.approvalId;
+
+    // (2) E0 + E5: Approve via UI island with `scope: 'session'` -> replay must succeed
+    // with zero UNKNOWN_DESKTOP_HANDS_ACTION: undefined and write hwnd session scope!
+    if (process.platform === 'win32') {
+      const approveRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/${encodeURIComponent(approvalId)}/approve`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ scope: 'session', source: 'ui_island' })
+      });
+      const approveData = await approveRes.json();
+      assert(
+        approveRes.status === 200 &&
+          approveData.ok === true &&
+          approveData.granularity === 'session' &&
+          approveData.execution?.status === 'SUCCESS' &&
+          approveData.execution?.data?.action === 'act' &&
+          approveData.execution?.data?.op === 'wait',
+        `E0/E5: postApprove replay must succeed with action='act', op='wait', got ${JSON.stringify(approveData)}`
+      );
+
+      // (3) E5: Second background call on the same hwnd=68752 must now be pre-approved (no second card!)
+      const secondRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          toolName: 'desktop_hands',
+          category: 'sensitive_write',
+          params: { hwnd: 68752, steps: [{ op: 'wait', durationMs: 10 }], delivery: 'background' }
+        })
+      });
+      const secondData = await secondRes.json();
+      assert(
+        secondRes.status === 200 &&
+          secondData.execution?.status === 'SUCCESS' &&
+          secondData.execution?.data?.action === 'batch' &&
+          secondData.execution?.data?.status === 'COMPLETED',
+        `E0/E5: second background call (omitted action batch) on session-approved hwnd=68752 must execute without confirmation, got ${JSON.stringify(secondData)}`
+      );
+
+      // Foreground call (`move` requires no hwnd/Win32 window handle) must STILL require confirmation
+      const fgRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          toolName: 'desktop_hands',
+          category: 'sensitive_write',
+          params: { hwnd: 68752, op: 'move', x: 100, y: 100, delivery: 'foreground' }
+        })
+      });
+      const fgData = await fgRes.json();
+      assert(
+        fgData.execution?.status === 'CONFIRMATION_REQUIRED' && fgData.execution?.riskLevel === 'high',
+        `E5: bg session approval must not exempt foreground call on hwnd=68752, got ${JSON.stringify(fgData)}`
+      );
+
+      // (4) Emergency kill must clear the session hwnd authorization
+      const emgRes = await fetch(`http://127.0.0.1:${port}/api/v1/daemon/emergency-kill`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ source: 'ui_island' })
+      });
+      assert(emgRes.status === 200, 'emergency-kill must return 200');
+
+      const afterEmgRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          toolName: 'desktop_hands',
+          category: 'sensitive_write',
+          params: { hwnd: 68752, op: 'wait', durationMs: 10, delivery: 'background' }
+        })
+      });
+      const afterEmgData = await afterEmgRes.json();
+      assert(
+        afterEmgData.execution?.status === 'CONFIRMATION_REQUIRED',
+        `E5: after emergency-kill, hwnd=68752 session approval must be cleared and require confirmation again, got ${JSON.stringify(afterEmgData)}`
+      );
+    }
+
+    // (5) E1 positive control: under full-access (danger-full-access + unattended-yolo),
+    // desktop_hands manipulation is pre-approved by policy.
+    kernel.updateContext({
+      confinementMode: 'danger-full-access',
+      approvalPolicy: 'unattended-yolo',
+      yoloExpiresAt: Date.now() + 60000
+    });
+    if (process.platform === 'win32') {
+      const fullAccessRes = await kernel.handleRequest({
+        id: 'c20_full_access_dh',
+        toolName: 'desktop_hands',
+        category: 'sensitive_write',
+        params: { hwnd: 68752, op: 'wait', durationMs: 10 }
+      });
+      assert(
+        fullAccessRes.status === 'SUCCESS' && fullAccessRes.data?.op === 'wait',
+        `E1: full-access desktop_hands wait must execute without confirmation, got ${JSON.stringify(fullAccessRes)}`
+      );
+    }
+  } finally {
+    await server.stop();
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// C21: Desktop Hands v2 E2/E3/E4 regression —
+// - E2: `downsampleBgraIfNeeded` downsamples oversized multi-monitor 4160x2560
+//   buffers to <= 3840x2160 after source-pixel redaction, and `captureScreenshot`
+//   succeeds on both default virtual screen and oversized region(0,0,99999,99999).
+// - E3: `UiaBridge.registerElementToken` / `resolveElementToken` issues `el_...`
+//   tokens, resolves center coordinates for pointer ops, and throws
+//   `STALE_ELEMENT_TOKEN` on unknown/mismatched tokens.
+// - E4: long-running `desktop_hands` batch sets `liveTask.status === 'RUNNING'`
+//   with `dh_...` id and can be aborted mid-flight via `/api/v1/tasks/:id/kill`.
+// ---------------------------------------------------------------------------
+await runCase('C21 desktop_hands E2/E3/E4: screenshot downsampling after redaction, elementToken & STALE_ELEMENT_TOKEN, and liveTask RUNNING kill switch', async () => {
+  const ws = tmpDir('mwh_p3_c21_');
+  const { downsampleBgraIfNeeded, redactBgraRects, captureScreenshot } = await import('../dist/desktop/win32Native.js');
+  const { UiaBridge } = await import('../dist/desktop/uiaBridge.js');
+  const { PipelineKernel } = await import('../dist/pipeline/pipeline.js');
+
+  // (1) E2: 4160x2560 (10.65 MP > 8.29 MP) redaction + proportional downsampling unit verification
+  const srcW = 4160;
+  const srcH = 2560;
+  const rawBgra = Buffer.alloc(srcW * srcH * 4, 0xff);
+  const redacted = redactBgraRects(
+    rawBgra,
+    { x: 0, y: -648, width: srcW, height: srcH },
+    [{ left: 100, top: -500, right: 500, bottom: -100 }]
+  );
+  assert(redacted === 1, `expected 1 redacted rect in source space, got ${redacted}`);
+  const scaled = downsampleBgraIfNeeded(rawBgra, srcW, srcH);
+  assert(
+    scaled.width <= 3840 &&
+      scaled.height <= 2160 &&
+      scaled.width * scaled.height <= 3840 * 2160 &&
+      scaled.scaleFactor > 0 &&
+      scaled.scaleFactor < 1,
+    `E2: 4160x2560 must downsample within 3840x2160 budget, got ${scaled.width}x${scaled.height} (scaleFactor=${scaled.scaleFactor})`
+  );
+
+  if (process.platform === 'win32') {
+    const shotDefault = await captureScreenshot({});
+    const shotSentinel = await captureScreenshot({ region: { x: 0, y: 0, width: 99999, height: 99999 } });
+    assert(
+      shotDefault.width === shotSentinel.width &&
+        shotDefault.height === shotSentinel.height &&
+        shotDefault.bounds.width === shotSentinel.bounds.width &&
+        shotDefault.bounds.height === shotSentinel.bounds.height,
+      `E2: default screenshot (${shotDefault.width}x${shotDefault.height}, bounds=${JSON.stringify(shotDefault.bounds)}) and sentinel region(0,0,99999,99999) (${shotSentinel.width}x${shotSentinel.height}, bounds=${JSON.stringify(shotSentinel.bounds)}) must be consistent`
+    );
+  }
+
+  // (2) E3: elementToken registration, resolution, and STALE_ELEMENT_TOKEN rejection
+  UiaBridge.clearElementTokens();
+  const tok = UiaBridge.registerElementToken({
+    hwnd: 4242,
+    seqIndex: 1,
+    name: 'Save',
+    automationId: 'btnSave',
+    controlType: 'Button',
+    bounds: { x: 200, y: 300, width: 80, height: 40 },
+    patterns: ['Invoke']
+  });
+  assert(tok.startsWith('el_4242_1_'), `expected el_4242_1_ prefix, got ${tok}`);
+  const resolved = UiaBridge.resolveElementToken(tok, 4242);
+  assert(resolved.name === 'Save' && resolved.bounds.x === 200, 'resolved token metadata must match');
+  expectThrowSync(
+    () => UiaBridge.resolveElementToken('el_9999_99_deadbeef'),
+    'STALE_ELEMENT_TOKEN'
+  );
+  expectThrowSync(
+    () => UiaBridge.resolveElementToken(tok, 9999),
+    'STALE_ELEMENT_TOKEN'
+  );
+
+  // (3) E4: Long batch exposes RUNNING liveTask with dh_... id and aborts immediately via /api/v1/tasks/:id/kill
+  if (process.platform === 'win32') {
+    const kernel = new PipelineKernel({
+      confinementMode: 'workspace-write',
+      approvalPolicy: 'auto-workspace',
+      workspaceRoot: ws,
+      desktopHandsEnabled: true
+    });
+    const port = 29410 + Math.floor(Math.random() * 190);
+    const server = new MwhServer({
+      host: '127.0.0.1',
+      port,
+      runtimeToken: 'Ab1!mnopQrStu34vwxy56789012zMWH#',
+      kernel
+    });
+    await server.start();
+    const authHeaders = {
+      Authorization: 'Bearer Ab1!mnopQrStu34vwxy56789012zMWH#',
+      'Content-Type': 'application/json'
+    };
+    try {
+      const batchPromise = fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          toolName: 'desktop_hands',
+          category: 'sensitive_write',
+          params: {
+            action: 'batch',
+            steps: [
+              { op: 'wait', durationMs: 5000 },
+              { op: 'wait', durationMs: 5000 }
+            ]
+          }
+        })
+      }).then((r) => r.json());
+
+      await new Promise((r) => setTimeout(r, 180));
+      const stateRes = await fetch(`http://127.0.0.1:${port}/api/v1/state`, { headers: authHeaders });
+      const stateData = await stateRes.json();
+      const runningId = stateData.liveTask?.id || '';
+      assert(
+        stateData.liveTask?.status === 'RUNNING' && runningId.startsWith('dh_'),
+        `E4: in-flight desktop_hands batch must set liveTask.status='RUNNING' with dh_ id, got ${JSON.stringify(stateData.liveTask)}`
+      );
+
+      const killRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/${encodeURIComponent(runningId)}/kill`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ source: 'ui_island' })
+      });
+      const killData = await killRes.json();
+      assert(
+        killRes.status === 200 && killData.ok === true && killData.status === 'TERMINATED',
+        `E4: killing running desktop_hands task must return 200 TERMINATED, got ${killRes.status} ${JSON.stringify(killData)}`
+      );
+
+      const batchOutcome = await batchPromise;
+      assert(
+        batchOutcome.execution?.data?.status === 'ABORTED',
+        `E4: killed batch must settle promptly with status='ABORTED', got ${JSON.stringify(batchOutcome)}`
+      );
+    } finally {
+      await server.stop();
+    }
+  }
+  fs.rmSync(ws, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------

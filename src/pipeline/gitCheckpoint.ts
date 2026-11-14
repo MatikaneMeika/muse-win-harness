@@ -38,8 +38,8 @@ export interface CheckpointMetadata {
 }
 
 export class GitCheckpointManager {
-  /** P2: strict checkpointId format. */
-  private static readonly CHECKPOINT_ID_REGEX = /^chk_[A-Za-z0-9_-]+$/;
+  /** P2: strict checkpointId format (chk_<13-digit timestamp>_<hex8> as produced by create()). */
+  private static readonly CHECKPOINT_ID_REGEX = /^chk_[0-9]+_[A-Za-z0-9]+$/;
 
   /**
    * Helper to execute git commands safely with windowsHide: true.
@@ -462,6 +462,22 @@ export class GitCheckpointManager {
   }
 
   /**
+   * Snapshot-index entry validation: the id must be present in the snapshot
+   * index (metadata.json readable, id + timestamp valid) of THIS root.
+   * Throws INVALID_SNAPSHOT_ID when absent — callers (IPC/HTTP/stateManager)
+   * map it to a 400 INVALID_SNAPSHOT_ID response. Fail-closed: no fs mutation
+   * may run for ids that were never created via create() in this root.
+   */
+  private static assertSnapshotInIndex(checkpointId: string, root: string): void {
+    const indexed = this.listCheckpoints(root);
+    if (!indexed.some((meta) => meta.id === checkpointId)) {
+      throw new Error(
+        `INVALID_SNAPSHOT_ID: Checkpoint '${checkpointId}' is not present in the snapshot index of root '${root}'`
+      );
+    }
+  }
+
+  /**
    * Restores workspace to the exact state captured in the checkpoint.
    *
    * P2: validates checkpointId (CHECKPOINT_INVALID_ID) and applies protected
@@ -473,6 +489,9 @@ export class GitCheckpointManager {
 
     // P2: fail-closed id validation (format + containment)
     this.assertValidCheckpointId(checkpointId, root);
+
+    // Fail-closed entry validation: the snapshot must exist in this root's index.
+    this.assertSnapshotInIndex(checkpointId, root);
 
     const checkpointDir = path.join(root, '.mwh', 'checkpoints', checkpointId);
     const metadataPath = path.join(checkpointDir, 'metadata.json');
@@ -738,13 +757,28 @@ export class GitCheckpointManager {
   /**
    * Deletes specific checkpoint records by id after strict ID + realpath validation.
    * Does not touch working tree files (record cleanup only).
+   *
+   * Fail-closed batch semantics: EVERY id is validated (format + containment +
+   * presence in this root's snapshot index) BEFORE any on-disk deletion; a
+   * single invalid id rejects the whole batch (INVALID_SNAPSHOT_ID).
    */
   public static deleteCheckpoints(checkpointIds: string[], cwd = process.cwd()): string[] {
     const root = path.resolve(cwd);
-    const deleted: string[] = [];
-    for (const id of checkpointIds) {
-      if (typeof id !== 'string' || !id.trim()) continue;
+    const ids = Array.isArray(checkpointIds) ? checkpointIds : [];
+    const indexed = new Set(this.listCheckpoints(root).map((meta) => meta.id));
+    for (const id of ids) {
+      if (typeof id !== 'string' || !id.trim()) {
+        throw new Error('INVALID_SNAPSHOT_ID: Blank or non-string checkpoint id in delete batch');
+      }
       this.assertValidCheckpointId(id, root);
+      if (!indexed.has(id)) {
+        throw new Error(
+          `INVALID_SNAPSHOT_ID: Checkpoint '${id}' is not present in the snapshot index of root '${root}'`
+        );
+      }
+    }
+    const deleted: string[] = [];
+    for (const id of ids) {
       const checkpointDir = path.join(root, '.mwh', 'checkpoints', id);
       if (fs.existsSync(checkpointDir)) {
         try {
@@ -773,8 +807,12 @@ export class GitCheckpointManager {
       grouped.set(normKey, list);
     }
     const toDelete: string[] = [];
+    // Sorting is done on sanitized safe integers only (never on raw parsed
+    // metadata fields), eliminating any sort-key injection surface.
+    const safeTs = (meta: CheckpointMetadata): number =>
+      Number.isSafeInteger(meta.timestamp) ? meta.timestamp : 0;
     for (const list of grouped.values()) {
-      list.sort((a, b) => b.timestamp - a.timestamp);
+      list.sort((a, b) => safeTs(b) - safeTs(a));
       for (let i = safeKeep; i < list.length; i++) {
         toDelete.push(list[i].id);
       }

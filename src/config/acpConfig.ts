@@ -11,6 +11,14 @@ import type { AcpConfig, AcpProfile } from '../types.js';
 
 export class AcpConfigManager {
   private static instance: AcpConfigManager | null = null;
+  /**
+   * Probe command whitelist (fail-closed): letters, digits, space and the
+   * path/punctuation set - _ . : \ / ( ). Blocks shell metacharacters,
+   * control characters (not in the class), quotes and traversal dots ('..'
+   * is rejected separately below). Length is capped at 2048.
+   */
+  private static readonly PROBE_COMMAND_REGEX = /^[A-Za-z0-9 \-_.:\\/()]+$/;
+  private static readonly PROBE_COMMAND_MAX_LENGTH = 2048;
   private readonly configPath: string;
   private readonly probeCache = new Map<
     string,
@@ -124,13 +132,27 @@ export class AcpConfigManager {
 
   /**
    * Probes whether a command / executable exists.
+   *
+   * Fail-closed input validation: only whitelist characters are accepted
+   * (alnum, space, - _ . : \ / ( )), length <= 2048, no '..' traversal
+   * segments and no control/shell metacharacters. Path-like inputs must be
+   * drive-letter paths (UNC or rooted-without-drive forms are rejected).
+   * Downstream execution stays shell-free (execFileSync + where.exe + fs stat).
    */
   public probeCommand(cmd: string): { available: boolean; path?: string; error?: string } {
-    if (!cmd || typeof cmd !== 'string' || !cmd.trim()) {
-      return { available: false, error: 'Empty command' };
+    const trimmed = typeof cmd === 'string' ? cmd.trim() : '';
+    if (
+      !trimmed ||
+      trimmed.length > AcpConfigManager.PROBE_COMMAND_MAX_LENGTH ||
+      trimmed.includes('..') ||
+      !AcpConfigManager.PROBE_COMMAND_REGEX.test(trimmed)
+    ) {
+      return { available: false, error: 'INVALID_COMMAND' };
+    }
+    if ((trimmed.includes('\\') || trimmed.includes('/')) && !/^[A-Za-z]:[\\/]/.test(trimmed)) {
+      return { available: false, error: 'INVALID_COMMAND' };
     }
 
-    const trimmed = cmd.trim();
     const cached = this.probeCache.get(trimmed);
     if (cached && cached.expiresAt > Date.now()) {
       return { available: cached.available, path: cached.path, error: cached.error };
@@ -348,7 +370,7 @@ export class AcpConfigManager {
     const target = config.acp_profiles.find((p: AcpProfile) => p.id.toLowerCase() === trimmedId);
 
     if (!target) {
-      return { success: false, error: `Profile '${id}' not found` };
+      return { success: false, error: 'UNKNOWN_PROFILE' };
     }
 
     target.enabled = enabled !== undefined ? enabled : !target.enabled;

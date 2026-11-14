@@ -13,6 +13,7 @@ export interface DesktopDeliveryStepLike {
   delivery?: string;
   x?: unknown;
   y?: unknown;
+  elementToken?: unknown;
 }
 
 export interface DesktopDeliveryClassification {
@@ -23,13 +24,57 @@ export interface DesktopDeliveryClassification {
 
 const UIA_OPS = new Set(['invoke', 'set_value', 'toggle', 'select', 'focus']);
 
+const VALID_DESKTOP_ACTIONS = new Set([
+  'windows',
+  'inspect',
+  'screenshot',
+  'act',
+  'batch',
+  'mouse_move',
+  'click',
+  'type_text'
+]);
+
+/**
+ * Normalizes desktop_hands client params so callers that supply `op` or `steps`
+ * without an explicit top-level `action` are deterministically mapped to
+ * `action: 'act'` or `action: 'batch'` before risk evaluation, approval hashing,
+ * and execution.
+ */
+export function normalizeDesktopHandsParams(
+  params: Record<string, any> | undefined
+): Record<string, any> {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return {};
+  }
+  const cloned = structuredClone(params);
+  const rawAction = typeof cloned.action === 'string' ? cloned.action.trim() : '';
+  if (!rawAction) {
+    if (Array.isArray(cloned.steps)) {
+      cloned.action = 'batch';
+    } else if (typeof cloned.op === 'string' && cloned.op.trim().length > 0) {
+      cloned.action = 'act';
+    }
+  }
+  return cloned;
+}
+
+export function isValidDesktopHandsAction(action: unknown): boolean {
+  return typeof action === 'string' && VALID_DESKTOP_ACTIONS.has(action);
+}
+
 function hasPositiveHwnd(val: unknown): boolean {
-  const n = Number(val);
-  return Number.isFinite(n) && n > 0;
+  // Strict check: runtime hwnd normalization only accepts real numbers, so a
+  // string hwnd must classify as foreground (fail-closed) to match delivery.
+  return typeof val === 'number' && Number.isFinite(val) && val > 0;
 }
 
 function hasFiniteCoord(val: unknown): boolean {
   return val !== undefined && val !== null && Number.isFinite(Number(val));
+}
+
+function hasValidElementToken(val: unknown): boolean {
+  return typeof val === 'string' && val.trim().length > 0;
 }
 
 export function classifyDesktopStepDelivery(step: DesktopDeliveryStepLike): boolean {
@@ -42,12 +87,13 @@ export function classifyDesktopStepDelivery(step: DesktopDeliveryStepLike): bool
   }
 
   const hwndOk = hasPositiveHwnd(step.hwnd);
+  const hasPointerTarget =
+    (hasFiniteCoord(step.x) && hasFiniteCoord(step.y)) || hasValidElementToken(step.elementToken);
   const canBackground =
     hwndOk &&
     (op === 'type_text' ||
       ((op === 'click' || op === 'double_click' || op === 'right_click' || op === 'scroll') &&
-        hasFiniteCoord(step.x) &&
-        hasFiniteCoord(step.y)));
+        hasPointerTarget));
 
   const requested = step.delivery === 'background' || step.delivery === 'foreground' ? step.delivery : 'auto';
   if (requested === 'background') {
@@ -61,7 +107,7 @@ export function classifyDesktopStepDelivery(step: DesktopDeliveryStepLike): bool
 }
 
 export function classifyDesktopCall(params: Record<string, any> | undefined): DesktopDeliveryClassification {
-  const p = params || {};
+  const p = normalizeDesktopHandsParams(params);
   const action = typeof p.action === 'string' ? p.action : '';
 
   if (action === 'windows' || action === 'inspect' || action === 'screenshot') {
@@ -77,13 +123,15 @@ export function classifyDesktopCall(params: Record<string, any> | undefined): De
       hwnd: p.hwnd,
       delivery: p.delivery,
       x: p.x,
-      y: p.y
+      y: p.y,
+      elementToken: p.elementToken
     });
   } else if (action === 'type_text') {
     isForeground = classifyDesktopStepDelivery({
       op: 'type_text',
       hwnd: p.hwnd,
-      delivery: p.delivery
+      delivery: p.delivery,
+      elementToken: p.elementToken
     });
   } else if (action === 'act') {
     isForeground = classifyDesktopStepDelivery({
@@ -91,7 +139,8 @@ export function classifyDesktopCall(params: Record<string, any> | undefined): De
       hwnd: p.hwnd,
       delivery: p.delivery,
       x: p.x,
-      y: p.y
+      y: p.y,
+      elementToken: p.elementToken
     });
   } else if (action === 'batch') {
     const steps = Array.isArray(p.steps) ? p.steps : [];
@@ -101,7 +150,8 @@ export function classifyDesktopCall(params: Record<string, any> | undefined): De
         hwnd: s?.hwnd ?? p.hwnd,
         delivery: s?.delivery ?? p.delivery,
         x: s?.x,
-        y: s?.y
+        y: s?.y,
+        elementToken: s?.elementToken ?? p.elementToken
       })
     );
   } else {

@@ -323,6 +323,7 @@ export const en: Record<string, string> = {
   'island.targetPath': 'Target: {path}',
   'island.snapshotTag': 'Pre-write snapshot: {id}',
   'island.denyBtn': 'Deny',
+  'island.allowAppSessionBtn': 'Allow App This Session',
   'island.alwaysInWorkspaceBtn': 'Always in Workspace',
   'island.allowOnceBtn': 'Allow Once',
   'island.rollbackBtn': 'Rollback Snapshot',

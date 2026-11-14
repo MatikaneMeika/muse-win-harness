@@ -10,6 +10,8 @@ import { promisify } from 'node:util';
 
 const deflateAsync = promisify(zlib.deflate);
 const MAX_SCREENSHOT_PIXELS = 3840 * 2160;
+const MAX_RAW_CAPTURE_DIMENSION = 16384;
+const MAX_RAW_CAPTURE_PIXELS = 12288 * 8640; // ~106 MP safety cap for raw multi-monitor GDI capture
 
 export interface WinRect {
   left: number;
@@ -37,6 +39,7 @@ export interface ScreenshotCaptureResult {
   height: number;
   bounds: { x: number; y: number; width: number; height: number };
   dpiScale: number;
+  scaleFactor: number;
 }
 
 interface Win32Bindings {
@@ -473,12 +476,68 @@ export function redactBgraRects(
   return redactedCount;
 }
 
+export function downsampleBgraIfNeeded(
+  bgra: Buffer,
+  srcWidth: number,
+  srcHeight: number,
+  maxPixels = MAX_SCREENSHOT_PIXELS
+): { bgra: Buffer; width: number; height: number; scaleFactor: number } {
+  const totalPixels = srcWidth * srcHeight;
+  const maxLongEdge = 3840;
+  const maxShortEdge = 2160;
+  const curLong = Math.max(srcWidth, srcHeight);
+  const curShort = Math.min(srcWidth, srcHeight);
+  if (totalPixels <= maxPixels && curLong <= maxLongEdge && curShort <= maxShortEdge) {
+    return { bgra, width: srcWidth, height: srcHeight, scaleFactor: 1 };
+  }
+  const pixelRatio = totalPixels > maxPixels ? Math.sqrt(maxPixels / totalPixels) : 1;
+  const longRatio = curLong > maxLongEdge ? maxLongEdge / curLong : 1;
+  const shortRatio = curShort > maxShortEdge ? maxShortEdge / curShort : 1;
+  const ratio = Math.min(pixelRatio, longRatio, shortRatio);
+  const dstWidth = Math.max(1, Math.min(srcWidth, Math.floor(srcWidth * ratio)));
+  const dstHeight = Math.max(1, Math.min(srcHeight, Math.floor(srcHeight * ratio)));
+  const scaleFactor = Number((dstWidth / srcWidth).toFixed(4));
+  const out = Buffer.allocUnsafe(dstWidth * dstHeight * 4);
+
+  for (let dy = 0; dy < dstHeight; dy++) {
+    const sy0 = Math.floor((dy * srcHeight) / dstHeight);
+    const sy1 = Math.max(sy0 + 1, Math.min(srcHeight, Math.floor(((dy + 1) * srcHeight) / dstHeight)));
+    const dstRowOffset = dy * dstWidth * 4;
+    for (let dx = 0; dx < dstWidth; dx++) {
+      const sx0 = Math.floor((dx * srcWidth) / dstWidth);
+      const sx1 = Math.max(sx0 + 1, Math.min(srcWidth, Math.floor(((dx + 1) * srcWidth) / dstWidth)));
+      let bSum = 0;
+      let gSum = 0;
+      let rSum = 0;
+      let count = 0;
+      for (let sy = sy0; sy < sy1; sy++) {
+        const srcRowOffset = sy * srcWidth * 4;
+        for (let sx = sx0; sx < sx1; sx++) {
+          const sIdx = srcRowOffset + sx * 4;
+          bSum += bgra[sIdx];
+          gSum += bgra[sIdx + 1];
+          rSum += bgra[sIdx + 2];
+          count++;
+        }
+      }
+      const dIdx = dstRowOffset + dx * 4;
+      out[dIdx] = Math.round(bSum / count);
+      out[dIdx + 1] = Math.round(gSum / count);
+      out[dIdx + 2] = Math.round(rSum / count);
+      out[dIdx + 3] = 0xff;
+    }
+  }
+
+  return { bgra: out, width: dstWidth, height: dstHeight, scaleFactor };
+}
+
 export async function captureScreenshot(options: {
   hwnd?: number;
   region?: { x: number; y: number; width: number; height: number };
   redactRects?: WinRect[];
 }): Promise<ScreenshotCaptureResult & { redactedCount: number }> {
   const b = ensureWin32();
+  const vs = getVirtualScreenBounds();
   let captureBounds: { x: number; y: number; width: number; height: number };
   let printWindowBounds: { x: number; y: number; width: number; height: number } | null = null;
   let dpiScale = 1;
@@ -513,28 +572,46 @@ export async function captureScreenshot(options: {
     const dpi = Number(b.GetDpiForWindow(targetHwnd)) || 96;
     dpiScale = Number((dpi / 96).toFixed(2));
   } else if (options.region) {
-    const vs = getVirtualScreenBounds();
     const rx1 = Math.trunc(options.region.x);
     const ry1 = Math.trunc(options.region.y);
-    const rx2 = rx1 + Math.max(1, Math.trunc(options.region.width));
-    const ry2 = ry1 + Math.max(1, Math.trunc(options.region.height));
-    const ix1 = Math.max(vs.x, rx1);
-    const iy1 = Math.max(vs.y, ry1);
-    const ix2 = Math.min(vs.x + vs.width, rx2);
-    const iy2 = Math.min(vs.y + vs.height, ry2);
+    const rw = Math.max(1, Math.trunc(options.region.width));
+    const rh = Math.max(1, Math.trunc(options.region.height));
+    // If caller passes origin (0,0) with an oversized sentinel region (>= virtual screen)
+    // when virtual screen has negative offsets (multi-monitor above/left of primary),
+    // expand to full virtual screen so both paths capture the unified virtual desktop.
+    const isFullScreenSentinel =
+      rx1 === 0 && ry1 === 0 && rw >= vs.width && rh >= vs.height && (vs.x < 0 || vs.y < 0);
+    const ix1 = isFullScreenSentinel ? vs.x : Math.max(vs.x, rx1);
+    const iy1 = isFullScreenSentinel ? vs.y : Math.max(vs.y, ry1);
+    const ix2 = Math.min(vs.x + vs.width, rx1 + rw);
+    const iy2 = Math.min(vs.y + vs.height, ry1 + rh);
     if (ix2 <= ix1 || iy2 <= iy1) {
       throw new Error('INVALID_REGION: screenshot region does not intersect virtual screen');
     }
     captureBounds = { x: ix1, y: iy1, width: ix2 - ix1, height: iy2 - iy1 };
+    const primaryHwnd = Number(b.GetForegroundWindow()) || 0;
+    const dpi = primaryHwnd ? Number(b.GetDpiForWindow(primaryHwnd)) || 96 : 96;
+    dpiScale = Number((dpi / 96).toFixed(2));
   } else {
-    captureBounds = getVirtualScreenBounds();
+    captureBounds = vs;
+    const primaryHwnd = Number(b.GetForegroundWindow()) || 0;
+    const dpi = primaryHwnd ? Number(b.GetDpiForWindow(primaryHwnd)) || 96 : 96;
+    dpiScale = Number((dpi / 96).toFixed(2));
   }
 
   const activeBounds = targetHwnd && printWindowBounds ? printWindowBounds : captureBounds;
   let { width, height } = captureBounds;
-  if (width * height > MAX_SCREENSHOT_PIXELS || activeBounds.width * activeBounds.height > MAX_SCREENSHOT_PIXELS) {
+  if (
+    width > MAX_RAW_CAPTURE_DIMENSION ||
+    height > MAX_RAW_CAPTURE_DIMENSION ||
+    activeBounds.width > MAX_RAW_CAPTURE_DIMENSION ||
+    activeBounds.height > MAX_RAW_CAPTURE_DIMENSION ||
+    width * height > MAX_RAW_CAPTURE_PIXELS ||
+    activeBounds.width * activeBounds.height > MAX_RAW_CAPTURE_PIXELS
+  ) {
+    const culprit = activeBounds.width * activeBounds.height >= width * height ? activeBounds : captureBounds;
     throw new Error(
-      `SCREENSHOT_REGION_TOO_LARGE: Capture area (${width}x${height}) exceeds ${MAX_SCREENSHOT_PIXELS} pixel limit; specify a smaller region or target hwnd.`
+      `SCREENSHOT_REGION_TOO_LARGE: Capture area (${culprit.width}x${culprit.height}) exceeds ${MAX_RAW_CAPTURE_PIXELS} raw pixel safety limit; specify a smaller region or target hwnd.`
     );
   }
 
@@ -587,17 +664,20 @@ export async function captureScreenshot(options: {
       throw new Error('GDI_GETDIBITS_FAILED: Failed to read bitmap pixels');
     }
 
+    // S5: Redact protected/sensitive windows in 1:1 physical source pixel space BEFORE downsampling
     const redactedCount = options.redactRects?.length
       ? redactBgraRects(bgra, effectiveBounds, options.redactRects)
       : 0;
 
-    const png = await encodeBgraToPng(bgra, width, height);
+    const scaled = downsampleBgraIfNeeded(bgra, width, height, MAX_SCREENSHOT_PIXELS);
+    const png = await encodeBgraToPng(scaled.bgra, scaled.width, scaled.height);
     return {
       base64: png.toString('base64'),
-      width,
-      height,
+      width: scaled.width,
+      height: scaled.height,
       bounds: effectiveBounds,
       dpiScale,
+      scaleFactor: scaled.scaleFactor,
       redactedCount
     };
   } finally {

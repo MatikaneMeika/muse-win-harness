@@ -388,6 +388,10 @@ export const MUSE_TOOLS: ToolDefinition[] = [
           type: 'string',
           description: 'UIA ControlType filter'
         },
+        elementToken: {
+          type: 'string',
+          description: 'Session elementToken returned by inspect for direct UIA/pointer targeting'
+        },
         value: {
           type: 'string',
           description: 'Value for UIA set_value'

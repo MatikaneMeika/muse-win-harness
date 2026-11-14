@@ -668,5 +668,5 @@ console.log('  layout: full-screen backdrop + 4-column tab grid + centred activi
 console.log('  content admission: human-only UI, zero agent lecture cards or retired CLI refs');
 console.log('  truth source: SKILL.example.md + zero private machine path leaks');
 console.log('  preflight: launcher verifies daemon (--ensure-daemon-only) before opening the shell');
-console.log('  onboarding & privacy: 5-step spotlight tour synced across surfaces + 15s endpoint/token auto-remask');
+console.log('  onboarding & privacy: 6-step spotlight tour synced across surfaces + 15s endpoint/token auto-remask');
 process.exit(0);

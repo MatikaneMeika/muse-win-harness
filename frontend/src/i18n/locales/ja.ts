@@ -323,6 +323,7 @@ export const ja: Record<string, string> = {
   'island.targetPath': '対象パス: {path}',
   'island.snapshotTag': '変更前スナップショット: {id}',
   'island.denyBtn': '拒否',
+  'island.allowAppSessionBtn': 'このセッション中このアプリを許可',
   'island.alwaysInWorkspaceBtn': '常に許可 (作業域)',
   'island.allowOnceBtn': '1 回許可',
   'island.rollbackBtn': 'スナップショットを復元',

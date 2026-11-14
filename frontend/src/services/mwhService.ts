@@ -33,6 +33,8 @@ export interface LiveTaskState {
   id: string;
   status: TaskStatus;
   sourceAgent: 'Muse Cloud MCP' | (string & {});
+  toolName?: string;
+  targetHwnd?: number;
   worktreeId?: string;
   command: string;
   targetPath: string;
@@ -228,6 +230,7 @@ export interface DaemonTelemetry {
 export interface PendingApprovalItem {
   id: string;
   toolName: string;
+  targetHwnd?: number;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
   summary: string;
   command: string;
@@ -1083,6 +1086,14 @@ export class MwhDaemonService {
     if (this.state.liveTask.status !== 'WAITING_APPROVAL' || !this.state.liveTask.id) return;
     void this.request('POST', `/api/v1/tasks/${encodeURIComponent(this.state.liveTask.id)}/approve`, {
       scope: 'once',
+      source: 'ui_island',
+    });
+  }
+
+  public approveLiveTaskAppSession() {
+    if (this.state.liveTask.status !== 'WAITING_APPROVAL' || !this.state.liveTask.id) return;
+    void this.request('POST', `/api/v1/tasks/${encodeURIComponent(this.state.liveTask.id)}/approve`, {
+      scope: 'session',
       source: 'ui_island',
     });
   }

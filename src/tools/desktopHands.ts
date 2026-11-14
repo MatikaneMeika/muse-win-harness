@@ -21,9 +21,9 @@ import {
   postText
 } from '../desktop/win32Native.js';
 import { WinGuard } from '../desktop/winGuard.js';
-import { UiaBridge } from '../desktop/uiaBridge.js';
+import { UiaBridge, type UiaElementTokenEntry } from '../desktop/uiaBridge.js';
 import { SubagentDispatcher } from '../subagents/dispatcher.js';
-import { classifyDesktopStepDelivery } from './desktopDelivery.js';
+import { classifyDesktopStepDelivery, normalizeDesktopHandsParams } from './desktopDelivery.js';
 
 export type DesktopDelivery = 'auto' | 'background' | 'foreground';
 
@@ -55,6 +55,7 @@ export interface DesktopHandsStep {
   automationId?: string;
   name?: string;
   controlType?: string;
+  elementToken?: string;
   value?: string;
   durationMs?: number;
 }
@@ -87,6 +88,7 @@ export interface DesktopHandsParams {
   automationId?: string;
   name?: string;
   controlType?: string;
+  elementToken?: string;
   value?: string;
   durationMs?: number;
   steps?: DesktopHandsStep[];
@@ -145,7 +147,7 @@ export class DesktopHands {
   }
 
   public static async execute(
-    params: DesktopHandsParams,
+    rawParams: DesktopHandsParams,
     enabled = false,
     options: DesktopHandsExecuteOptions = {}
   ): Promise<any> {
@@ -155,6 +157,8 @@ export class DesktopHands {
     if (process.platform !== 'win32') {
       throw new Error('PLATFORM_NOT_SUPPORTED: Desktop Hands only supports Windows platform.');
     }
+
+    const params = normalizeDesktopHandsParams(rawParams as any) as DesktopHandsParams;
 
     switch (params.action) {
       case 'windows': {
@@ -218,6 +222,7 @@ export class DesktopHands {
             height: shot.height,
             bounds: shot.bounds,
             dpiScale: shot.dpiScale,
+            scaleFactor: shot.scaleFactor,
             redactedCount: shot.redactedCount,
             __mcpImage: {
               data: shot.base64,
@@ -247,6 +252,7 @@ export class DesktopHands {
               automationId: params.automationId,
               name: params.name,
               controlType: params.controlType,
+              elementToken: params.elementToken,
               value: params.value,
               durationMs: params.durationMs
             },
@@ -326,15 +332,14 @@ export class DesktopHands {
 
       case 'click': {
         const startEpoch = SubagentDispatcher.getEmergencyEpoch();
-        const x = assertFiniteCoord(params.x, 'x');
-        const y = assertFiniteCoord(params.y, 'y');
         return this.withDesktopMutex(() =>
           this.executeStep(
             {
               op: 'click',
-              x,
-              y,
+              x: params.x,
+              y: params.y,
               hwnd: params.hwnd,
+              elementToken: params.elementToken,
               button: params.button,
               delivery: params.delivery ?? 'auto'
             },
@@ -356,6 +361,7 @@ export class DesktopHands {
               op: 'type_text',
               text,
               hwnd: params.hwnd,
+              elementToken: params.elementToken,
               delivery: params.delivery ?? 'auto'
             },
             options,
@@ -385,18 +391,38 @@ export class DesktopHands {
       return { op: 'wait', durationMs: Math.max(0, Math.min(MAX_WAIT_MS, Math.trunc(durationMs))), delivery: 'none' };
     }
 
-    const hwnd = typeof step.hwnd === 'number' && step.hwnd > 0 ? Math.trunc(step.hwnd) : undefined;
+    let hwnd = typeof step.hwnd === 'number' && step.hwnd > 0 ? Math.trunc(step.hwnd) : undefined;
+    let resolvedToken: UiaElementTokenEntry | undefined;
+    if (typeof step.elementToken === 'string' && step.elementToken.trim().length > 0) {
+      resolvedToken = UiaBridge.resolveElementToken(step.elementToken, hwnd);
+      if (!hwnd && resolvedToken.hwnd > 0) {
+        hwnd = resolvedToken.hwnd;
+      }
+    }
+
     const requiresCoords =
       op === 'click' || op === 'double_click' || op === 'right_click' || op === 'move' || op === 'scroll';
+    let rawX = step.x;
+    let rawY = step.y;
+    if (resolvedToken && (rawX === undefined || rawX === null) && (rawY === undefined || rawY === null) && requiresCoords) {
+      if (resolvedToken.bounds.width <= 0 || resolvedToken.bounds.height <= 0) {
+        throw new Error(
+          `STALE_ELEMENT_TOKEN: Element token '${resolvedToken.token}' has zero/invalid bounds (${resolvedToken.bounds.width}x${resolvedToken.bounds.height})`
+        );
+      }
+      rawX = Math.round(resolvedToken.bounds.x + resolvedToken.bounds.width / 2);
+      rawY = Math.round(resolvedToken.bounds.y + resolvedToken.bounds.height / 2);
+    }
+
     const x = requiresCoords
-      ? assertFiniteCoord(step.x, 'x')
-      : step.x !== undefined
-        ? assertFiniteCoord(step.x, 'x')
+      ? assertFiniteCoord(rawX, 'x')
+      : rawX !== undefined
+        ? assertFiniteCoord(rawX, 'x')
         : undefined;
     const y = requiresCoords
-      ? assertFiniteCoord(step.y, 'y')
-      : step.y !== undefined
-        ? assertFiniteCoord(step.y, 'y')
+      ? assertFiniteCoord(rawY, 'y')
+      : rawY !== undefined
+        ? assertFiniteCoord(rawY, 'y')
         : undefined;
 
     // Security fence before any UIA/input operation
@@ -407,6 +433,7 @@ export class DesktopHands {
       const targetHwnd = assertPositiveHwnd(hwnd, `UIA ${op}`);
       const uiaRes = await UiaBridge.act({
         hwnd: targetHwnd,
+        elementToken: resolvedToken?.token ?? step.elementToken,
         automationId: step.automationId,
         name: step.name,
         controlType: step.controlType,
@@ -436,7 +463,14 @@ export class DesktopHands {
         );
       }
     }
-    const useForeground = classifyDesktopStepDelivery({ op, hwnd, delivery: requestedDelivery, x, y });
+    const useForeground = classifyDesktopStepDelivery({
+      op,
+      hwnd,
+      delivery: requestedDelivery,
+      x,
+      y,
+      elementToken: resolvedToken?.token ?? step.elementToken
+    });
 
     if (!useForeground && hwnd) {
       switch (op) {
@@ -448,7 +482,16 @@ export class DesktopHands {
           const button = op === 'right_click' ? 'right' : step.button || 'left';
           const dbl = op === 'double_click';
           const client = postMouseClick(hwnd, px, py, button, dbl);
-          return { op, delivery: 'background_msg', hwnd, x: px, y: py, button, client };
+          return {
+            op,
+            delivery: 'background_msg',
+            hwnd,
+            x: px,
+            y: py,
+            button,
+            client,
+            ...(resolvedToken ? { elementToken: resolvedToken.token } : {})
+          };
         }
         case 'type_text': {
           const text = step.text || '';
@@ -456,14 +499,28 @@ export class DesktopHands {
             throw new Error(`TEXT_TOO_LONG: type_text text exceeds the ${MAX_TEXT_LEN} character limit`);
           }
           postText(hwnd, text);
-          return { op, delivery: 'background_msg', hwnd, length: text.length };
+          return {
+            op,
+            delivery: 'background_msg',
+            hwnd,
+            length: text.length,
+            ...(resolvedToken ? { elementToken: resolvedToken.token } : {})
+          };
         }
         case 'scroll': {
           const px = assertFiniteCoord(x, 'x');
           const py = assertFiniteCoord(y, 'y');
           const delta = assertFiniteCoord(step.delta ?? -3, 'delta');
           postScroll(hwnd, px, py, delta);
-          return { op, delivery: 'background_msg', hwnd, x: px, y: py, delta };
+          return {
+            op,
+            delivery: 'background_msg',
+            hwnd,
+            x: px,
+            y: py,
+            delta,
+            ...(resolvedToken ? { elementToken: resolvedToken.token } : {})
+          };
         }
       }
     }

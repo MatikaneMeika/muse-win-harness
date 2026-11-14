@@ -14,7 +14,7 @@ import type {
   ToolMetaCategory
 } from '../types.js';
 import type { PathAccessResult } from './pathGuard.js';
-import { classifyDesktopCall } from '../tools/desktopDelivery.js';
+import { classifyDesktopCall, normalizeDesktopHandsParams } from '../tools/desktopDelivery.js';
 
 /**
  * Computes a deterministic SHA-256 hash over the tool params with keys sorted,
@@ -207,18 +207,19 @@ export class ApprovalEngine {
     // 4.5. Desktop Hands v2: perception (windows/inspect/screenshot) is low risk;
     // background UIA/PostMessage is medium risk; foreground SendInput is high risk.
     if (toolName === 'desktop_hands') {
-      const action = typeof params.action === 'string' ? params.action : '';
-      const { isPerception, isForeground } = classifyDesktopCall(params);
+      const norm = normalizeDesktopHandsParams(params);
+      const action = typeof norm.action === 'string' ? norm.action : '';
+      const { isPerception, isForeground } = classifyDesktopCall(norm);
       if (isPerception) {
         return {
           riskLevel: 'low',
-          summary: `Desktop perception (${action})${params.hwnd ? ` on hwnd=${params.hwnd}` : ''}`,
+          summary: `Desktop perception (${action})${norm.hwnd ? ` on hwnd=${norm.hwnd}` : ''}`,
           requiresMobileHmac: false
         };
       }
       return {
         riskLevel: isForeground ? 'high' : 'medium',
-        summary: `Desktop ${isForeground ? 'foreground' : 'background'} ${action}${params.op ? `:${params.op}` : ''}${params.hwnd ? ` (hwnd=${params.hwnd})` : ''}`,
+        summary: `Desktop ${isForeground ? 'foreground' : 'background'} ${action}${norm.op ? `:${norm.op}` : ''}${norm.hwnd ? ` (hwnd=${norm.hwnd})` : ''}`,
         requiresMobileHmac: false
       };
     }
@@ -379,7 +380,11 @@ export class ApprovalEngine {
 
     const approvalId = `appr_${crypto.randomUUID().replace(/-/g, '')}`;
     const secret = context.hmacSecret || this.hmacSecret;
-    const paramsHash = hashClientParams(params);
+    const storedParams =
+      toolName === 'desktop_hands'
+        ? normalizeDesktopHandsParams(params)
+        : structuredClone(params || {});
+    const paramsHash = hashClientParams(storedParams);
 
     const hmacSig = crypto
       .createHmac('sha256', secret)
@@ -392,7 +397,7 @@ export class ApprovalEngine {
       requestId,
       toolName,
       category,
-      params,
+      params: storedParams,
       riskLevel,
       summary,
       requiresMobileHmac,
@@ -527,10 +532,21 @@ export class ApprovalEngine {
         record.params.hwnd > 0
       ) {
         const { deliveryTag } = classifyDesktopCall(record.params);
-        const hwndKey = `desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}:${deliveryTag}`;
-        this.sessionApprovedActions.add(hwndKey);
-        if (context?.sessionApprovedActions) {
-          context.sessionApprovedActions.add(hwndKey);
+        // One-way coverage: approving a foreground call also authorizes the
+        // safer background delivery for the same hwnd; a bg approval never
+        // covers fg (fg keys are strictly a superset of bg keys).
+        const hwndKeys =
+          deliveryTag === 'fg'
+            ? [
+                `desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}:fg`,
+                `desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}:bg`
+              ]
+            : [`desktop_hands:hwnd:${Math.trunc(record.params.hwnd)}:bg`];
+        for (const hwndKey of hwndKeys) {
+          this.sessionApprovedActions.add(hwndKey);
+          if (context?.sessionApprovedActions) {
+            context.sessionApprovedActions.add(hwndKey);
+          }
         }
       }
     } else if (granularity === 'workspace') {
@@ -652,8 +668,9 @@ export class ApprovalEngine {
   }
 
   /** Clears in-memory session-level approvals (invoked by Global Emergency Kill). */
-  public clearSessionApprovals(): void {
+  public clearSessionApprovals(context?: ExecutionContext): void {
     this.sessionApprovedActions.clear();
+    context?.sessionApprovedActions?.clear();
   }
 
   /** Caps in-memory approval history to prevent unbounded growth over long daemon runs. */

@@ -1841,9 +1841,279 @@ await runCase('C21 desktop_hands E2/E3/E4: screenshot downsampling after redacti
         batchOutcome.execution?.data?.status === 'ABORTED',
         `E4: killed batch must settle promptly with status='ABORTED', got ${JSON.stringify(batchOutcome)}`
       );
+      assert(
+        String(batchOutcome.execution?.summary || '').startsWith('[ABORTED]') &&
+          String(batchOutcome.execution?.error || '').includes('EMERGENCY_STOP_ABORTED'),
+        `Defect 4: aborted batch outer PipelineResponse must carry [ABORTED] summary and error, got ${JSON.stringify(batchOutcome.execution)}`
+      );
     } finally {
       await server.stop();
     }
+  }
+  fs.rmSync(ws, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Case 22: Defect 1/2/3 — job_control poll never overwrites WAITING_APPROVAL with
+// a ghost RUNNING panel, postKill fail-safe resets stale RUNNING frames, and
+// audit.jsonl records approvalId across the entire approval lifecycle.
+// ---------------------------------------------------------------------------
+await runCase('C22 ghost RUNNING prevention on job_control poll, fail-safe kill reset, and audit.jsonl approvalId traceability', async () => {
+  const ws = tmpDir('mwh_p3_c22_');
+  const { PipelineKernel } = await import('../dist/pipeline/pipeline.js');
+
+  const kernel = new PipelineKernel({
+    confinementMode: 'workspace-write',
+    approvalPolicy: 'smart-risk',
+    workspaceRoot: ws,
+    desktopHandsEnabled: true
+  });
+  const port = 29610 + Math.floor(Math.random() * 180);
+  const server = new MwhServer({
+    host: '127.0.0.1',
+    port,
+    runtimeToken: 'Ab1!mnopQrStu34vwxy56789012zMWH#',
+    kernel
+  });
+  await server.start();
+  const authHeaders = {
+    Authorization: 'Bearer Ab1!mnopQrStu34vwxy56789012zMWH#',
+    'Content-Type': 'application/json'
+  };
+
+  try {
+    // 1) Trigger a sensitive_write exec_command that requires local confirmation
+    const trigRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        toolName: 'exec_command',
+        category: 'sensitive_write',
+        params: { command: 'Write-Output "APPROVAL_GHOST_GUARD_OK"' }
+      })
+    }).then((r) => r.json());
+
+    const approvalId = trigRes.execution?.approvalId;
+    assert(
+      trigRes.execution?.status === 'CONFIRMATION_REQUIRED' &&
+        typeof approvalId === 'string' &&
+        approvalId.startsWith('appr_'),
+      `C22: expected CONFIRMATION_REQUIRED with appr_ id, got ${JSON.stringify(trigRes)}`
+    );
+    assert(
+      trigRes.liveTask?.status === 'WAITING_APPROVAL' && trigRes.liveTask?.id === approvalId,
+      `C22: liveTask must be WAITING_APPROVAL for ${approvalId}, got ${JSON.stringify(trigRes.liveTask)}`
+    );
+
+    // 2) Poll job_control(action='poll', approvalId) just like Muse does while waiting for user approval
+    const pollRes = await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        toolName: 'job_control',
+        category: 'write',
+        params: { action: 'poll', approvalId }
+      })
+    }).then((r) => r.json());
+
+    assert(
+      pollRes.execution?.status === 'SUCCESS' &&
+        pollRes.execution?.data?.status === 'RUNNING_ASYNC' &&
+        pollRes.execution?.data?.approvalStatus === 'PENDING',
+      `C22: job_control poll on PENDING approval must return RUNNING_ASYNC + PENDING, got ${JSON.stringify(pollRes.execution)}`
+    );
+
+    // Crucial assertion for Defect 1: liveTask MUST stay WAITING_APPROVAL, NEVER overwritten to RUNNING!
+    const stateAfterPoll = await fetch(`http://127.0.0.1:${port}/api/v1/state`, {
+      headers: authHeaders
+    }).then((r) => r.json());
+    assert(
+      stateAfterPoll.liveTask?.status === 'WAITING_APPROVAL' &&
+        stateAfterPoll.liveTask?.id === approvalId,
+      `C22 (Defect 1): job_control poll must NOT overwrite WAITING_APPROVAL with ghost RUNNING frame, got ${JSON.stringify(stateAfterPoll.liveTask)}`
+    );
+
+    // Also run a fast read-only command while approval is pending — WAITING_APPROVAL must remain intact
+    await fetch(`http://127.0.0.1:${port}/api/v1/tasks/trigger`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        toolName: 'exec_command',
+        category: 'read',
+        params: { command: 'whoami' }
+      })
+    }).then((r) => r.json());
+    const stateAfterRo = await fetch(`http://127.0.0.1:${port}/api/v1/state`, {
+      headers: authHeaders
+    }).then((r) => r.json());
+    assert(
+      stateAfterRo.liveTask?.status === 'WAITING_APPROVAL' &&
+        stateAfterRo.liveTask?.id === approvalId,
+      `C22 (Defect 1): background read-only completion must not clobber pending WAITING_APPROVAL card, got ${JSON.stringify(stateAfterRo.liveTask)}`
+    );
+
+    // 3) Approve the pending task and verify audit.jsonl carries approvalId across all entries
+    const appRes = await fetch(
+      `http://127.0.0.1:${port}/api/v1/tasks/${encodeURIComponent(approvalId)}/approve`,
+      {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ scope: 'once', source: 'ui_island' })
+      }
+    ).then((r) => r.json());
+    assert(
+      appRes.ok === true && appRes.execution?.status === 'SUCCESS',
+      `C22: approval replay expected SUCCESS, got ${JSON.stringify(appRes)}`
+    );
+
+    const auditFile = path.join(ws, '.mwh', 'logs', 'audit.jsonl');
+    const auditLines = fs
+      .readFileSync(auditFile, 'utf-8')
+      .split(/\r?\n/)
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l));
+    const matchingAudit = auditLines.filter((row) => row.approvalId === approvalId);
+    assert(
+      matchingAudit.length >= 3 &&
+        matchingAudit.some((r) => r.status === 'CONFIRMATION_REQUIRED') &&
+        matchingAudit.some((r) => r.status === 'SUCCESS'),
+      `C22 (Defect 3): audit.jsonl must record approvalId=${approvalId} on CONFIRMATION_REQUIRED, replay SUCCESS, and UI approval entries (found ${matchingAudit.length}: ${JSON.stringify(matchingAudit)})`
+    );
+
+    // 4) Defect 2: Inject a simulated stale RUNNING frame into controlPlane and verify fail-safe reset via postKill
+    server.controlPlane.liveTask = {
+      ...server.controlPlane.liveTask,
+      id: 'appr_stale_ghost_frame_999',
+      status: 'RUNNING',
+      stepLabel: '后台运行中',
+      stepIndex: 2,
+      totalSteps: 3
+    };
+    const killGhostRes = await fetch(
+      `http://127.0.0.1:${port}/api/v1/tasks/appr_stale_ghost_frame_999/kill`,
+      {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ source: 'ui_island' })
+      }
+    );
+    const killGhostData = await killGhostRes.json();
+    assert(
+      killGhostRes.status === 200 &&
+        killGhostData.ok === true &&
+        killGhostData.failSafeReset === true &&
+        killGhostData.status === 'IDLE_RESET',
+      `C22 (Defect 2): killing a stale/ghost RUNNING frame from UI island must fail-safe reset with 200 IDLE_RESET, got ${killGhostRes.status} ${JSON.stringify(killGhostData)}`
+    );
+    const stateAfterReset = await fetch(`http://127.0.0.1:${port}/api/v1/state`, {
+      headers: authHeaders
+    }).then((r) => r.json());
+    assert(
+      stateAfterReset.liveTask?.status === 'IDLE',
+      `C22 (Defect 2): liveTask must be IDLE after fail-safe kill reset, got ${JSON.stringify(stateAfterReset.liveTask)}`
+    );
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(ws, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Case 23: Defect 4/5/6 — inspect value head+tail preservation (no 200-char blind
+// spot), E2 screenshot contract in tool definitions & SKILL, and workspace-scope
+// approval revocation without daemon restart.
+// ---------------------------------------------------------------------------
+await runCase('C23 inspect value head+tail preservation, E2 contract docs, and workspace approval revocation', async () => {
+  const ws = tmpDir('mwh_p3_c23_');
+  const { formatUiaNodeValue } = await import('../dist/desktop/uiaBridge.js');
+  const { getExposedMuseTools } = await import('../dist/tools/definitions.js');
+  const { PipelineKernel } = await import('../dist/pipeline/pipeline.js');
+
+  // 1) Defect 5: Value <= 1000 chars preserved in full; > 1000 chars preserves 500 head + 500 tail + valueLength
+  const mediumText = 'A'.repeat(250) + '_APPENDED_AT_300_CHARS';
+  const formattedMed = formatUiaNodeValue(mediumText);
+  assert(
+    formattedMed.value === mediumText &&
+      formattedMed.valueLength === mediumText.length &&
+      formattedMed.value.endsWith('_APPENDED_AT_300_CHARS'),
+    `C23 (Defect 5): >200 char value (${mediumText.length} chars) must not be truncated at 200 chars, got ${JSON.stringify(formattedMed)}`
+  );
+
+  const longText = 'HEAD_START_' + 'M'.repeat(1400) + '_TAIL_TYPED_END';
+  const formattedLong = formatUiaNodeValue(longText);
+  assert(
+    formattedLong.valueLength === longText.length &&
+      formattedLong.value.startsWith('HEAD_START_') &&
+      formattedLong.value.endsWith('_TAIL_TYPED_END') &&
+      formattedLong.value.includes('...[+'),
+    `C23 (Defect 5): >1000 char value must preserve both head and tail with valueLength=${longText.length}, got ${JSON.stringify(formattedLong)}`
+  );
+
+  // 2) Defect 6a: E2 screenshot contract documented in definitions.ts and SKILL.example.md
+  const dhTool = getExposedMuseTools(true).find((t) => t.name === 'desktop_hands');
+  assert(
+    dhTool &&
+      dhTool.description.includes('3840x2160') &&
+      dhTool.description.includes('scaleFactor') &&
+      String(dhTool.inputSchema?.properties?.region?.description || '').includes('scaleFactor'),
+    `C23 (Defect 6): desktop_hands tool definition must document <=3840x2160 downsampling and scaleFactor`
+  );
+  const skillExample = fs.readFileSync(
+    path.resolve(process.cwd(), 'connectors', 'muse-skill-template', 'SKILL.example.md'),
+    'utf-8'
+  );
+  assert(
+    skillExample.includes('3840x2160') && skillExample.includes('scaleFactor'),
+    'C23 (Defect 6): SKILL.example.md must document <=3840x2160 downsampling and scaleFactor'
+  );
+
+  // 3) Defect 6b: Workspace-level approval revocation via /api/v1/security/revoke-approvals and emergency-kill
+  const kernel = new PipelineKernel({
+    confinementMode: 'workspace-write',
+    approvalPolicy: 'smart-risk',
+    workspaceRoot: ws,
+    desktopHandsEnabled: true
+  });
+  const port = 29800 + Math.floor(Math.random() * 150);
+  const server = new MwhServer({
+    host: '127.0.0.1',
+    port,
+    runtimeToken: 'Ab1!mnopQrStu34vwxy56789012zMWH#',
+    kernel
+  });
+  await server.start();
+  const authHeaders = {
+    Authorization: 'Bearer Ab1!mnopQrStu34vwxy56789012zMWH#',
+    'Content-Type': 'application/json'
+  };
+  try {
+    const engine = kernel.getApprovalEngine();
+    const ctx = kernel.getContext();
+    const callParams = { action: 'act', op: 'click', hwnd: 77889, x: 50, y: 50, delivery: 'background' };
+    const actionKey = engine.getActionKey('desktop_hands', callParams);
+    const { approvalRecord } = engine.createApproval('ws_rev_1', 'desktop_hands', 'sensitive_write', callParams, 'medium', 'bg click', false, ctx);
+    engine.resolveApproval(approvalRecord.id, 'approve', undefined, 'workspace', ctx, 'ui_island');
+
+    assert(
+      engine.isActionPreApproved('desktop_hands', actionKey, 'medium', 'smart-risk', ctx, callParams) === true,
+      'C23: workspace approval must pre-approve matching action before revocation'
+    );
+
+    const revRes = await fetch(`http://127.0.0.1:${port}/api/v1/security/revoke-approvals`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ scope: 'workspace', source: 'ui_island' })
+    }).then((r) => r.json());
+    assert(
+      revRes.ok === true && revRes.workspaceRemovedCount >= 1,
+      `C23 (Defect 6): /api/v1/security/revoke-approvals must remove workspace approvals, got ${JSON.stringify(revRes)}`
+    );
+    assert(
+      engine.isActionPreApproved('desktop_hands', actionKey, 'medium', 'smart-risk', ctx, callParams) === false,
+      'C23 (Defect 6): workspace approval must be revoked immediately without restarting daemon'
+    );
+  } finally {
+    await server.stop();
   }
   fs.rmSync(ws, { recursive: true, force: true });
 });

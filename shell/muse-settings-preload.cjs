@@ -6626,6 +6626,14 @@ function renderApprovalIsland() {
         '</div>';
     }
   } else if (task.status === 'RUNNING') {
+    const runningLayout = loadIslandLayout();
+    const runningExpandKey = 'RUNNING:' + (task.id || task.startedAt || '');
+    if (runningLayout.capsule && taskChanged && state.islandAutoExpandedTaskId !== runningExpandKey) {
+      state.islandAutoExpandedTaskId = runningExpandKey;
+      runningLayout.capsule = false;
+      saveIslandLayout();
+      applyIslandLayout();
+    }
     if (loadIslandLayout().capsule) {
       inner =
         '<div class="mwh-island-head">' +
@@ -8067,7 +8075,20 @@ async function handleIslandAction(action, target) {
     return;
   }
   if (action === 'task-kill') {
-    await invokeDaemon('mwh:task-kill', { id: task.id });
+    try {
+      const res = await invokeDaemon('mwh:task-kill', { id: task.id || 'current' });
+      if (res && res.failSafeReset && settings.liveTask && settings.liveTask.status === 'RUNNING') {
+        settings.liveTask.status = 'IDLE';
+        settings.liveTask.stepLabel = '无活跃任务 · 已复位';
+        renderApprovalIsland();
+      }
+    } catch (_err) {
+      if (settings.liveTask && settings.liveTask.status === 'RUNNING') {
+        settings.liveTask.status = 'IDLE';
+        settings.liveTask.stepLabel = '无活跃任务 · 已复位';
+        renderApprovalIsland();
+      }
+    }
     await refreshSettings();
     return;
   }

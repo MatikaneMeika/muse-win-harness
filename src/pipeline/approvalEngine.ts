@@ -673,6 +673,35 @@ export class ApprovalEngine {
     context?.sessionApprovedActions?.clear();
   }
 
+  /**
+   * Clears in-memory workspace-level approvals (invoked by Global Emergency Kill
+   * or explicit security revocation). If prefix is provided (e.g. 'desktop_hands:'),
+   * only matching keys are removed; otherwise all workspace approvals are cleared.
+   */
+  public clearWorkspaceApprovals(context?: ExecutionContext, prefix?: string): number {
+    if (!prefix) {
+      const removed = this.workspaceApprovedActions.size;
+      this.workspaceApprovedActions.clear();
+      context?.workspaceApprovedActions?.clear();
+      return removed;
+    }
+    let removed = 0;
+    for (const key of Array.from(this.workspaceApprovedActions)) {
+      if (key.startsWith(prefix)) {
+        this.workspaceApprovedActions.delete(key);
+        removed += 1;
+      }
+    }
+    if (context?.workspaceApprovedActions) {
+      for (const key of Array.from(context.workspaceApprovedActions)) {
+        if (key.startsWith(prefix)) {
+          context.workspaceApprovedActions.delete(key);
+        }
+      }
+    }
+    return removed;
+  }
+
   /** Caps in-memory approval history to prevent unbounded growth over long daemon runs. */
   private evictTerminalRecordsIfNeeded(maxRetained = 200): void {
     if (this.pendingApprovals.size <= maxRetained) return;

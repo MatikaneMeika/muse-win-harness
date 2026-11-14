@@ -303,7 +303,7 @@ export const MUSE_TOOLS: ToolDefinition[] = [
     name: 'desktop_hands',
     category: 'sensitive_write',
     description:
-      'Native Windows desktop automation (windows, inspect UIA tree, screenshot with multimodal image output, background-first act, and emergency-stoppable batch). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.',
+      'Native Windows desktop automation (windows, inspect UIA tree with elementToken and head+tail value preservation, screenshot with multimodal image output [unified full virtual-screen capture in Per-Monitor Aware V2 physical pixels, 1:1 source-space redaction of sensitive windows first, then proportional downsampling to <=3840x2160 with scaleFactor], background-first act, and emergency-stoppable batch). For native desktop apps only—use Resource Library MCP tools for web/browser tasks. Disabled by default.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -338,7 +338,7 @@ export const MUSE_TOOLS: ToolDefinition[] = [
         },
         region: {
           type: 'object',
-          description: 'Optional screen capture region { x, y, width, height }'
+          description: 'Optional screen capture region { x, y, width, height } in physical pixels. Default omitted or sentinel oversized region (e.g. 99999x99999) both capture the full multi-monitor virtual desktop, redact sensitive windows in 1:1 source pixels, and proportionally downsample to <=3840x2160 (returning physical bounds and scaleFactor).'
         },
         delivery: {
           type: 'string',

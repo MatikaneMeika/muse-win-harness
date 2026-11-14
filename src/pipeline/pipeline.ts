@@ -629,6 +629,30 @@ export class PipelineKernel {
           data: result
         };
       }
+      if (
+        toolName === 'desktop_hands' &&
+        result &&
+        typeof result === 'object' &&
+        ((result as any).status === 'ABORTED' ||
+          (result as any).status === 'PARTIAL_FAILURE' ||
+          (result as any).status === 'PAUSED_USER_PREEMPTION')
+      ) {
+        const subStatus = String((result as any).status);
+        const completedSteps =
+          typeof (result as any).completedSteps === 'number' ? (result as any).completedSteps : 0;
+        const nextStepIndex =
+          typeof (result as any).nextStepIndex === 'number' ? (result as any).nextStepIndex : 0;
+        const errMsg =
+          typeof (result as any).error === 'string' && (result as any).error
+            ? (result as any).error
+            : `Desktop batch ${subStatus}`;
+        return {
+          status: 'SUCCESS',
+          summary: `[${subStatus}] Desktop batch stopped at step ${nextStepIndex + 1} (${completedSteps} completed): ${errMsg}`,
+          error: errMsg,
+          data: result
+        };
+      }
       return { status: 'SUCCESS', data: result };
     } catch (err: any) {
       return { status: 'ERROR', error: err.message || 'Tool execution failed' };
@@ -674,18 +698,28 @@ export class PipelineKernel {
     const dataObj =
       response.data && typeof response.data === 'object' ? (response.data as Record<string, any>) : undefined;
     const jobId = typeof dataObj?.jobId === 'string' && dataObj.jobId ? dataObj.jobId : undefined;
+    const effectiveApprovalId =
+      (typeof response.approvalId === 'string' && response.approvalId) ||
+      (typeof request.approvalId === 'string' && request.approvalId) ||
+      (typeof request.id === 'string' && request.id.startsWith('reexec_appr_')
+        ? request.id.slice('reexec_'.length)
+        : undefined);
     const rawSubStatus = typeof dataObj?.status === 'string' ? dataObj.status : undefined;
     const terminalStatus =
       dataObj?.timedOut === true
         ? 'TIMEOUT'
-        : rawSubStatus === 'COMPLETED' ||
-            rawSubStatus === 'FAILED' ||
-            rawSubStatus === 'TERMINATED' ||
-            rawSubStatus === 'TIMEOUT'
-          ? rawSubStatus
-          : response.status === 'DENIED' || response.status === 'ERROR'
+        : rawSubStatus === 'ABORTED'
+          ? 'TERMINATED'
+          : rawSubStatus === 'PARTIAL_FAILURE' || rawSubStatus === 'PAUSED_USER_PREEMPTION'
             ? 'FAILED'
-            : undefined;
+            : rawSubStatus === 'COMPLETED' ||
+                rawSubStatus === 'FAILED' ||
+                rawSubStatus === 'TERMINATED' ||
+                rawSubStatus === 'TIMEOUT'
+              ? rawSubStatus
+              : response.status === 'DENIED' || response.status === 'ERROR'
+                ? 'FAILED'
+                : undefined;
     const diagnostic = scrub(
       typeof dataObj?.diagnostic === 'string' && dataObj.diagnostic ? dataObj.diagnostic : undefined
     );
@@ -693,6 +727,7 @@ export class PipelineKernel {
     const auditEntry = {
       timestamp: new Date().toISOString(),
       requestId: request.id,
+      ...(effectiveApprovalId ? { approvalId: effectiveApprovalId } : {}),
       ...(jobId ? { jobId } : {}),
       toolName: request.toolName,
       category: request.category,

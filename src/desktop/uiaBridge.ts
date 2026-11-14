@@ -20,7 +20,19 @@ export interface UiaNode {
   isEnabled: boolean;
   isOffscreen: boolean;
   value?: string;
+  valueLength?: number;
   children?: UiaNode[];
+}
+
+export function formatUiaNodeValue(rawVal: string): { value: string; valueLength: number } {
+  const len = rawVal.length;
+  if (len <= 1000) {
+    return { value: rawVal, valueLength: len };
+  }
+  return {
+    value: `${rawVal.slice(0, 500)} ...[+${len - 1000} chars]... ${rawVal.slice(len - 500)}`,
+    valueLength: len
+  };
 }
 
 export interface UiaElementTokenEntry {
@@ -97,7 +109,12 @@ public static class MwhUiaHelper {
             { "isEnabled", info.IsEnabled },
             { "isOffscreen", info.IsOffscreen }
         };
-        if (val != null) node["value"] = val.Length > 200 ? val.Substring(0, 200) : val;
+        if (val != null) {
+            node["valueLength"] = val.Length;
+            node["value"] = val.Length > 1000
+                ? (val.Substring(0, 500) + " ...[+" + (val.Length - 1000) + " chars]... " + val.Substring(val.Length - 500))
+                : val;
+        }
 
         if (depth < maxDepth && count < maxNodes) {
             var children = new List<object>();
@@ -306,7 +323,14 @@ export class UiaBridge {
         isOffscreen: Boolean(node?.isOffscreen)
       };
       if (typeof node?.value === 'string') {
-        decorated.value = node.value;
+        if (typeof node?.valueLength === 'number') {
+          decorated.value = node.value;
+          decorated.valueLength = node.valueLength;
+        } else {
+          const formatted = formatUiaNodeValue(node.value);
+          decorated.value = formatted.value;
+          decorated.valueLength = formatted.valueLength;
+        }
       }
       if (Array.isArray(node?.children) && node.children.length > 0) {
         decorated.children = node.children.map((ch: any) => visit(ch));

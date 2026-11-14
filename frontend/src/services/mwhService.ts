@@ -1120,7 +1120,17 @@ export class MwhDaemonService {
     const id = this.state.liveTask.id || 'current';
     void this.request('POST', `/api/v1/tasks/${encodeURIComponent(id)}/kill`, {
       source: 'ui_island',
-    }).then(() => {
+    }).then((res) => {
+      if (!res || res.ok === false || res.failSafeReset) {
+        if (this.state.liveTask.status === 'RUNNING') {
+          this.state = {
+            ...this.state,
+            liveTask: { ...this.state.liveTask, status: 'IDLE', stepLabel: '无活跃任务 · 已复位' },
+          };
+          this.emit();
+        }
+        void this.pullState();
+      }
       this.showToast(this.t('service.taskKilled'));
     });
   }

@@ -163,11 +163,17 @@ export const LiveTaskFloatingIsland: React.FC = () => {
   useEffect(() => {
     const taskKey =
       liveTask.id || `${String(liveTask.command || '')}|${String(liveTask.startedAt || '')}`;
-    const isNewTask = prevTaskKeyRef.current !== taskKey;
-    prevTaskKeyRef.current = taskKey;
-    if (liveTask.status !== 'WAITING_APPROVAL' || !capsule || !isNewTask) return;
-    if (autoExpandedTaskRef.current === taskKey) return;
-    autoExpandedTaskRef.current = taskKey;
+    const expandKey = `${liveTask.status}:${taskKey}`;
+    const isNewTask = prevTaskKeyRef.current !== expandKey;
+    prevTaskKeyRef.current = expandKey;
+    if (
+      (liveTask.status !== 'WAITING_APPROVAL' && liveTask.status !== 'RUNNING') ||
+      !capsule ||
+      !isNewTask
+    )
+      return;
+    if (autoExpandedTaskRef.current === expandKey) return;
+    autoExpandedTaskRef.current = expandKey;
     setCapsule(false);
   }, [liveTask, capsule, setCapsule]);
 

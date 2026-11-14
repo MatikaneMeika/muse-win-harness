@@ -236,6 +236,7 @@ export interface MwhState {
     commandOrPath: string;
     mode: ConfinementMode;
     reason: string;
+    approvalId?: string;
     jobId?: string;
     terminalStatus?: string;
     diagnostic?: string;
@@ -637,7 +638,10 @@ export class MwhControlPlane {
       }),
       snapshots,
       auditLogs: this.readAuditTail(ctx.workspaceRoot, 50),
-      liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+      liveTask: (() => {
+        this.reconcileStaleRunningLiveTask();
+        return this.sanitizeLiveTaskFrame(this.liveTask);
+      })(),
       lastCopiedToast: null,
       lastInjectedChatText: null,
       resources: this.resourceState()
@@ -722,6 +726,41 @@ export class MwhControlPlane {
     return true;
   }
 
+  /**
+   * Self-heals orphaned RUNNING liveTask frames (e.g. if a stale frame carries an
+   * approvalId or a finished jobId that is neither in JobManager.getActiveJobs()
+   * nor activeDesktopTaskId). Restores the next pending approval card if one exists,
+   * otherwise resets to IDLE.
+   */
+  private reconcileStaleRunningLiveTask(): boolean {
+    if (this.liveTask.status !== 'RUNNING') {
+      return false;
+    }
+    const currentId = String(this.liveTask.id || '');
+    const isActiveDesktop =
+      Boolean(this.activeDesktopTaskId) && currentId === this.activeDesktopTaskId;
+    const isActiveJob =
+      JOB_ID_REGEX.test(currentId) &&
+      JobManager.getInstance()
+        .getActiveJobs()
+        .some((j) => j.id === currentId);
+    if (isActiveDesktop || isActiveJob) {
+      return false;
+    }
+    this.armJobCapture = false;
+    if (this.boundJobId === currentId) {
+      this.boundJobId = null;
+    }
+    if (!this.promoteNextPendingTask()) {
+      this.liveTask = this.sanitizeLiveTaskFrame({
+        ...idleTask(),
+        status: 'IDLE',
+        stepLabel: '待命'
+      });
+    }
+    return true;
+  }
+
   private formatExecutionReceiptSummary(
     toolName: string,
     params: Record<string, any> | undefined,
@@ -731,10 +770,20 @@ export class MwhControlPlane {
     const p = params || {};
     const targetBaseName =
       typeof p.path === 'string' && p.path ? path.basename(p.path) : '';
+    const subStatus =
+      toolName === 'desktop_hands' &&
+      execRes.data &&
+      typeof execRes.data === 'object' &&
+      typeof (execRes.data as any).status === 'string' &&
+      ((execRes.data as any).status === 'ABORTED' ||
+        (execRes.data as any).status === 'PARTIAL_FAILURE' ||
+        (execRes.data as any).status === 'PAUSED_USER_PREEMPTION')
+        ? ` [${(execRes.data as any).status}]`
+        : '';
     const head =
       toolName === 'fs_mutate'
         ? `fs_mutate(${p.action || 'write'})${targetBaseName ? ` on '${targetBaseName}'` : ''} -> ${execRes.status}`
-        : `${toolName} -> ${execRes.status}${jobId ? ` (jobId=${jobId})` : ''}`;
+        : `${toolName} -> ${execRes.status}${subStatus}${jobId ? ` (jobId=${jobId})` : ''}`;
     if (execRes.status === 'ERROR' || execRes.status === 'DENIED') {
       const detail = execRes.error || execRes.reason || (typeof execRes.data?.error === 'string' ? execRes.data.error : '');
       return detail ? `${head}: ${detail}` : head;
@@ -882,7 +931,8 @@ export class MwhControlPlane {
         toolName: record.toolName,
         commandOrPath: commandPreview(record.toolName, record.params),
         reason: 'USER_REJECTED_VIA_MOBILE',
-        status: 'DENIED'
+        status: 'DENIED',
+        approvalId: id
       });
       this.armJobCapture = false;
       if (!this.promoteNextPendingTask()) {
@@ -938,8 +988,12 @@ export class MwhControlPlane {
       execRes,
       record.jobId
     );
+    const subAbortedOrFailed =
+      execRes.data?.status === 'ABORTED' ||
+      execRes.data?.status === 'PARTIAL_FAILURE' ||
+      execRes.data?.status === 'PAUSED_USER_PREEMPTION';
     const executionStatus =
-      execRes.status === 'SUCCESS'
+      execRes.status === 'SUCCESS' && !subAbortedOrFailed
         ? 'SUCCESS'
         : execRes.status === 'DENIED'
           ? 'DENIED'
@@ -986,7 +1040,9 @@ export class MwhControlPlane {
       toolName: record.toolName,
       commandOrPath: commandPreview(record.toolName, record.params),
       reason: 'USER_APPROVED_VIA_MOBILE (once)',
-      status: execRes.status
+      status: execRes.status,
+      approvalId: id,
+      ...(record.jobId ? { jobId: record.jobId } : {})
     });
     this.broadcastSse({
       liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
@@ -1268,6 +1324,45 @@ export class MwhControlPlane {
       }
       if (pathname === '/api/v1/daemon/emergency-kill' && method === 'POST') {
         await this.postEmergencyKill(res, this.resolveRequestActor(req));
+        return true;
+      }
+      if (pathname === '/api/v1/security/revoke-approvals' && method === 'POST') {
+        const body = await this.readJson(req);
+        const actor = this.resolveRequestActor(req, body);
+        const scope =
+          body?.scope === 'session' || body?.scope === 'workspace' ? body.scope : 'all';
+        const prefix = typeof body?.prefix === 'string' && body.prefix ? body.prefix : undefined;
+        const ctx = this.kernel.getContext();
+        if (scope === 'session' || scope === 'all') {
+          this.kernel.getApprovalEngine().clearSessionApprovals(ctx);
+        }
+        let workspaceRemovedCount = 0;
+        if (scope === 'workspace' || scope === 'all') {
+          workspaceRemovedCount = this.kernel
+            .getApprovalEngine()
+            .clearWorkspaceApprovals(ctx, prefix);
+          if (!prefix) {
+            this.alwaysAllowedWorkspaces = [];
+          }
+        }
+        this.appendAudit({
+          decision: 'BLOCK',
+          actor,
+          toolName: 'revoke_approvals',
+          commandOrPath: `${scope}${prefix ? `:${prefix}` : ''}`,
+          reason: `REVOKE_APPROVALS (${scope})`,
+          status: 'SUCCESS'
+        });
+        this.broadcastSse({
+          alwaysAllowedWorkspaces: this.alwaysAllowedWorkspaces,
+          auditLogs: this.readAuditTail(ctx.workspaceRoot, 50)
+        });
+        this.send(res, 200, {
+          ok: true,
+          scope,
+          workspaceRemovedCount,
+          alwaysAllowedWorkspaces: this.alwaysAllowedWorkspaces
+        });
         return true;
       }
       if (pathname === '/api/v1/workspaces/add' && method === 'POST') {
@@ -1553,7 +1648,31 @@ export class MwhControlPlane {
     const isReadOnlyShortCircuit = category === 'read' || riskEval.riskLevel === 'low';
     this.preTaskDirtyFiles = this.getWorkspaceDirtySet(ctx.workspaceRoot);
 
-    if (toolName === 'exec_command' || toolName === 'subagent_dispatch') {
+    const actionKey = this.kernel.getApprovalEngine().getActionKey(toolName, normalizedParams);
+    const isPreApproved = this.kernel.getApprovalEngine().isActionPreApproved(
+      toolName,
+      actionKey,
+      riskEval.riskLevel,
+      ctx.approvalPolicy,
+      ctx,
+      normalizedParams
+    );
+    const willDeferToMuseHitl =
+      ctx.multiDeviceApproval === true &&
+      toolName !== 'desktop_hands' &&
+      riskEval.riskLevel !== 'critical' &&
+      !riskEval.requiresMobileHmac;
+    const willRunImmediately = isPreApproved || willDeferToMuseHitl;
+
+    const hasPendingApprovalCard =
+      this.liveTask.status === 'WAITING_APPROVAL' &&
+      this.getSanitizedPendingApprovals().length > 0;
+
+    if (
+      (toolName === 'exec_command' || toolName === 'subagent_dispatch') &&
+      willRunImmediately &&
+      !(hasPendingApprovalCard && isReadOnlyShortCircuit)
+    ) {
       this.armJobCapture = true;
       this.boundJobId = null;
       if (!isReadOnlyShortCircuit && ctx.confinementMode !== 'read-only') {
@@ -1563,7 +1682,7 @@ export class MwhControlPlane {
         } catch {
           // Snapshot is best-effort; execution still goes through the kernel fence.
         }
-      } else {
+      } else if (this.liveTask.status !== 'WAITING_APPROVAL') {
         this.liveTask = {
           ...this.liveTask,
           snapshotId: undefined,
@@ -1575,15 +1694,6 @@ export class MwhControlPlane {
 
     let dhTaskId = '';
     if (toolName === 'desktop_hands' && !classifyDesktopCall(normalizedParams).isPerception) {
-      const actionKey = this.kernel.getApprovalEngine().getActionKey(toolName, normalizedParams);
-      const willRunImmediately = this.kernel.getApprovalEngine().isActionPreApproved(
-        toolName,
-        actionKey,
-        riskEval.riskLevel,
-        ctx.approvalPolicy,
-        ctx,
-        normalizedParams
-      );
       if (willRunImmediately) {
         dhTaskId = this.startDesktopRunningLiveTask(request, riskEval.riskLevel, riskEval.summary);
       }
@@ -1646,10 +1756,26 @@ export class MwhControlPlane {
       });
       return;
     }
-    if (res.status === 'SUCCESS' && res.data && typeof res.data.jobId === 'string') {
+    if (
+      res.status === 'SUCCESS' &&
+      request.toolName !== 'job_control' &&
+      res.data &&
+      typeof res.data.jobId === 'string' &&
+      JOB_ID_REGEX.test(res.data.jobId)
+    ) {
       const jobId = res.data.jobId as string;
-      this.boundJobId = jobId;
       const running = res.data.status === 'RUNNING_ASYNC';
+      // Protect an active WAITING_APPROVAL card from being overwritten by an unrelated
+      // synchronous read/probe command while the user hasn't resolved the pending approval.
+      if (
+        !running &&
+        this.liveTask.status === 'WAITING_APPROVAL' &&
+        this.getSanitizedPendingApprovals().length > 0 &&
+        request.approvalId !== this.liveTask.id
+      ) {
+        return;
+      }
+      this.boundJobId = jobId;
       const stdoutText = typeof res.data.stdout === 'string' ? res.data.stdout : '';
       const stdoutLines = String(stdoutText).split(/\r?\n/).filter((line) => line.length > 0);
       const changeReport = running
@@ -2012,6 +2138,8 @@ export class MwhControlPlane {
       desktopHandsForegroundFallback: nextForeground
     });
     if (!nextEnabled) {
+      this.kernel.getApprovalEngine().clearSessionApprovals(ctx);
+      this.kernel.getApprovalEngine().clearWorkspaceApprovals(ctx, 'desktop_hands:');
       try {
         UiaBridge.dispose();
       } catch {
@@ -2495,9 +2623,13 @@ export class MwhControlPlane {
       execRes,
       record.jobId
     );
+    const subAbortedOrFailed =
+      execRes.data?.status === 'ABORTED' ||
+      execRes.data?.status === 'PARTIAL_FAILURE' ||
+      execRes.data?.status === 'PAUSED_USER_PREEMPTION';
     engine.recordExecutionReceipt(id, {
       executionStatus:
-        execRes.status === 'SUCCESS'
+        execRes.status === 'SUCCESS' && !subAbortedOrFailed
           ? 'SUCCESS'
           : execRes.status === 'DENIED'
             ? 'DENIED'
@@ -2546,7 +2678,10 @@ export class MwhControlPlane {
       toolName: record.toolName,
       commandOrPath: commandPreview(record.toolName, record.params),
       reason: `USER_APPROVED_VIA_UI (${granularity})`,
-      status: execRes.status
+      status: execRes.status,
+      approvalId: id,
+      ...(record.jobId ? { jobId: record.jobId } : {}),
+      ...(execRes.data?.status === 'ABORTED' ? { terminalStatus: 'TERMINATED' } : {})
     });
     this.broadcastSse({
       liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
@@ -2592,7 +2727,8 @@ export class MwhControlPlane {
       toolName: record.toolName,
       commandOrPath: commandPreview(record.toolName, record.params),
       reason: 'USER_REJECTED_VIA_UI',
-      status: 'DENIED'
+      status: 'DENIED',
+      approvalId: id
     });
     this.pendingTasks.delete(id);
     if (this.pendingTask?.approvalId === id) {
@@ -2618,7 +2754,7 @@ export class MwhControlPlane {
     if (
       typeof id === 'string' &&
       id.startsWith('dh_') &&
-      this.activeDesktopTaskId === id
+      (this.activeDesktopTaskId === id || this.liveTask.id === id)
     ) {
       this.activeDesktopTaskId = null;
       SubagentDispatcher.triggerEmergencyStop();
@@ -2633,11 +2769,15 @@ export class MwhControlPlane {
         toolName: 'desktop_hands',
         commandOrPath: id,
         reason: 'USER_KILL_VIA_UI',
-        status: 'DENIED'
+        status: 'DENIED',
+        terminalStatus: 'TERMINATED'
       });
-      this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已强杀' });
+      if (!this.promoteNextPendingTask()) {
+        this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已强杀' });
+      }
       this.broadcastSse({
         liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+        pendingApprovals: this.getSanitizedPendingApprovals(),
         auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50)
       });
       this.send(res, 200, { ok: true, jobId: id, status: 'TERMINATED' });
@@ -2652,7 +2792,49 @@ export class MwhControlPlane {
         ? id
         : '';
     if (!targetJobId) {
-      this.send(res, 404, { ok: false, error: 'NO_ACTIVE_JOB', jobId: id });
+      // Fail-safe UI reset: if the floating island is stuck displaying a stale/ghost
+      // RUNNING frame with no active backing job or desktop task, reset liveTask
+      // immediately (promoting the next pending approval card if one exists, else IDLE)
+      // so the user is never trapped on a non-responsive RUNNING panel.
+      const hadStaleRunning =
+        this.liveTask.status === 'RUNNING' &&
+        (actor === 'ui_island' ||
+          this.liveTask.id === id ||
+          id === 'current' ||
+          (typeof id === 'string' && id.startsWith('appr_')));
+      const reconciled = this.reconcileStaleRunningLiveTask();
+      if (hadStaleRunning || reconciled) {
+        this.armJobCapture = false;
+        this.boundJobId = null;
+        if (this.liveTask.status === 'RUNNING') {
+          if (!this.promoteNextPendingTask()) {
+            this.liveTask = this.sanitizeLiveTaskFrame({
+              ...idleTask(),
+              status: 'IDLE',
+              stepLabel: '无活跃任务 · 已复位'
+            });
+          }
+        }
+        this.broadcastSse({
+          liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+          pendingApprovals: this.getSanitizedPendingApprovals(),
+          auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50)
+        });
+        if (
+          actor === 'ui_island' ||
+          id === 'current' ||
+          (typeof id === 'string' && id.startsWith('appr_'))
+        ) {
+          this.send(res, 200, {
+            ok: true,
+            jobId: id,
+            status: 'IDLE_RESET',
+            failSafeReset: true
+          });
+          return;
+        }
+      }
+      this.send(res, 404, { ok: false, error: 'NO_ACTIVE_JOB', jobId: id, failSafeReset: hadStaleRunning || reconciled });
       return;
     }
     let result: { success: boolean; jobId: string; status: string; error?: string };
@@ -2671,8 +2853,14 @@ export class MwhControlPlane {
       status: 'DENIED'
     });
     this.armJobCapture = false;
-    this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已强杀' });
-    this.broadcastSse({ liveTask: this.sanitizeLiveTaskFrame(this.liveTask), auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50) });
+    if (!this.promoteNextPendingTask()) {
+      this.liveTask = this.sanitizeLiveTaskFrame({ ...this.liveTask, status: 'IDLE', stepLabel: '已强杀' });
+    }
+    this.broadcastSse({
+      liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+      pendingApprovals: this.getSanitizedPendingApprovals(),
+      auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50)
+    });
     this.send(res, 200, { ok: result.success, jobId: targetJobId, status: result.status });
   }
 
@@ -2695,6 +2883,8 @@ export class MwhControlPlane {
       // Best-effort: Job Object kill-on-close still applies at process exit.
     }
     this.kernel.getApprovalEngine().clearSessionApprovals(this.kernel.getContext());
+    this.kernel.getApprovalEngine().clearWorkspaceApprovals(this.kernel.getContext());
+    this.alwaysAllowedWorkspaces = [];
     const rejectedApprovalIds = this.kernel
       .getApprovalEngine()
       .rejectAllPending('EMERGENCY_KILL');
@@ -2723,6 +2913,7 @@ export class MwhControlPlane {
     });
     this.broadcastSse({
       liveTask: this.sanitizeLiveTaskFrame(this.liveTask),
+      alwaysAllowedWorkspaces: this.alwaysAllowedWorkspaces,
       worktrees: this.worktrees,
       auditLogs: this.readAuditTail(this.kernel.getContext().workspaceRoot, 50)
     });
@@ -3420,6 +3611,7 @@ export class MwhControlPlane {
     commandOrPath: string;
     reason: string;
     status: string;
+    approvalId?: string;
     jobId?: string;
     terminalStatus?: string;
     diagnostic?: string;
@@ -3436,6 +3628,7 @@ export class MwhControlPlane {
       confinementMode: ctx.confinementMode,
       reason: this.scrubSecretText(entry.reason),
       status: entry.status,
+      ...(entry.approvalId ? { approvalId: entry.approvalId } : {}),
       ...(entry.jobId ? { jobId: entry.jobId } : {}),
       ...(entry.terminalStatus ? { terminalStatus: entry.terminalStatus } : {}),
       ...(entry.diagnostic ? { diagnostic: this.scrubSecretText(entry.diagnostic) } : {})
@@ -3480,6 +3673,7 @@ export class MwhControlPlane {
           commandOrPath: String(row.commandOrPath || row.summary || row.reason || ''),
           mode: (row.mode || row.confinementMode || 'workspace-write') as ConfinementMode,
           reason: String(row.reason || row.error || ''),
+          ...(row.approvalId ? { approvalId: String(row.approvalId) } : {}),
           ...(row.jobId ? { jobId: String(row.jobId) } : {}),
           ...(row.terminalStatus ? { terminalStatus: String(row.terminalStatus) } : {}),
           ...(row.diagnostic ? { diagnostic: this.scrubSecretText(String(row.diagnostic)) } : {})

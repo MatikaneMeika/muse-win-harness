@@ -15,3 +15,6 @@ muse_log/
 # ZCode session plan artifacts (approved plans, per-session)
 .zcode/
 .zcode_subtask.md
+
+# Offline heavy media / video promotional assets
+docs/videos/

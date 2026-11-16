@@ -539,6 +539,7 @@ await runCase('C14 loopback approve of critical record rejected (403 LOOPBACK_SE
     assert(approve2.statusCode === 200, `non-critical loopback approve should succeed, got ${approve2.statusCode}`);
     assert(approve2.body.includes('Action Approved Successfully'), 'non-critical approve should complete');
   } finally {
+    try { fs.unlinkSync(path.join(root, 'c14_target.txt')); } catch {}
     await server.stop();
   }
 });

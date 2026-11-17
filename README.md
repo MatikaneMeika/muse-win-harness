@@ -19,13 +19,7 @@
   <a href="./DISCLAIMER.md"><img src="https://img.shields.io/badge/built_with-Vibe_Coding_%2B_Human_Gates-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
-<p align="center">
-  <video src="https://github.com/MatikaneMeika/muse-win-harness/releases/download/v0.1.0/mwh-promo-01-launch.mp4" controls="controls" width="100%" poster="./assets/brand/mwh-cover.svg">
-    Your browser does not support the video tag.
-  </video>
-  <br>
-  <sub>🎬 <i>Watch the 45-second launch walkthrough: <b><a href="https://github.com/MatikaneMeika/muse-win-harness/releases/download/v0.1.0/mwh-promo-01-launch.mp4">mwh-promo-01-launch.mp4</a></b></i></sub>
-</p>
+https://github.com/user-attachments/assets/3e8179af-c930-4266-b1cd-fecf5ae0faac
 
 **Connect [Muse](https://muse.ai) to your Windows.** That's what Muse-Win-Harness does.
 

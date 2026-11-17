@@ -19,13 +19,7 @@
   <a href="../../DISCLAIMER.md"><img src="https://img.shields.io/badge/开发方式-Vibe_Coding_%2B_门禁校验-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
-<p align="center">
-  <video src="https://github.com/MatikaneMeika/muse-win-harness/releases/download/v0.1.0/mwh-promo-01-launch.mp4" controls="controls" width="100%" poster="../../assets/brand/mwh-cover-zh.svg">
-    你的浏览器不支持 video 标签播放。
-  </video>
-  <br>
-  <sub>🎬 <i>观看 45 秒极简开箱与配对演示视频：<b><a href="https://github.com/MatikaneMeika/muse-win-harness/releases/download/v0.1.0/mwh-promo-01-launch.mp4">mwh-promo-01-launch.mp4</a></b></i></sub>
-</p>
+https://github.com/user-attachments/assets/3e8179af-c930-4266-b1cd-fecf5ae0faac
 
 **让 [Muse](https://muse.ai) 接入你的 Windows。** 这就是 Muse-Win-Harness。
 

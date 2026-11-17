@@ -190,6 +190,12 @@ pause
 `;
   fs.writeFileSync(path.join(APP_DIR, '使用说明.txt'), readmeTxt, 'utf8');
 
+  // Also copy config.example.yaml for user reference
+  const configExample = path.join(root, 'config.example.yaml');
+  if (fs.existsSync(configExample)) {
+    fs.copyFileSync(configExample, path.join(APP_DIR, 'config.example.yaml'));
+  }
+
   // 9. Verify package via Smoke Test
   log('Verifying packaged application via Smoke Test...');
   try {
@@ -201,6 +207,13 @@ pause
     log('[OK] Smoke Test Passed on Muse-Win-Harness.exe!');
   } catch (err) {
     console.warn(`[WARN] Smoke test exited with: ${err.message}`);
+  }
+
+  // Clean up any smoke test runtime residue (.mwh) so release archive is 100% clean and contains zero local secrets
+  const staleMwh = path.join(APP_DIR, '.mwh');
+  if (fs.existsSync(staleMwh)) {
+    log('Purging smoke test runtime residue (.mwh) before compression...');
+    fs.rmSync(staleMwh, { recursive: true, force: true });
   }
 
   // 10. Create Zip Archive

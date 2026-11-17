@@ -19,3 +19,7 @@ muse_log/
 # Offline heavy media / video promotional assets
 docs/videos/
 c14_target.txt
+
+# Packaged distribution outputs
+/release/
+/out/

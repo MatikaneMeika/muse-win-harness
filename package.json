@@ -20,7 +20,8 @@
     "test:ui-contract": "node scripts/test_ui_contract.mjs",
     "test:resources": "node scripts/test_resources.mjs",
     "verify": "node scripts/verify.mjs",
-    "doctor": "node scripts/doctor.mjs"
+    "doctor": "node scripts/doctor.mjs",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "koffi": "^3.3.7",

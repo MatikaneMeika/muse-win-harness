@@ -201,7 +201,9 @@ function getCurrentGitBranch() {
 const CURRENT_BRANCH = getCurrentGitBranch();
 const DAEMON_PORT = Number(process.env.MWH_PORT || 19820);
 const MAIN_URL = process.env.MWH_MUSE_URL || 'https://muse.ai';
-const ROOT_DIR = path.resolve(__dirname, '..');
+const ROOT_DIR = app.isPackaged
+  ? (process.env.MWH_WORKSPACE_DIR || process.cwd())
+  : path.resolve(__dirname, '..');
 const LOG_DIR = path.join(ROOT_DIR, '.mwh', 'logs');
 const EXIT_REASON_LOG_PATH = path.join(LOG_DIR, 'exit-reason.log');
 const SMOKE = process.argv.includes('--smoke-test') || process.argv.includes('--smoke');
@@ -393,7 +395,9 @@ let lastNotifiedApprovalId = '';
 let token = process.env.TUNNEL_RUNTIME_TOKEN || '';
 let signingKey = process.env.MWH_HMAC_SECRET || '';
 let persistedExtra = {};
-const SECRETS_FILE = path.join(__dirname, '..', '.mwh', 'secrets.json');
+const SECRETS_FILE = app.isPackaged
+  ? path.join(ROOT_DIR, '.mwh', 'secrets.json')
+  : path.join(__dirname, '..', '.mwh', 'secrets.json');
 const DEFAULT_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 let cachedShellDpapi;
@@ -648,6 +652,7 @@ function describePortListener(port) {
 }
 
 function resolveNodeBin() {
+  if (app.isPackaged) return process.execPath;
   const fromEnv = process.env.MWH_NODE_EXE || process.env.MWH_NODE;
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
   const candidates = [];
@@ -668,14 +673,20 @@ function resolveNodeBin() {
 //   { ok: true, adopted: false }  -> this process spawned and verified a daemon
 //   { ok: false, reason, detail } -> PORT_OCCUPIED_UNAUTHORIZED | DAEMON_START_TIMEOUT | SPAWN_FAILED
 function startDaemonProcess(nodeBin, cli, extraEnv, detachedStdio) {
+  const isElectronNode = nodeBin === process.execPath;
+  const cloudflaredBin = app.isPackaged
+    ? path.join(process.resourcesPath, 'bin', 'cloudflared.exe')
+    : undefined;
   const child = spawn(nodeBin, [cli], {
     windowsHide: true,
-    cwd: path.resolve(__dirname, '..'),
+    cwd: ROOT_DIR,
     detached: Boolean(detachedStdio),
     stdio: detachedStdio ? 'ignore' : ['pipe', 'pipe', 'pipe'],
     env: {
       ...process.env,
       ...(extraEnv || {}),
+      ...(isElectronNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+      ...(cloudflaredBin && fs.existsSync(cloudflaredBin) ? { MWH_CLOUDFLARED_DIR: cloudflaredBin } : {}),
       TUNNEL_RUNTIME_TOKEN: token,
       MWH_HMAC_SECRET: signingKey,
     },
@@ -702,7 +713,9 @@ async function ensureDaemon() {
   }
 
   ensureSecretsForSpawn();
-  const cli = path.resolve(__dirname, '..', 'dist', 'cli.js');
+  const cli = app.isPackaged
+    ? path.join(process.resourcesPath, 'daemon', 'dist', 'cli.js')
+    : path.resolve(__dirname, '..', 'dist', 'cli.js');
   let spawnError = null;
   let retriedWithElectron = false;
 

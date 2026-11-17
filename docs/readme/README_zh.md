@@ -19,6 +19,10 @@
   <a href="../../DISCLAIMER.md"><img src="https://img.shields.io/badge/开发方式-Vibe_Coding_%2B_门禁校验-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/MatikaneMeika/muse-win-harness/releases/download/v0.1.0/Muse-Win-Harness-v0.1.0-win-x64.zip"><img src="https://img.shields.io/badge/⚡_一键下载-免安装便携版_v0.1.0_(Zip)-10B981?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 绿色免安装版"></a>
+</p>
+
 https://github.com/user-attachments/assets/3e8179af-c930-4266-b1cd-fecf5ae0faac
 
 **让 [Muse](https://muse.ai) 接入你的 Windows。** 这就是 Muse-Win-Harness。

@@ -19,6 +19,10 @@
   <a href="./DISCLAIMER.md"><img src="https://img.shields.io/badge/built_with-Vibe_Coding_%2B_Human_Gates-F59E0B.svg" alt="Vibe Coding Disclosure"></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/MatikaneMeika/muse-win-harness/releases/download/v0.1.0/Muse-Win-Harness-v0.1.0-win-x64.zip"><img src="https://img.shields.io/badge/⚡_Download-Portable_v0.1.0_(Zip)-10B981?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable Zip"></a>
+</p>
+
 https://github.com/user-attachments/assets/3e8179af-c930-4266-b1cd-fecf5ae0faac
 
 **Connect [Muse](https://muse.ai) to your Windows.** That's what Muse-Win-Harness does.
